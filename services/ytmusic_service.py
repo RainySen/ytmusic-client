@@ -2,7 +2,7 @@ from ytmusicapi import YTMusic
 
 class YTMusicService:
     def __init__(self):
-        self.ytmusic = YTMusic()  # Sin autenticación por ahora
+        self.ytmusic = YTMusic()  # Sin autenticación
 
     def search(self, query):
         results = self.ytmusic.search(query, filter="songs", limit=20)
