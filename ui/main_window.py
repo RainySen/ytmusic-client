@@ -102,7 +102,7 @@ class MainWindow(QWidget):
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
 
-        queue_title = QLabel("<b>📋 Cola de reproducción</b>")
+        queue_title = QLabel("<b>Cola de reproducción</b>")
         queue_title.setStyleSheet("font-size: 14px;")
         right_layout.addWidget(queue_title)
 
@@ -340,14 +340,14 @@ class MainWindow(QWidget):
         self.results_list.clear()
         for r in results:
             artist = r['artists'][0]['name'] if r.get('artists') else 'Desconocido'
-            self.results_list.addItem(f"🎵 {r['title']} - {artist}")
+            self.results_list.addItem(f" {r['title']} - {artist}")
 
     def song_selected(self):
         index = self.results_list.currentRow()
         self.on_select_song(index)
 
     def update_song_info(self, text):
-        self.song_label.setText(f"🎵 {text}")
+        self.song_label.setText(f" {text}")
 
     def toggle_play_clicked(self):
         self.on_toggle_play()

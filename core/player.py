@@ -52,7 +52,7 @@ class Player(QObject):
 
     def _update_position(self):
         if self.player.get_media() and self.is_playing:
-            position = self.player.get_position()  # 0.0 a 1.0
+            position = self.player.get_position()
             current_time = self.player.get_time() // 1000
             total_time = self.player.get_length() // 1000
 
