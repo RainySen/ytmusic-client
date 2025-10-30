@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QListWidget, QLabel, QSlider, QSplitter, QMenu
+    QLineEdit, QPushButton, QListWidget, QLabel, QSlider, QSplitter, QMenu,
+    QInputDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
@@ -10,7 +11,7 @@ import qtawesome as qta
 class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play,
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
-                 on_queue_item_selected):
+                 on_queue_item_selected, on_import_playlist):
         super().__init__()
 
         self.on_search = on_search
@@ -23,6 +24,7 @@ class MainWindow(QWidget):
         self.on_previous = on_previous
         self.on_remove_from_queue = on_remove_from_queue
         self.on_queue_item_selected = on_queue_item_selected
+        self.on_import_playlist = on_import_playlist
 
         self.setWindowTitle("YTMusic Minimal Client")
 
@@ -35,6 +37,8 @@ class MainWindow(QWidget):
         self.icon_volume = qta.icon('fa5s.volume-up', color='white')
         self.icon_trash = qta.icon('fa5s.trash', color='white')
         self.icon_clear = qta.icon('fa5s.broom', color='white')
+        self.icon_clear = qta.icon('fa5s.broom', color='white')
+        self.icon_import = qta.icon('fa5s.file-import', color='white')
 
         # Layout principal
         main_layout = QVBoxLayout(self)
@@ -128,6 +132,23 @@ class MainWindow(QWidget):
         self.queue_list.itemDoubleClicked.connect(self.queue_item_selected)
 
         queue_buttons = QHBoxLayout()
+        self.import_btn = QPushButton()
+        self.import_btn.setIcon(self.icon_import)
+        self.import_btn.setText(" Importar URL")
+        self.import_btn.clicked.connect(self.import_playlist_clicked)
+        self.import_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #007bff;
+                        color: white;
+                        border: none;
+                        padding: 6px 12px;
+                        border-radius: 4px;
+                    }
+                    QPushButton:hover {
+                        background-color: #0099ff;
+                    }
+                """)
+
         self.remove_btn = QPushButton()
         self.remove_btn.setIcon(self.icon_trash)
         self.remove_btn.setText(" Eliminar")
@@ -161,6 +182,7 @@ class MainWindow(QWidget):
             }
         """)
 
+        queue_buttons.addWidget(self.import_btn)
         queue_buttons.addWidget(self.remove_btn)
         queue_buttons.addWidget(self.clear_btn)
 
@@ -396,6 +418,14 @@ class MainWindow(QWidget):
             prefix = "▶ " if i == current_index else "   "
             artist = song['artists'][0]['name'] if song.get('artists') else 'Desconocido'
             self.queue_list.addItem(f"{prefix}{song['title']} - {artist}")
+
+    def import_playlist_clicked(self):
+        url, ok = QInputDialog.getText(self,
+                                       "Importar Playlist",
+                                       "Pega la URL de la playlist de YouTube/YTMusic:")
+
+        if ok and url:
+            self.on_import_playlist(url)
 
     def remove_selected(self):
         index = self.queue_list.currentRow()

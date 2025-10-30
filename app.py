@@ -17,9 +17,13 @@ PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
 
 def handle_search(query):
     global results_cache
+    results_cache = service.search(query)
+    window.update_results(results_cache)
 
-    #Revisar si la consulta es una URL de playlist
-    match = PLAYLIST_RE.search(query)
+
+def handle_import_playlist(url):
+    global results_cache
+    match = PLAYLIST_RE.search(url)
 
     if match:
         playlist_id = match.group(1)
@@ -29,6 +33,7 @@ def handle_search(query):
         playlist_songs = service.get_playlist_songs(playlist_id)
 
         if playlist_songs:
+            # Limpiar resultados de búsqueda y cola actual
             results_cache = []
             window.update_results(results_cache)
             queue_manager.clear()
@@ -37,8 +42,6 @@ def handle_search(query):
 
             first_song_to_play = None
             for song in playlist_songs:
-                #Añadir cada canción a la cola
-                # add_song devuelve la canción si es la primera en ser añadida
                 maybe_first = queue_manager.add_song(song)
 
                 if maybe_first and first_song_to_play is None:
@@ -49,16 +52,11 @@ def handle_search(query):
                 play_song(first_song_to_play)
 
             window.update_song_info(f"Playlist cargada ({len(playlist_songs)} canciones)")
-            window.search_box.clear()  # Limpiar la barra de búsqueda
 
         else:
             window.update_song_info("Error al cargar la playlist o está vacía")
-
     else:
-        #Si no es una playlist, hacer la búsqueda normal
-        print("Realizando búsqueda normal...")
-        results_cache = service.search(query)
-        window.update_results(results_cache)
+        window.update_song_info("La URL de la playlist no es válida")
 
 
 def handle_song_selected(index):
@@ -147,7 +145,8 @@ window = MainWindow(
     handle_next,
     handle_previous,
     handle_remove_from_queue,
-    handle_queue_item_selected
+    handle_queue_item_selected,
+    handle_import_playlist
 )
 
 player.position_changed.connect(window.update_progress)
@@ -159,7 +158,7 @@ queue_manager.current_changed.connect(on_queue_updated)
 
 window.clear_btn.clicked.connect(queue_manager.clear)
 
-window.resize(900, 600)
+window.resize(1000, 600)
 window.show()
 
 sys.exit(app.exec())
