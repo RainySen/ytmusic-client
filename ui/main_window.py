@@ -475,21 +475,17 @@ class MainWindow(QWidget):
             self.on_add_to_queue(index)
 
     def init_tray_icon(self):
-        # Crear el ícono de la bandeja
         self.tray_icon = QSystemTrayIcon(self.app_icon, self)
         self.tray_icon.setToolTip("YTMusic Minimal Client")
 
-        # Crear el menú contextual (clic derecho)
         tray_menu = QMenu(self)
 
-        # 1. Acción para mostrar la ventana
         show_action = QAction("Mostrar Aplicación", self)
-        show_action.triggered.connect(self.showNormal)  # showNormal restaura la ventana
+        show_action.triggered.connect(self.showNormal)
         tray_menu.addAction(show_action)
 
         tray_menu.addSeparator()
 
-        # 2. Acciones de control (usamos los handlers que ya teníamos)
         self.play_pause_action = QAction(" Reproducir", self)
         self.play_pause_action.triggered.connect(self.on_toggle_play)
         tray_menu.addAction(self.play_pause_action)
@@ -504,16 +500,12 @@ class MainWindow(QWidget):
 
         tray_menu.addSeparator()
 
-        # 3. Acción para salir
         quit_action = QAction("Salir", self)
         quit_action.triggered.connect(QApplication.instance().quit)  # Cierra la app de verdad
         tray_menu.addAction(quit_action)
 
         self.tray_icon.setContextMenu(tray_menu)
-
-        # Conectar el clic izquierdo a mostrar la ventana
         self.tray_icon.activated.connect(self.on_tray_activated)
-
         self.tray_icon.show()
 
     def on_tray_activated(self, reason):
