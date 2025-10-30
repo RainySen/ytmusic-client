@@ -27,14 +27,14 @@ class MainWindow(QWidget):
         self.setWindowTitle("YTMusic Minimal Client")
 
         # Definir iconos
-        self.icon_play = qta.icon('fa5s.play', color='#1DB954')
-        self.icon_pause = qta.icon('fa5s.pause', color='#1DB954')
+        self.icon_play = qta.icon('fa5s.play', color='white')
+        self.icon_pause = qta.icon('fa5s.pause', color='white')
         self.icon_next = qta.icon('fa5s.step-forward', color='white')
         self.icon_prev = qta.icon('fa5s.step-backward', color='white')
         self.icon_search = qta.icon('fa5s.search', color='white')
         self.icon_volume = qta.icon('fa5s.volume-up', color='white')
-        self.icon_trash = qta.icon('fa5s.trash', color='#ff4444')
-        self.icon_clear = qta.icon('fa5s.broom', color='#ff8800')
+        self.icon_trash = qta.icon('fa5s.trash', color='white')
+        self.icon_clear = qta.icon('fa5s.broom', color='white')
 
         # Layout principal
         main_layout = QVBoxLayout(self)

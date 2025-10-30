@@ -3,3 +3,4 @@ PySide6
 ytmusicapi
 python-vlc
 qtawesome
+pyinstaller
