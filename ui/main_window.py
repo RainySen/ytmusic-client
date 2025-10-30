@@ -1,6 +1,8 @@
+import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QListWidget, QLabel, QSlider, QSplitter, QMenu
+    QLineEdit, QPushButton, QListWidget, QLabel, QSlider, QSplitter, QMenu,
+    QInputDialog, QMessageBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
@@ -10,7 +12,7 @@ import qtawesome as qta
 class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play,
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
-                 on_queue_item_selected):
+                 on_queue_item_selected, on_login_requested, on_playlist_selected):
         super().__init__()
 
         self.on_search = on_search
@@ -23,6 +25,8 @@ class MainWindow(QWidget):
         self.on_previous = on_previous
         self.on_remove_from_queue = on_remove_from_queue
         self.on_queue_item_selected = on_queue_item_selected
+        self.on_login_requested = on_login_requested
+        self.on_playlist_selected = on_playlist_selected
 
         self.setWindowTitle("YTMusic Minimal Client")
 
@@ -35,6 +39,7 @@ class MainWindow(QWidget):
         self.icon_volume = qta.icon('fa5s.volume-up', color='white')
         self.icon_trash = qta.icon('fa5s.trash', color='white')
         self.icon_clear = qta.icon('fa5s.broom', color='white')
+        self.icon_login = qta.icon('fa5s.sign-in-alt', color='white')
 
         # Layout principal
         main_layout = QVBoxLayout(self)
@@ -42,13 +47,25 @@ class MainWindow(QWidget):
         # Splitter horizontal (búsqueda | cola)
         splitter = QSplitter(Qt.Horizontal)
 
-        # --- Panel izquierdo: Búsqueda ---
+        # --- Panel izquierdo: Búsqueda y Playlists ---
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
 
+        search_header_layout = QHBoxLayout()
         search_title = QLabel("<b>Búsqueda</b>")
         search_title.setStyleSheet("font-size: 14px;")
-        left_layout.addWidget(search_title)
+        search_header_layout.addWidget(search_title)
+        search_header_layout.addStretch()
+
+        self.login_button = QPushButton()
+        self.login_button.setIcon(self.icon_login)
+        self.login_button.setToolTip("Iniciar Sesión para ver tus playlists")
+        self.login_button.setFixedSize(32, 32)
+        self.login_button.clicked.connect(self.login_clicked)
+        self.login_button.setStyleSheet("QPushButton { border: none; background-color: transparent; }")
+        search_header_layout.addWidget(self.login_button)
+
+        left_layout.addLayout(search_header_layout)
 
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Buscar canción, artista, álbum...")
@@ -73,7 +90,9 @@ class MainWindow(QWidget):
         """)
 
         self.results_list = QListWidget()
-        self.results_list.itemDoubleClicked.connect(self.song_selected)
+        # === CAMBIO CLAVE AQUÍ ===
+        # Conectamos el doble clic a la misma función que el menú contextual "Reproducir ahora".
+        self.results_list.itemDoubleClicked.connect(self.play_selected_song_now)
         self.results_list.setStyleSheet("""
             QListWidget {
                 background-color: #181818;
@@ -99,6 +118,16 @@ class MainWindow(QWidget):
         left_layout.addWidget(self.search_box)
         left_layout.addWidget(self.search_button)
         left_layout.addWidget(self.results_list)
+
+        playlists_title = QLabel("<b>Mis Playlists</b>")
+        playlists_title.setStyleSheet("font-size: 14px; margin-top: 10px;")
+
+        self.playlists_list = QListWidget()
+        self.playlists_list.itemDoubleClicked.connect(self.playlist_selected)
+        self.playlists_list.setStyleSheet(self.results_list.styleSheet())  # Reutiliza el estilo
+
+        left_layout.addWidget(playlists_title)
+        left_layout.addWidget(self.playlists_list)
 
         # --- Panel derecho: Cola ---
         right_panel = QWidget()
@@ -335,7 +364,59 @@ class MainWindow(QWidget):
             }
         """)
 
-    # Métodos UI
+    def login_clicked(self):
+        instructions = """
+Para iniciar sesión, sigue estos pasos con atención:
+
+1. Abre YouTube Music en tu navegador (Chrome, Firefox, Opera).
+2. **IMPORTANTE: Asegúrate de haber iniciado sesión con tu cuenta.**
+3. Abre las herramientas de desarrollador (con F12).
+4. Ve a la pestaña "Red" (o "Network").
+5. **IMPORTANTE: Haz una recarga forzada de la página (Ctrl + Shift + R)** para evitar la caché.
+6. En el filtro, escribe `browse` para encontrar la petición correcta.
+7. Busca la petición a `music.youtube.com/youtubei...`, haz clic derecho sobre ella.
+8. Ve a "Copiar" -> "Copiar como cURL (bash)".
+9. Pega el texto completo en el campo de abajo.
+"""
+
+        text, ok = QInputDialog.getMultiLineText(self, 'Iniciar Sesión - Obtener Credenciales', instructions, text="")
+
+        if ok and text:
+            headers_list = []
+
+            h_matches = re.findall(r"-H\s+'([^']*)'", text)
+            if h_matches:
+                headers_list.extend(h_matches)
+
+            cookie_match = re.search(r"(--cookie|-b)\s+'([^']*)'", text)
+            if cookie_match:
+                cookie_data = cookie_match.group(2)
+                headers_list.append(f"Cookie: {cookie_data}")
+
+            headers_raw = "\n".join(headers_list)
+
+            self.on_login_requested(headers_raw)
+
+    def update_playlists(self, playlists):
+        self.playlists_list.clear()
+        if not playlists:
+            self.playlists_list.addItem("Inicia sesión para ver tus playlists")
+            return
+
+        for p in playlists:
+            self.playlists_list.addItem(f" {p['title']}")
+
+    def playlist_selected(self):
+        index = self.playlists_list.currentRow()
+        self.on_playlist_selected(index)
+
+    def show_auth_success(self):
+        QMessageBox.information(self, "Éxito", "¡Inicio de sesión completado! Tus playlists se han cargado.")
+
+    def show_auth_error(self):
+        QMessageBox.warning(self, "Error",
+                            "No se pudo completar el inicio de sesión. Por favor, verifica las cabeceras e inténtalo de nuevo.")
+
     def search_clicked(self):
         text = self.search_box.text()
         if text:
@@ -347,9 +428,15 @@ class MainWindow(QWidget):
             artist = r['artists'][0]['name'] if r.get('artists') else 'Desconocido'
             self.results_list.addItem(f" {r['title']} - {artist}")
 
-    def song_selected(self):
+    # === MÉTODO CORREGIDO Y CENTRALIZADO ===
+    def play_selected_song_now(self):
+        """
+        Esta función se encarga de reproducir la canción seleccionada
+        en la lista de resultados, ya sea por doble clic o por menú contextual.
+        """
         index = self.results_list.currentRow()
-        self.on_select_song(index)
+        if index >= 0:
+            self.on_select_song(index)
 
     def update_song_info(self, text):
         self.song_label.setText(f" {text}")
@@ -430,7 +517,8 @@ class MainWindow(QWidget):
         action = menu.exec(self.results_list.mapToGlobal(position))
 
         if action == play_now_action:
-            self.song_selected()
+            # Apuntamos al nuevo método centralizado
+            self.play_selected_song_now()
         elif action == add_queue_action:
             index = self.results_list.currentRow()
             self.on_add_to_queue(index)

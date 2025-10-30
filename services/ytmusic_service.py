@@ -1,22 +1,104 @@
 from ytmusicapi import YTMusic
+import os
+import traceback
+import json
+
+AUTH_FILE = "oauth.json"
+
 
 class YTMusicService:
     def __init__(self):
-        self.ytmusic = YTMusic()  # Sin autenticación
+        if os.path.exists(AUTH_FILE):
+            try:
+                self.ytmusic = YTMusic(AUTH_FILE)
+                self.is_authenticated = True
+            except Exception:
+                self.ytmusic = YTMusic()
+                self.is_authenticated = False
+        else:
+            self.ytmusic = YTMusic()
+            self.is_authenticated = False
+
+    def setup_authentication(self, headers_raw):
+        try:
+            if not headers_raw or not headers_raw.strip():
+                print("Error: Las cabeceras extraídas están vacías.")
+                return False
+            auth_headers = {}
+            for line in headers_raw.strip().split('\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    auth_headers[key.strip()] = value.strip()
+            if 'Cookie' not in auth_headers and 'cookie' not in auth_headers:
+                print("Error: No se encontró la 'Cookie' en las cabeceras.")
+                return False
+            self.ytmusic = YTMusic(auth=auth_headers)
+            self.ytmusic.get_library_playlists(limit=1)
+            with open(AUTH_FILE, 'w') as f:
+                json.dump(auth_headers, f, indent=4)
+            self.is_authenticated = True
+            return True
+        except Exception:
+            print("Error durante la autenticación:")
+            traceback.print_exc()
+            if os.path.exists(AUTH_FILE):
+                os.remove(AUTH_FILE)
+            self.is_authenticated = False
+            return False
+
+    def get_library_playlists(self):
+        if not self.is_authenticated:
+            return []
+        try:
+            return self.ytmusic.get_library_playlists(limit=50)
+        except Exception as e:
+            print(f"Error obteniendo playlists: {e}")
+            return []
+
+    def get_playlist_songs(self, playlist_id):
+        if not self.is_authenticated:
+            return []
+        try:
+            # --- INICIO DE CAMBIO PARA DEPURACIÓN ---
+            print("\n" + "=" * 20 + " INICIO DEPURACIÓN DE PLAYLIST " + "=" * 20)
+            print(f"[DEBUG] Solicitando canciones para la playlist con ID: {playlist_id}")
+
+            # 1. Hacemos la llamada a la API
+            playlist_data = self.ytmusic.get_playlist(playlist_id, limit=100)
+
+            # 2. Imprimimos la respuesta COMPLETA de la API
+            print(f"[DEBUG] Respuesta COMPLETA de la API:\n{json.dumps(playlist_data, indent=2)}\n")
+
+            # 3. Comprobamos si la clave 'tracks' existe en la respuesta
+            if 'tracks' in playlist_data and playlist_data['tracks']:
+                print(f"[DEBUG] Se encontraron {len(playlist_data['tracks'])} canciones en la respuesta.")
+            else:
+                print("[DEBUG] ¡ALERTA! La respuesta de la API no contiene la clave 'tracks' o está vacía.")
+
+            print("=" * 22 + " FIN DEPURACIÓN DE PLAYLIST " + "=" * 23 + "\n")
+
+            # 4. Continuamos con la normalización
+            return self.normalize_playlist_tracks(playlist_data.get('tracks', []))
+            # --- FIN DE CAMBIO PARA DEPURACIÓN ---
+        except Exception as e:
+            print(f"Error obteniendo canciones de la playlist: {e}")
+            traceback.print_exc()
+            return []
+
+    def normalize_playlist_tracks(self, tracks):
+        normalized_songs = []
+        for track in tracks:
+            if not track or not track.get('videoId'):
+                continue
+            normalized_songs.append({
+                'videoId': track['videoId'],
+                'title': track.get('title', 'Título Desconocido'),
+                'artists': track.get('artists', [{'name': 'Desconocido'}])
+            })
+        return normalized_songs
 
     def search(self, query):
-        results = self.ytmusic.search(query, filter="songs", limit=20)
-        return results
+        return self.ytmusic.search(query, filter="songs", limit=20)
 
     def get_stream_url(self, video_id):
         return f"https://music.youtube.com/watch?v={video_id}"
-
-    def get_playlist_songs(self, playlist_id):
-        try:
-            playlist_data = self.ytmusic.get_playlist(playlistId=playlist_id, limit=None)
-
-            if 'tracks' in playlist_data:
-                return playlist_data['tracks']
-        except Exception as e:
-            print(f"Error al obtener la playlist: {e}")
-            return None
