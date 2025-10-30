@@ -9,7 +9,8 @@ import qtawesome as qta
 
 class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play,
-                 on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue):
+                 on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
+                 on_queue_item_selected):
         super().__init__()
 
         self.on_search = on_search
@@ -21,6 +22,7 @@ class MainWindow(QWidget):
         self.on_next = on_next
         self.on_previous = on_previous
         self.on_remove_from_queue = on_remove_from_queue
+        self.on_queue_item_selected = on_queue_item_selected
 
         self.setWindowTitle("YTMusic Minimal Client")
 
@@ -44,7 +46,7 @@ class MainWindow(QWidget):
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
 
-        search_title = QLabel("<b>🔍 Búsqueda</b>")
+        search_title = QLabel("<b>Búsqueda</b>")
         search_title.setStyleSheet("font-size: 14px;")
         left_layout.addWidget(search_title)
 
@@ -121,6 +123,9 @@ class MainWindow(QWidget):
                 background-color: #282828;
             }
         """)
+
+        # Habilitar doble click en la cola
+        self.queue_list.itemDoubleClicked.connect(self.queue_item_selected)
 
         queue_buttons = QHBoxLayout()
         self.remove_btn = QPushButton()
@@ -396,6 +401,11 @@ class MainWindow(QWidget):
         index = self.queue_list.currentRow()
         if index >= 0:
             self.on_remove_from_queue(index)
+
+    def queue_item_selected(self):
+        index = self.queue_list.currentRow()
+        if index >= 0:
+            self.on_queue_item_selected(index)
 
     def show_results_context_menu(self, position):
         item = self.results_list.itemAt(position)

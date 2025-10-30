@@ -59,20 +59,31 @@ class QueueManager(QObject):
             self.queue_updated.emit()
 
     def clear(self):
+
         self.queue.clear()
         self.current_index = -1
         self.queue_updated.emit()
 
     def get_current(self):
+
         if 0 <= self.current_index < len(self.queue):
             return self.queue[self.current_index]
         return None
 
     def get_queue(self):
+
         return self.queue
 
     def get_current_index(self):
+
         return self.current_index
+
+    def jump_to(self, index):
+        if 0 <= index < len(self.queue):
+            self.current_index = index
+            self.current_changed.emit(self.current_index)
+            return self.queue[self.current_index]
+        return None
 
     def has_next(self):
         return self.current_index < len(self.queue) - 1

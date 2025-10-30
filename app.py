@@ -42,12 +42,14 @@ def play_song(song_data):
 
     if title:
         window.update_song_info(title)
+        window.update_play_button_icon(True)
     else:
         window.update_song_info("Error al reproducir")
 
 
 def handle_toggle_play():
     player.toggle_play()
+    window.update_play_button_icon(player.is_playing)
 
 
 def handle_volume_change(value):
@@ -74,18 +76,25 @@ def handle_remove_from_queue(index):
     queue_manager.remove_at(index)
 
 
+def handle_queue_item_selected(index):
+    song = queue_manager.jump_to(index)
+    if song:
+        play_song(song)
+
+
 def on_song_finished():
     if queue_manager.has_next():
         handle_next()
     else:
         window.update_song_info("Cola terminada")
+        window.update_play_button_icon(False)
 
 
 def on_queue_updated():
     window.update_queue(queue_manager.get_queue(), queue_manager.get_current_index())
 
 
-# Crear la ventana PRIMERO
+# Crear la ventana
 window = MainWindow(
     handle_search,
     handle_song_selected,
@@ -95,7 +104,8 @@ window = MainWindow(
     handle_seek,
     handle_next,
     handle_previous,
-    handle_remove_from_queue
+    handle_remove_from_queue,
+    handle_queue_item_selected
 )
 
 player.position_changed.connect(window.update_progress)
