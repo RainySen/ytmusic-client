@@ -4,6 +4,7 @@ from services.ytmusic_service import YTMusicService
 from core.player import Player
 from core.queue_manager import QueueManager
 from ui.main_window import MainWindow
+import re
 
 app = QApplication(sys.argv)
 
@@ -11,12 +12,53 @@ service = YTMusicService()
 player = Player()
 queue_manager = QueueManager()
 results_cache = []
+PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
 
 
 def handle_search(query):
     global results_cache
-    results_cache = service.search(query)
-    window.update_results(results_cache)
+
+    #Revisar si la consulta es una URL de playlist
+    match = PLAYLIST_RE.search(query)
+
+    if match:
+        playlist_id = match.group(1)
+        print(f"Detectada playlist ID: {playlist_id}")
+
+        #Obtener las canciones de la playlist
+        playlist_songs = service.get_playlist_songs(playlist_id)
+
+        if playlist_songs:
+            results_cache = []
+            window.update_results(results_cache)
+            queue_manager.clear()
+
+            print(f"Cargando {len(playlist_songs)} canciones en la cola...")
+
+            first_song_to_play = None
+            for song in playlist_songs:
+                #Añadir cada canción a la cola
+                # add_song devuelve la canción si es la primera en ser añadida
+                maybe_first = queue_manager.add_song(song)
+
+                if maybe_first and first_song_to_play is None:
+                    first_song_to_play = maybe_first
+
+            #Reproducir la primera canción de la playlist
+            if first_song_to_play:
+                play_song(first_song_to_play)
+
+            window.update_song_info(f"Playlist cargada ({len(playlist_songs)} canciones)")
+            window.search_box.clear()  # Limpiar la barra de búsqueda
+
+        else:
+            window.update_song_info("Error al cargar la playlist o está vacía")
+
+    else:
+        #Si no es una playlist, hacer la búsqueda normal
+        print("Realizando búsqueda normal...")
+        results_cache = service.search(query)
+        window.update_results(results_cache)
 
 
 def handle_song_selected(index):
