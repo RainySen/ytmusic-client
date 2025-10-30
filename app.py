@@ -1,4 +1,6 @@
 import sys
+import qtawesome as qta
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 from services.ytmusic_service import YTMusicService
 from core.player import Player
@@ -8,6 +10,9 @@ import re
 
 app = QApplication(sys.argv)
 
+app.setQuitOnLastWindowClosed(False)
+app_icon = qta.icon('fa5s.music', color='#1DB954')
+app.setWindowIcon(app_icon)
 service = YTMusicService()
 player = Player()
 queue_manager = QueueManager()
@@ -33,7 +38,6 @@ def handle_import_playlist(url):
         playlist_songs = service.get_playlist_songs(playlist_id)
 
         if playlist_songs:
-            # Limpiar resultados de búsqueda y cola actual
             results_cache = []
             window.update_results(results_cache)
             queue_manager.clear()
@@ -47,16 +51,13 @@ def handle_import_playlist(url):
                 if maybe_first and first_song_to_play is None:
                     first_song_to_play = maybe_first
 
-            #Reproducir la primera canción de la playlist
             if first_song_to_play:
                 play_song(first_song_to_play)
 
-            window.update_song_info(f"Playlist cargada ({len(playlist_songs)} canciones)")
-
         else:
-            window.update_song_info("Error al cargar la playlist o está vacía")
+            print("Error al cargar la playlist o está vacía")
     else:
-        window.update_song_info("La URL de la playlist no es válida")
+        print("La URL de la playlist no es válida")
 
 
 def handle_song_selected(index):
@@ -146,7 +147,8 @@ window = MainWindow(
     handle_previous,
     handle_remove_from_queue,
     handle_queue_item_selected,
-    handle_import_playlist
+    handle_import_playlist,
+    app_icon
 )
 
 player.position_changed.connect(window.update_progress)
