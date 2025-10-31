@@ -190,39 +190,38 @@ def handle_login(headers_raw):
 
 def handle_playlist_selected(index):
     """
-    === LÓGICA CORREGIDA Y FINAL ===
-    Esta función ahora carga la playlist directamente en la cola de reproducción.
+    Se llama al hacer doble clic en una playlist de "Mis Playlists".
     """
     global results_cache
     if 0 <= index < len(playlists_cache):
         playlist = playlists_cache[index]
-        # Usamos 'playlistId' que es la clave correcta para las playlists de la librería.
         playlist_id = playlist.get('playlistId')
 
         if not playlist_id:
             print(f"[ERROR] La playlist '{playlist.get('title')}' no tiene un 'playlistId' válido.")
-            # Imprimimos los datos de la playlist para depurar si vuelve a fallar.
-            print(f"[DEBUG] Datos de la playlist con error: {playlist}")
             return
 
-        songs = service.get_playlist_songs(playlist_id)
+        songs_data = service.get_playlist_songs(playlist_id)
 
-        if songs:
-            print(f"Cargando {len(songs)} canciones de la playlist '{playlist.get('title')}' a la cola.")
+        #Verificamos que 'songs_data' no sea None Y que contenga la lista 'tracks'
+        if songs_data and 'tracks' in songs_data:
 
-            # 1. Limpiamos la lista de búsqueda y la cola actual.
+            #Extraemos la lista de canciones y el título
+            songs_list = songs_data['tracks']
+            playlist_title = songs_data.get('title', 'Playlist')
+
+            print(f"Cargando {len(songs_list)} canciones de la playlist '{playlist_title}' a la cola.")
+
             results_cache = []
             window.update_results([])
             queue_manager.clear()
 
-            # 2. Añadimos todas las canciones a la cola.
-            for song in songs:
+            #Iteramos sobre la LISTA de canciones, no sobre el diccionario
+            for song in songs_list:
                 queue_manager.add_song(song)
 
-            # 3. Le decimos al gestor que salte a la primera canción (índice 0) y la obtenemos.
+            #Saltamos a la primera canción y la reproducimos
             first_song = queue_manager.jump_to(0)
-
-            # 4. Reproducimos la primera canción.
             if first_song:
                 play_song(first_song)
         else:
