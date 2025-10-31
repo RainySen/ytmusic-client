@@ -56,20 +56,16 @@ class YTMusicService:
             return []
 
     def get_playlist_songs(self, playlist_id):
-        if not self.is_authenticated:
-            return []
         try:
-            # --- INICIO DE CAMBIO PARA DEPURACIÓN ---
             print("\n" + "=" * 20 + " INICIO DEPURACIÓN DE PLAYLIST " + "=" * 20)
             print(f"[DEBUG] Solicitando canciones para la playlist con ID: {playlist_id}")
 
-            # 1. Hacemos la llamada a la API
-            playlist_data = self.ytmusic.get_playlist(playlist_id, limit=100)
+            # 1. Hacemos la llamada (con limit=None para obtenerlas TODAS)
+            playlist_data = self.ytmusic.get_playlist(playlist_id, limit=None)
 
-            # 2. Imprimimos la respuesta COMPLETA de la API
-            print(f"[DEBUG] Respuesta COMPLETA de la API:\n{json.dumps(playlist_data, indent=2)}\n")
+            # 2. Imprimimos la respuesta (opcional)
+            # print(f"[DEBUG] Respuesta COMPLETA de la API:\n{json.dumps(playlist_data, indent=2)}\n")
 
-            # 3. Comprobamos si la clave 'tracks' existe en la respuesta
             if 'tracks' in playlist_data and playlist_data['tracks']:
                 print(f"[DEBUG] Se encontraron {len(playlist_data['tracks'])} canciones en la respuesta.")
             else:
@@ -77,13 +73,16 @@ class YTMusicService:
 
             print("=" * 22 + " FIN DEPURACIÓN DE PLAYLIST " + "=" * 23 + "\n")
 
-            # 4. Continuamos con la normalización
-            return self.normalize_playlist_tracks(playlist_data.get('tracks', []))
-            # --- FIN DE CAMBIO PARA DEPURACIÓN ---
+            # 3. Devolvemos el título Y las canciones
+            return {
+                'title': playlist_data.get('title', 'Playlist Importada'),
+                'tracks': self.normalize_playlist_tracks(playlist_data.get('tracks', []))
+            }
+
         except Exception as e:
             print(f"Error obteniendo canciones de la playlist: {e}")
             traceback.print_exc()
-            return []
+            return None  # Devolvemos None en caso de error
 
     def normalize_playlist_tracks(self, tracks):
         normalized_songs = []
@@ -102,3 +101,24 @@ class YTMusicService:
 
     def get_stream_url(self, video_id):
         return f"https://music.youtube.com/watch?v={video_id}"
+
+    def create_playlist(self, title, description, song_list):
+        if not self.is_authenticated:
+            print("Intento de crear playlist sin autenticación.")
+            return None
+        try:
+            # Extraemos solo los IDs de video, que es lo que pide la API
+            video_ids = [song['videoId'] for song in song_list if 'videoId' in song]
+
+            # Creamos la playlist (por defecto como PRIVADA)
+            playlist_id = self.ytmusic.create_playlist(
+                title=title,
+                description=description,
+                privacy_status="PRIVATE",
+                video_ids=video_ids
+            )
+            return playlist_id
+        except Exception as e:
+            print(f"Error al crear la playlist en la biblioteca: {e}")
+            traceback.print_exc()
+            return None

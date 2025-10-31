@@ -19,42 +19,85 @@ player = Player()
 queue_manager = QueueManager()
 results_cache = []
 playlists_cache = []
+last_imported_playlist_data = None
 PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
 
 
 def handle_search(query):
     global results_cache
-    match = PLAYLIST_RE.search(query)
+    print("Realizando búsqueda normal de texto...")
     results_cache = service.search(query)
     window.update_results(results_cache)
 
 
 def handle_import_playlist(url):
-    global results_cache
+    global results_cache, last_imported_playlist_data
     match = PLAYLIST_RE.search(url)
 
     if match:
         playlist_id = match.group(1)
-        playlist_songs = service.get_playlist_songs(playlist_id)
-        if playlist_songs:
+        print(f"Detectada playlist ID: {playlist_id}")
+
+        playlist_data = service.get_playlist_songs(playlist_id)
+
+        if playlist_data and playlist_data['tracks']:
+            playlist_songs = playlist_data['tracks']
+            playlist_title = playlist_data['title']
+
             results_cache = []
             window.update_results(results_cache)
             queue_manager.clear()
+
+            print(f"Cargando {len(playlist_songs)} canciones en la cola...")
+
             first_song_to_play = None
             for song in playlist_songs:
                 maybe_first = queue_manager.add_song(song)
                 if maybe_first and first_song_to_play is None:
                     first_song_to_play = maybe_first
+
             if first_song_to_play:
                 play_song(first_song_to_play)
-            window.update_song_info(f"Playlist cargada ({len(playlist_songs)} canciones)")
-            window.search_box.clear()
-        else:
-            window.update_song_info("Error al cargar la playlist o está vacía")
-    else:
-        results_cache = service.search(query)
-        window.update_results(results_cache)
 
+            window.search_box.clear()
+
+            last_imported_playlist_data = playlist_data
+
+            if service.is_authenticated:
+                window.ask_to_save_playlist(playlist_title)
+
+        else:
+            print("Error al cargar la playlist o está vacía")
+    else:
+        print("La URL de la playlist no es válida")
+
+
+def handle_save_imported_playlist():
+    """
+    Se llama cuando el usuario hace clic en "Sí" en el diálogo de guardado.
+    """
+    global last_imported_playlist_data, playlists_cache
+    if not last_imported_playlist_data:
+        return
+
+    title = last_imported_playlist_data['title']
+    songs = last_imported_playlist_data['tracks']
+    description = f"Importada desde URL. Contiene {len(songs)} canciones."
+
+    print(f"Intentando guardar la playlist '{title}' en la biblioteca...")
+    playlist_id = service.create_playlist(title, description, songs)
+
+    if playlist_id:
+        print(f"Playlist guardada con éxito. ID: {playlist_id}")
+        # Actualizamos la lista de "Mis Playlists" en la UI
+        playlists_cache = service.get_library_playlists()
+        window.update_playlists(playlists_cache)
+        window.show_save_playlist_success(title)
+    else:
+        print("Error al guardar la playlist.")
+        window.show_save_playlist_error(title)
+
+    last_imported_playlist_data = None  # Limpiamos el caché temporal
 
 def handle_song_selected(index):
     if 0 <= index < len(results_cache):
@@ -208,8 +251,9 @@ window = MainWindow(
     on_queue_item_selected=handle_queue_item_selected,
     on_login_requested=handle_login,
     on_playlist_selected=handle_playlist_selected,
-    handle_import_playlist,
-    app_icon
+    on_import_playlist=handle_import_playlist,
+    on_save_imported_playlist=handle_save_imported_playlist,
+    app_icon=app_icon
 )
 
 player.position_changed.connect(window.update_progress)

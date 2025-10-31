@@ -12,7 +12,8 @@ import qtawesome as qta
 class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play,
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
-                 on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon):
+                 on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
+                 on_save_imported_playlist):
         super().__init__()
 
         self.on_search = on_search
@@ -28,6 +29,7 @@ class MainWindow(QWidget):
         self.on_login_requested = on_login_requested
         self.on_playlist_selected = on_playlist_selected
         self.on_import_playlist = on_import_playlist
+        self.on_save_imported_playlist = on_save_imported_playlist
 
         self.app_icon = app_icon
         self.setWindowIcon(self.app_icon)
@@ -613,3 +615,22 @@ Para iniciar sesión, sigue estos pasos con atención:
             QSystemTrayIcon.MessageIcon.Information,
             2000  # milisegundos
         )
+
+    def ask_to_save_playlist(self, title):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Guardar Playlist")
+        msg_box.setText(f"¿Quieres guardar '{title}' en tu biblioteca 'Mis Playlists'?")
+        msg_box.setInformativeText("Esto creará una nueva playlist en tu cuenta (requiere inicio de sesión).")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg_box.setDefaultButton(QMessageBox.Yes)
+        msg_box.setIcon(QMessageBox.Question)
+
+        # Si el usuario dice "Sí", llamamos al handler que la guarda
+        if msg_box.exec() == QMessageBox.Yes:
+            self.on_save_imported_playlist()
+
+    def show_save_playlist_success(self, title):
+        QMessageBox.information(self, "Éxito", f"La playlist '{title}' se ha guardado en tu biblioteca.")
+
+    def show_save_playlist_error(self, title):
+        QMessageBox.warning(self, "Error", f"No se pudo guardar la playlist '{title}'.")
