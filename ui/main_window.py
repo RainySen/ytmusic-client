@@ -394,32 +394,33 @@ class MainWindow(QWidget):
 
     def login_clicked(self):
         instructions = """
-Para iniciar sesión, sigue estos pasos con atención:
-
-1. Abre YouTube Music en tu navegador (Chrome, Firefox, Opera).
-2. **IMPORTANTE: Asegúrate de haber iniciado sesión con tu cuenta.**
-3. Abre las herramientas de desarrollador (con F12).
-4. Ve a la pestaña "Red" (o "Network").
-5. **IMPORTANTE: Haz una recarga forzada de la página (Ctrl + Shift + R)** para evitar la caché.
-6. En el filtro, escribe `browse` para encontrar la petición correcta.
-7. Busca la petición a `music.youtube.com/youtubei...`, haz clic derecho sobre ella.
-8. Ve a "Copiar" -> "Copiar como cURL (bash)".
-9. Pega el texto completo en el campo de abajo.
-"""
+            Para iniciar sesión, sigue estos pasos con atención:
+            
+            1. Abre YouTube Music en tu navegador (Chrome, Firefox, Opera).
+            2. **IMPORTANTE: Asegúrate de haber iniciado sesión con tu cuenta.**
+            3. Abre las herramientas de desarrollador (con F12).
+            4. Ve a la pestaña "Red" (o "Network").
+            5. **IMPORTANTE: Haz una recarga forzada de la página (Ctrl + Shift + R)** para evitar la caché.
+            6. En el filtro, escribe `browse` para encontrar la petición correcta.
+            7. Busca la petición a `music.youtube.com/youtubei...`, haz clic derecho sobre ella.
+            8. Ve a "Copiar" -> "Copiar como cURL (bash)".
+            9. Pega el texto completo en el campo de abajo.
+        """
 
         text, ok = QInputDialog.getMultiLineText(self, 'Iniciar Sesión - Obtener Credenciales', instructions, text="")
 
         if ok and text:
             headers_list = []
 
-            h_matches = re.findall(r"-H\s+'([^']*)'", text)
+            h_matches = re.findall(r"-H\s+['\"]([^'\"]*)['\"]", text)
             if h_matches:
                 headers_list.extend(h_matches)
 
-            cookie_match = re.search(r"(--cookie|-b)\s+'([^']*)'", text)
+            cookie_match = re.search(r"(--cookie|-b)\s+['\"]([^'\"]*)['\"]", text)
             if cookie_match:
                 cookie_data = cookie_match.group(2)
-                headers_list.append(f"Cookie: {cookie_data}")
+                if not any(h.startswith('Cookie:') for h in headers_list):
+                    headers_list.append(f"Cookie: {cookie_data}")
 
             headers_raw = "\n".join(headers_list)
 
