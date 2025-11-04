@@ -1,6 +1,7 @@
 import vlc
 import yt_dlp
 from PySide6.QtCore import QTimer, QObject, Signal
+import traceback  # Importar para imprimir errores detallados
 
 
 class Player(QObject):
@@ -27,12 +28,32 @@ class Player(QObject):
             "quiet": True,
         }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return info["url"], info["title"]
+        # --- INICIO DE CAMBIO PARA DEPURACIÓN ---
+        # Envolvemos la llamada a yt-dlp en un try-except para capturar el error exacto.
+        try:
+            print(f"[DEBUG] Obteniendo URL de stream para: {url}")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                print("[DEBUG] yt-dlp obtuvo la información correctamente.")
+                return info["url"], info["title"]
+        except Exception as e:
+            print("\n" + "="*50)
+            print("[ERROR] yt-dlp no pudo obtener la URL del stream.")
+            print(f"      URL solicitada: {url}")
+            print(f"      Error: {e}")
+            traceback.print_exc()  # Imprime el error completo y detallado
+            print("="*50 + "\n")
+            return None, None  # Devolvemos None para que la reproducción falle de forma controlada
+        # --- FIN DE CAMBIO PARA DEPURACIÓN ---
 
     def play(self, url):
         stream_url, title = self.get_audio_url(url)
+
+        # Si get_audio_url falló, stream_url será None
+        if not stream_url:
+            print("[ERROR] No se pudo iniciar la reproducción porque no se obtuvo una URL de stream válida.")
+            return None  # Devolvemos None para indicar el fallo
+
         media = self.instance.media_new(stream_url)
         self.player.set_media(media)
         self.player.play()
