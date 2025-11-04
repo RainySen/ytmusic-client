@@ -7,6 +7,7 @@ Te permite buscar en YouTube Music, gestionar una cola de reproducción y escuch
 <img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/d02358a8-d57d-479e-8c6a-f98d6e4d5904" />
 <img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/b6234f13-81ca-40b2-a340-5c4968b31b6c" />
 
+> **Nota:** Este proyecto está fuertemente inspirado en el concepto y la funcionalidad de [ytmdesktop/ytmdesktop](https://github.com/ytmdesktop/ytmdesktop).
 
 ---
 
