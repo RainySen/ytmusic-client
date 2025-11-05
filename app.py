@@ -15,13 +15,25 @@ app.setQuitOnLastWindowClosed(False)
 app_icon = qta.icon('fa5s.music', color='#03adb7')
 app.setWindowIcon(app_icon)
 service = YTMusicService()
-player = Player()
+player = Player(service)  # IMPORTANTE: Pasar el servicio al player
 queue_manager = QueueManager()
 results_cache = []
 playlists_cache = []
 last_imported_playlist_data = None
 PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
 
+def handle_result_highlighted(index):
+    """
+    Se llama cuando el usuario resalta un ítem en la búsqueda.
+    Inicia la precarga del stream.
+    """
+    if 0 <= index < len(results_cache):
+        song_data = results_cache[index]
+        if "videoId" in song_data:
+            video_id = song_data["videoId"]
+            # ¡Tu nuevo player.py es más inteligente!
+            # Solo necesita el ID, él se encarga del resto.
+            player.preload_stream(video_id)
 
 def handle_search(query):
     global results_cache
@@ -58,8 +70,7 @@ def handle_import_playlist(url):
 
             if first_song_to_play:
                 play_song(first_song_to_play)
-                # Precargar las siguientes 2 canciones
-                preload_next_songs(2)
+                preload_next_songs(5)
 
             window.search_box.clear()
 
@@ -107,8 +118,8 @@ def handle_song_selected(index):
         current_song = queue_manager.play_now(song_data)
         if current_song:
             play_song(current_song)
-            # Precargar las siguientes 2 canciones
-            preload_next_songs(2)
+            # Precargar las siguientes 5 canciones
+            preload_next_songs(5)
 
 
 def handle_add_to_queue(index):
@@ -117,14 +128,16 @@ def handle_add_to_queue(index):
         first_song = queue_manager.add_song(song_data)
         if first_song:
             play_song(first_song)
-            # Precargar las siguientes 2 canciones
-            preload_next_songs(2)
+            # Precargar las siguientes 5 canciones
+            preload_next_songs(5)
+        else:
+            # Si no es la primera canción, precargar la que acabamos de agregar
+            if "videoId" in song_data:
+                video_id = song_data["videoId"]
+                player.preload_stream(video_id)
 
 
-def preload_next_songs(count=2):
-    """
-    Precarga las siguientes N canciones en la cola para reproducción instantánea
-    """
+def preload_next_songs(count=5):
     queue = queue_manager.get_queue()
     current_index = queue_manager.get_current_index()
 
@@ -134,8 +147,7 @@ def preload_next_songs(count=2):
             next_song = queue[next_index]
             if "videoId" in next_song:
                 video_id = next_song["videoId"]
-                url = service.get_stream_url(video_id)
-                player.preload_stream(video_id, url)
+                player.preload_stream(video_id)
 
 
 def play_song(song_data):
@@ -144,20 +156,15 @@ def play_song(song_data):
         return
 
     video_id = song_data["videoId"]
-    url = service.get_stream_url(video_id)
-
-    # Mostrar mensaje de carga
     artist_name = song_data.get('artists', [{}])[0].get('name', 'Desconocido')
-    window.update_song_info(f"Cargando: {song_data['title']} - {artist_name}")
+    display_text = f"{song_data['title']} - {artist_name}"
+    window.update_play_button_icon(True)
+    window.update_song_info(f"Cargando: {display_text}")
+    title_from_cache = player.play(video_id)
 
-    title = player.play(video_id, url)
-
-    if title:
-        # Reproducción inmediata desde caché
-        display_text = f"{title} - {artist_name}"
+    if title_from_cache:
+        print("[UI] Cache hit, actualizando título final.")
         window.update_song_info(display_text)
-        window.update_play_button_icon(True)
-    # Si no hay título, se actualizará vía signal cuando esté listo
 
 
 def on_stream_ready(video_id, title):
@@ -193,8 +200,8 @@ def handle_next():
     next_song = queue_manager.next()
     if next_song:
         play_song(next_song)
-        # Precargar las siguientes 2 canciones
-        preload_next_songs(2)
+        # Precargar las siguientes 5 canciones
+        preload_next_songs(5)
 
 
 def handle_previous():
@@ -211,8 +218,7 @@ def handle_queue_item_selected(index):
     song = queue_manager.jump_to(index)
     if song:
         play_song(song)
-        # Precargar las siguientes 2 canciones
-        preload_next_songs(2)
+        preload_next_songs(5)
 
 
 def on_song_finished():
@@ -269,7 +275,7 @@ def handle_playlist_selected(index):
             first_song = queue_manager.jump_to(0)
             if first_song:
                 play_song(first_song)
-                preload_next_songs(2)
+                preload_next_songs(5)
         else:
             print(f"La playlist '{playlist.get('title')}' está vacía o no se pudo cargar.")
 
@@ -298,6 +304,7 @@ window = MainWindow(
     on_playlist_selected=handle_playlist_selected,
     on_import_playlist=handle_import_playlist,
     on_save_imported_playlist=handle_save_imported_playlist,
+    on_result_highlighted=handle_result_highlighted,
     app_icon=app_icon
 )
 
