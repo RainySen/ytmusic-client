@@ -13,7 +13,7 @@ class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play,
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
                  on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
-                 on_save_imported_playlist):
+                 on_save_imported_playlist, on_result_highlighted):
         super().__init__()
 
         self.on_search = on_search
@@ -30,6 +30,7 @@ class MainWindow(QWidget):
         self.on_playlist_selected = on_playlist_selected
         self.on_import_playlist = on_import_playlist
         self.on_save_imported_playlist = on_save_imported_playlist
+        self.on_result_highlighted = on_result_highlighted
 
         self.app_icon = app_icon
         self.setWindowIcon(self.app_icon)
@@ -98,6 +99,7 @@ class MainWindow(QWidget):
 
         self.results_list = QListWidget()
         self.results_list.itemDoubleClicked.connect(self.play_selected_song_now)
+        self.results_list.currentItemChanged.connect(self.result_highlighted)
         self.results_list.setStyleSheet("""
             QListWidget {
                 background-color: #0a1415;
@@ -476,6 +478,15 @@ class MainWindow(QWidget):
         text = self.search_box.text()
         if text:
             self.on_search(text)
+
+    def result_highlighted(self, current, previous):
+        """
+        Se llama cuando el usuario selecciona (con un clic) un ítem
+        en la lista de resultados.
+        """
+        index = self.results_list.currentRow()
+        if self.on_result_highlighted and index >= 0:
+            self.on_result_highlighted(index)
 
     def update_results(self, results):
         self.results_list.clear()
