@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QInputDialog, QMessageBox, QSystemTrayIcon, QApplication
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtGui import QIcon, QAction, QKeySequence
 import qtawesome as qta
 
 
@@ -383,6 +383,8 @@ class MainWindow(QWidget):
 
         main_layout.addWidget(player_widget)
 
+        self.setup_quit_shortcut()
+
         self.init_tray_icon()
 
         # Estilo general de la ventana
@@ -407,7 +409,17 @@ class MainWindow(QWidget):
             }
         """)
 
+    def setup_quit_shortcut(self):
+        """Crea una acción invisible que cierra la app con Ctrl+Q."""
+        quit_action = QAction("Salir", self)
+        quit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        quit_action.setToolTip("Cierra la aplicación completamente")
+        # Conecta la acción directamente al 'quit' de la aplicación
+        quit_action.triggered.connect(QApplication.instance().quit)
+        self.addAction(quit_action)
+
     def login_clicked(self):
+        # ... (el resto del archivo no cambia) ...
         instructions = """
             Para iniciar sesión, sigue estos pasos con atención:
 
@@ -625,7 +637,7 @@ class MainWindow(QWidget):
 
         tray_menu.addSeparator()
 
-        quit_action = QAction("Salir", self)
+        quit_action = QAction("Salir (o Ctrl+Q)", self)
         quit_action.triggered.connect(QApplication.instance().quit)
         tray_menu.addAction(quit_action)
 
