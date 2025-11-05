@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QInputDialog, QMessageBox, QSystemTrayIcon, QApplication
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtGui import QIcon, QAction, QKeySequence
 import qtawesome as qta
 
 
@@ -45,17 +45,16 @@ class MainWindow(QWidget):
         self.icon_volume = qta.icon('fa5s.volume-up', color='white')
         self.icon_trash = qta.icon('fa5s.trash', color='white')
         self.icon_clear = qta.icon('fa5s.broom', color='white')
-        self.icon_login = qta.icon('fa5s.sign-in-alt', color='white')
-        self.icon_clear = qta.icon('fa5s.broom', color='white')
+        self.icon_login = qta.icon('mdi.account-circle', color='white')
         self.icon_import = qta.icon('fa5s.file-import', color='white')
 
         # Layout principal
         main_layout = QVBoxLayout(self)
 
-        # Splitter horizontal (búsqueda | cola)
+        # Splitter horizontal (búsqueda | playlists + cola)
         splitter = QSplitter(Qt.Horizontal)
 
-        # --- Panel izquierdo: Búsqueda y Playlists ---
+        # --- Panel izquierdo: Búsqueda ---
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
 
@@ -85,7 +84,7 @@ class MainWindow(QWidget):
         self.search_button.clicked.connect(self.search_clicked)
         self.search_button.setStyleSheet("""
             QPushButton {
-                background-color: #1DB954;
+                background-color: #03adb7;
                 color: white;
                 border: none;
                 padding: 8px;
@@ -93,33 +92,30 @@ class MainWindow(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #1ed760;
+                background-color: #00dfe5;
             }
         """)
 
         self.results_list = QListWidget()
-        # === CAMBIO CLAVE AQUÍ ===
-        # Conectamos el doble clic a la misma función que el menú contextual "Reproducir ahora".
         self.results_list.itemDoubleClicked.connect(self.play_selected_song_now)
         self.results_list.setStyleSheet("""
             QListWidget {
-                background-color: #181818;
+                background-color: #0a1415;
                 color: white;
-                border: 1px solid #282828;
+                border: 1px solid #1a2728;
                 border-radius: 4px;
             }
             QListWidget::item {
                 padding: 8px;
             }
             QListWidget::item:hover {
-                background-color: #282828;
+                background-color: #1a2728;
             }
             QListWidget::item:selected {
-                background-color: #1DB954;
+                background-color: #03adb7;
             }
         """)
 
-        # Habilitar menú contextual
         self.results_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.results_list.customContextMenuRequested.connect(self.show_results_context_menu)
 
@@ -127,42 +123,70 @@ class MainWindow(QWidget):
         left_layout.addWidget(self.search_button)
         left_layout.addWidget(self.results_list)
 
+        # --- Panel derecho: Playlists + Cola (vertical split) ---
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Splitter vertical para Playlists y Cola
+        vertical_splitter = QSplitter(Qt.Vertical)
+
+        # --- Sección de Playlists (arriba) ---
+        playlists_panel = QWidget()
+        playlists_layout = QVBoxLayout(playlists_panel)
+
         playlists_title = QLabel("<b>Mis Playlists</b>")
-        playlists_title.setStyleSheet("font-size: 14px; margin-top: 10px;")
+        playlists_title.setStyleSheet("font-size: 14px;")
 
         self.playlists_list = QListWidget()
         self.playlists_list.itemDoubleClicked.connect(self.playlist_selected)
-        self.playlists_list.setStyleSheet(self.results_list.styleSheet())  # Reutiliza el estilo
-
-        left_layout.addWidget(playlists_title)
-        left_layout.addWidget(self.playlists_list)
-
-        # --- Panel derecho: Cola ---
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-
-        queue_title = QLabel("<b>Cola de reproducción</b>")
-        queue_title.setStyleSheet("font-size: 14px;")
-        right_layout.addWidget(queue_title)
-
-        self.queue_list = QListWidget()
-        self.queue_list.setStyleSheet("""
+        self.playlists_list.setStyleSheet("""
             QListWidget {
-                background-color: #181818;
+                background-color: #0a1415;
                 color: white;
-                border: 1px solid #282828;
+                border: 1px solid #1a2728;
                 border-radius: 4px;
             }
             QListWidget::item {
                 padding: 8px;
             }
             QListWidget::item:hover {
-                background-color: #282828;
+                background-color: #1a2728;
+            }
+            QListWidget::item:selected {
+                background-color: #03adb7;
             }
         """)
 
-        # Habilitar doble click en la cola
+        playlists_layout.addWidget(playlists_title)
+        playlists_layout.addWidget(self.playlists_list)
+
+        # --- Sección de Cola (abajo) ---
+        queue_panel = QWidget()
+        queue_layout = QVBoxLayout(queue_panel)
+
+        queue_title = QLabel("<b>Cola de reproducción</b>")
+        queue_title.setStyleSheet("font-size: 14px;")
+
+        self.queue_list = QListWidget()
+        self.queue_list.setStyleSheet("""
+            QListWidget {
+                background-color: #0a1415;
+                color: white;
+                border: 1px solid #1a2728;
+                border-radius: 4px;
+            }
+            QListWidget::item {
+                padding: 8px;
+            }
+            QListWidget::item:hover {
+                background-color: #1a2728;
+            }
+        """)
+
         self.queue_list.itemDoubleClicked.connect(self.queue_item_selected)
+        self.queue_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.queue_list.customContextMenuRequested.connect(self.show_queue_context_menu)
 
         queue_buttons = QHBoxLayout()
         self.import_btn = QPushButton()
@@ -170,32 +194,15 @@ class MainWindow(QWidget):
         self.import_btn.setText(" Importar URL")
         self.import_btn.clicked.connect(self.import_playlist_clicked)
         self.import_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #007bff;
-                        color: white;
-                        border: none;
-                        padding: 6px 12px;
-                        border-radius: 4px;
-                    }
-                    QPushButton:hover {
-                        background-color: #0099ff;
-                    }
-                """)
-
-        self.remove_btn = QPushButton()
-        self.remove_btn.setIcon(self.icon_trash)
-        self.remove_btn.setText(" Eliminar")
-        self.remove_btn.clicked.connect(self.remove_selected)
-        self.remove_btn.setStyleSheet("""
             QPushButton {
-                background-color: #ff4444;
+                background-color: #007bff;
                 color: white;
                 border: none;
                 padding: 6px 12px;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #ff6666;
+                background-color: #0099ff;
             }
         """)
 
@@ -204,25 +211,33 @@ class MainWindow(QWidget):
         self.clear_btn.setText(" Limpiar todo")
         self.clear_btn.setStyleSheet("""
             QPushButton {
-                background-color: #ff8800;
+                background-color: #e1732e;
                 color: white;
                 border: none;
                 padding: 6px 12px;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #ffaa00;
+                background-color: #e68c48;
             }
         """)
 
         queue_buttons.addWidget(self.import_btn)
-        queue_buttons.addWidget(self.remove_btn)
         queue_buttons.addWidget(self.clear_btn)
 
-        right_layout.addWidget(self.queue_list)
-        right_layout.addLayout(queue_buttons)
+        queue_layout.addWidget(queue_title)
+        queue_layout.addWidget(self.queue_list)
+        queue_layout.addLayout(queue_buttons)
 
-        # Agregar paneles al splitter
+        # Agregar paneles al splitter vertical
+        vertical_splitter.addWidget(playlists_panel)
+        vertical_splitter.addWidget(queue_panel)
+        vertical_splitter.setStretchFactor(0, 1)
+        vertical_splitter.setStretchFactor(1, 1)
+
+        right_layout.addWidget(vertical_splitter)
+
+        # Agregar paneles al splitter horizontal
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
         splitter.setStretchFactor(0, 1)
@@ -234,7 +249,7 @@ class MainWindow(QWidget):
         player_widget = QWidget()
         player_widget.setStyleSheet("""
             QWidget {
-                background-color: #282828;
+                background-color: #0f1b1c;
                 border-radius: 8px;
                 padding: 10px;
             }
@@ -254,19 +269,19 @@ class MainWindow(QWidget):
         self.progress_slider.sliderMoved.connect(self.seek_position)
         self.progress_slider.setStyleSheet("""
             QSlider::groove:horizontal {
-                background: #404040;
+                background: #1a2728;
                 height: 4px;
                 border-radius: 2px;
             }
             QSlider::handle:horizontal {
-                background: #1DB954;
+                background: #03adb7;
                 width: 12px;
                 height: 12px;
                 margin: -4px 0;
                 border-radius: 6px;
             }
             QSlider::sub-page:horizontal {
-                background: #1DB954;
+                background: #03adb7;
                 border-radius: 2px;
             }
         """)
@@ -287,12 +302,12 @@ class MainWindow(QWidget):
         self.prev_button.setFixedSize(40, 40)
         self.prev_button.setStyleSheet("""
             QPushButton {
-                background-color: #404040;
+                background-color: #1a2728;
                 border: none;
                 border-radius: 20px;
             }
             QPushButton:hover {
-                background-color: #535353;
+                background-color: #2a3738;
             }
         """)
 
@@ -302,12 +317,12 @@ class MainWindow(QWidget):
         self.play_button.setFixedSize(50, 50)
         self.play_button.setStyleSheet("""
             QPushButton {
-                background-color: #1DB954;
+                background-color: #03adb7;
                 border: none;
                 border-radius: 25px;
             }
             QPushButton:hover {
-                background-color: #1ed760;
+                background-color: #00dfe5;
                 transform: scale(1.05);
             }
         """)
@@ -318,12 +333,12 @@ class MainWindow(QWidget):
         self.next_button.setFixedSize(40, 40)
         self.next_button.setStyleSheet("""
             QPushButton {
-                background-color: #404040;
+                background-color: #1a2728;
                 border: none;
                 border-radius: 20px;
             }
             QPushButton:hover {
-                background-color: #535353;
+                background-color: #2a3738;
             }
         """)
 
@@ -334,19 +349,19 @@ class MainWindow(QWidget):
         self.volume_slider.valueChanged.connect(self.volume_changed)
         self.volume_slider.setStyleSheet("""
             QSlider::groove:horizontal {
-                background: #404040;
+                background: #1a2728;
                 height: 4px;
                 border-radius: 2px;
             }
             QSlider::handle:horizontal {
-                background: white;
+                background: #03adb7;
                 width: 10px;
                 height: 10px;
                 margin: -3px 0;
                 border-radius: 5px;
             }
             QSlider::sub-page:horizontal {
-                background: white;
+                background: #03adb7;
                 border-radius: 2px;
             }
         """)
@@ -368,34 +383,46 @@ class MainWindow(QWidget):
 
         main_layout.addWidget(player_widget)
 
+        self.setup_quit_shortcut()
+
         self.init_tray_icon()
 
         # Estilo general de la ventana
         self.setStyleSheet("""
             QWidget {
-                background-color: #121212;
+                background-color: #060d0e;
                 color: white;
                 font-family: 'Segoe UI', Arial;
             }
             QLineEdit {
-                background-color: #282828;
+                background-color: #0f1b1c;
                 color: white;
-                border: 1px solid #404040;
+                border: 1px solid #1a2728;
                 border-radius: 4px;
                 padding: 8px;
             }
             QLineEdit:focus {
-                border: 1px solid #1DB954;
+                border: 1px solid #03adb7;
             }
             QLabel {
                 color: white;
             }
         """)
 
+    def setup_quit_shortcut(self):
+        """Crea una acción invisible que cierra la app con Ctrl+Q."""
+        quit_action = QAction("Salir", self)
+        quit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        quit_action.setToolTip("Cierra la aplicación completamente")
+        # Conecta la acción directamente al 'quit' de la aplicación
+        quit_action.triggered.connect(QApplication.instance().quit)
+        self.addAction(quit_action)
+
     def login_clicked(self):
+        # ... (el resto del archivo no cambia) ...
         instructions = """
             Para iniciar sesión, sigue estos pasos con atención:
-            
+
             1. Abre YouTube Music en tu navegador (Chrome, Firefox, Opera).
             2. **IMPORTANTE: Asegúrate de haber iniciado sesión con tu cuenta.**
             3. Abre las herramientas de desarrollador (con F12).
@@ -412,15 +439,14 @@ class MainWindow(QWidget):
         if ok and text:
             headers_list = []
 
-            h_matches = re.findall(r"-H\s+['\"]([^'\"]*)['\"]", text)
+            h_matches = re.findall(r"-H\s+'([^']*)'", text)
             if h_matches:
                 headers_list.extend(h_matches)
 
-            cookie_match = re.search(r"(--cookie|-b)\s+['\"]([^'\"]*)['\"]", text)
+            cookie_match = re.search(r"(--cookie|-b)\s+'([^']*)'", text)
             if cookie_match:
                 cookie_data = cookie_match.group(2)
-                if not any(h.startswith('Cookie:') for h in headers_list):
-                    headers_list.append(f"Cookie: {cookie_data}")
+                headers_list.append(f"Cookie: {cookie_data}")
 
             headers_raw = "\n".join(headers_list)
 
@@ -455,9 +481,8 @@ class MainWindow(QWidget):
         self.results_list.clear()
         for r in results:
             artist = r['artists'][0]['name'] if r.get('artists') else 'Desconocido'
-            self.results_list.addItem(f" {r['title']} - {artist}")
+            self.results_list.addItem(f"♪ {r['title']} - {artist}")
 
-    # === MÉTODO CORREGIDO Y CENTRALIZADO ===
     def play_selected_song_now(self):
         """
         Esta función se encarga de reproducir la canción seleccionada
@@ -468,7 +493,7 @@ class MainWindow(QWidget):
             self.on_select_song(index)
 
     def update_song_info(self, text):
-        self.song_label.setText(f" {text}")
+        self.song_label.setText(f"♪ {text}")
 
     def toggle_play_clicked(self):
         self.on_toggle_play()
@@ -477,11 +502,11 @@ class MainWindow(QWidget):
         if is_playing:
             self.play_button.setIcon(self.icon_pause)
             if hasattr(self, 'play_pause_action'):
-                self.play_pause_action.setText(" Pausar")
+                self.play_pause_action.setText("⏸ Pausar")
         else:
             self.play_button.setIcon(self.icon_play)
             if hasattr(self, 'play_pause_action'):
-                self.play_pause_action.setText(" Reproducir")
+                self.play_pause_action.setText("▶ Reproducir")
 
     def volume_changed(self, value):
         self.on_volume_change(value)
@@ -535,6 +560,29 @@ class MainWindow(QWidget):
         if index >= 0:
             self.on_queue_item_selected(index)
 
+    def show_queue_context_menu(self, position):
+        item = self.queue_list.itemAt(position)
+        if item is None:
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #0f1b1c;
+                color: white;
+                border: 1px solid #1a2728;
+            }
+            QMenu::item:selected {
+                background-color: #ff4444;
+            }
+        """)
+
+        delete_action = menu.addAction(self.icon_trash, " Eliminar de la cola")
+        action = menu.exec(self.queue_list.mapToGlobal(position))
+
+        if action == delete_action:
+            self.remove_selected()
+
     def show_results_context_menu(self, position):
         item = self.results_list.itemAt(position)
         if item is None:
@@ -543,12 +591,12 @@ class MainWindow(QWidget):
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
-                background-color: #282828;
+                background-color: #0f1b1c;
                 color: white;
-                border: 1px solid #404040;
+                border: 1px solid #1a2728;
             }
             QMenu::item:selected {
-                background-color: #1DB954;
+                background-color: #03adb7;
             }
         """)
 
@@ -558,7 +606,6 @@ class MainWindow(QWidget):
         action = menu.exec(self.results_list.mapToGlobal(position))
 
         if action == play_now_action:
-            # Apuntamos al nuevo método centralizado
             self.play_selected_song_now()
         elif action == add_queue_action:
             index = self.results_list.currentRow()
@@ -590,8 +637,8 @@ class MainWindow(QWidget):
 
         tray_menu.addSeparator()
 
-        quit_action = QAction("Salir", self)
-        quit_action.triggered.connect(QApplication.instance().quit)  # Cierra la app de verdad
+        quit_action = QAction("Salir (o Ctrl+Q)", self)
+        quit_action.triggered.connect(QApplication.instance().quit)
         tray_menu.addAction(quit_action)
 
         self.tray_icon.setContextMenu(tray_menu)
@@ -599,22 +646,17 @@ class MainWindow(QWidget):
         self.tray_icon.show()
 
     def on_tray_activated(self, reason):
-        # Mostrar la ventana con un clic izquierdo normal
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.showNormal()
 
     def closeEvent(self, event):
-        # Sobreescribir el evento de cierre (clic en la 'X')
-        # 1. Ignorar el evento (evita que la app se cierre)
         event.ignore()
-        # 2. Ocultar la ventana
         self.hide()
-        # 3. Mostrar una notificación (opcional pero recomendado)
         self.tray_icon.showMessage(
             "Aplicación minimizada",
             "El reproductor sigue activo en la bandeja del sistema.",
             QSystemTrayIcon.MessageIcon.Information,
-            2000  # milisegundos
+            2000
         )
 
     def ask_to_save_playlist(self, title):
@@ -626,7 +668,6 @@ class MainWindow(QWidget):
         msg_box.setDefaultButton(QMessageBox.Yes)
         msg_box.setIcon(QMessageBox.Question)
 
-        # Si el usuario dice "Sí", llamamos al handler que la guarda
         if msg_box.exec() == QMessageBox.Yes:
             self.on_save_imported_playlist()
 

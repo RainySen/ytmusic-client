@@ -59,9 +59,15 @@ class QueueManager(QObject):
             self.queue_updated.emit()
 
     def clear(self):
+        current_song = self.get_current()
 
-        self.queue.clear()
-        self.current_index = -1
+        if current_song:
+            self.queue = [current_song]
+            self.current_index = 0
+        else:
+            self.queue.clear()
+            self.current_index = -1
+
         self.queue_updated.emit()
 
     def get_current(self):
