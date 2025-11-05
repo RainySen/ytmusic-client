@@ -97,7 +97,7 @@ class YTMusicService:
         return normalized_songs
 
     def search(self, query):
-        return self.ytmusic.search(query, filter="songs", limit=20)
+        return self.ytmusic.search(query, filter="songs", limit=30)
 
     def get_stream_url(self, video_id):
         return f"https://music.youtube.com/watch?v={video_id}"
