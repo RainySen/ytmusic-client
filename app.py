@@ -35,6 +35,12 @@ def handle_result_highlighted(index):
             # Solo necesita el ID, él se encarga del resto.
             player.preload_stream(video_id)
 
+def handle_queue_item_moved(source_index, dest_index):
+    queue_manager.move_song(source_index, dest_index)
+
+def handle_toggle_loop():
+    queue_manager.toggle_loop_mode()
+
 def handle_search(query):
     global results_cache
     print("Realizando búsqueda normal de texto...")
@@ -222,11 +228,24 @@ def handle_queue_item_selected(index):
 
 
 def on_song_finished():
-    if queue_manager.has_next():
-        handle_next()
+    mode = queue_manager.get_loop_mode()
+
+    if mode == QueueManager.LOOP_SONG:
+        print("[LOOP] Repitiendo canción actual.")
+        current_song = queue_manager.get_current()
+        if current_song:
+            play_song(current_song)
     else:
-        window.update_song_info("Cola terminada")
-        window.update_play_button_icon(False)
+        # Modo LOOP_OFF o LOOP_QUEUE
+        # El metodo next() ya se encarga de la lógica de LOOP_QUEUE
+        next_song = queue_manager.next()
+        if next_song:
+            play_song(next_song)
+            preload_next_songs(5)
+        else:
+            # Se llegó al final de la cola y el modo es LOOP_OFF
+            window.update_song_info("Cola terminada")
+            window.update_play_button_icon(False)
 
 
 def on_queue_updated():
@@ -305,6 +324,8 @@ window = MainWindow(
     on_import_playlist=handle_import_playlist,
     on_save_imported_playlist=handle_save_imported_playlist,
     on_result_highlighted=handle_result_highlighted,
+    on_queue_item_moved=handle_queue_item_moved,
+    on_toggle_loop=handle_toggle_loop,
     app_icon=app_icon
 )
 
@@ -318,9 +339,10 @@ player.stream_error.connect(on_stream_error)
 # Conectar signals del queue manager
 queue_manager.queue_updated.connect(on_queue_updated)
 queue_manager.current_changed.connect(on_queue_updated)
+queue_manager.loop_mode_changed.connect(window.update_loop_button_icon)
 window.clear_btn.clicked.connect(queue_manager.clear)
 
 initial_load()
-window.resize(1000, 600)
+window.resize(1080, 750)
 window.show()
 sys.exit(app.exec())
