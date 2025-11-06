@@ -13,7 +13,7 @@ class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play,
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
                  on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
-                 on_save_imported_playlist, on_result_highlighted):
+                 on_save_imported_playlist, on_result_highlighted, on_queue_item_moved, on_toggle_loop):
         super().__init__()
 
         self.on_search = on_search
@@ -31,6 +31,8 @@ class MainWindow(QWidget):
         self.on_import_playlist = on_import_playlist
         self.on_save_imported_playlist = on_save_imported_playlist
         self.on_result_highlighted = on_result_highlighted
+        self.on_queue_item_moved = on_queue_item_moved
+        self.on_toggle_loop = on_toggle_loop
 
         self.app_icon = app_icon
         self.setWindowIcon(self.app_icon)
@@ -46,8 +48,11 @@ class MainWindow(QWidget):
         self.icon_volume = qta.icon('fa5s.volume-up', color='white')
         self.icon_trash = qta.icon('fa5s.trash', color='white')
         self.icon_clear = qta.icon('fa5s.broom', color='white')
-        self.icon_login = qta.icon('mdi.account-circle', color='white')
+        self.icon_login = qta.icon('fa5s.user-circle', color='white')
         self.icon_import = qta.icon('fa5s.file-import', color='white')
+        self.icon_loop_off = qta.icon('fa5s.sync-alt', color='gray')
+        self.icon_loop_queue = qta.icon('fa5s.sync-alt', color='#03adb7')
+        self.icon_loop_song = qta.icon('fa5s.redo', color='#03adb7')
 
         # Layout principal
         main_layout = QVBoxLayout(self)
@@ -104,7 +109,6 @@ class MainWindow(QWidget):
             QListWidget {
                 background-color: #0a1415;
                 color: white;
-                border: 1px solid #1a2728;
                 border-radius: 4px;
             }
             QListWidget::item {
@@ -112,10 +116,13 @@ class MainWindow(QWidget):
             }
             QListWidget::item:hover {
                 background-color: #1a2728;
+                outline: none;
             }
-            QListWidget::item:selected {
+            QListWidget::item:selected:active {
                 background-color: #03adb7;
+                outline: none;
             }
+            
         """)
 
         self.results_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -154,9 +161,11 @@ class MainWindow(QWidget):
             }
             QListWidget::item:hover {
                 background-color: #1a2728;
+                outline: none;
             }
             QListWidget::item:selected {
                 background-color: #03adb7;
+                outline: none;
             }
         """)
 
@@ -171,18 +180,39 @@ class MainWindow(QWidget):
         queue_title.setStyleSheet("font-size: 14px;")
 
         self.queue_list = QListWidget()
+
+        self.queue_list.setDragEnabled(True)
+        self.queue_list.setAcceptDrops(True)
+        self.queue_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self.queue_list.model().rowsMoved.connect(self.queue_item_moved)
+
         self.queue_list.setStyleSheet("""
             QListWidget {
                 background-color: #0a1415;
                 color: white;
                 border: 1px solid #1a2728;
                 border-radius: 4px;
+                selection-background-color: #1a2728;
             }
             QListWidget::item {
                 padding: 8px;
             }
             QListWidget::item:hover {
                 background-color: #1a2728;
+                outline: none;
+            }
+            QListWidget::item:selected {
+                background-color: #1a2728
+                color: white;
+                border-left: 3px solid #03adb7;
+                padding-left: 5px
+                outline: none;
+            }
+            QListWidget::item:selected:active {
+                background-color: #1a2728; 
+                border-left: 3px solid #03adb7;
+                padding-left: 5px;
+                outline: none;
             }
         """)
 
@@ -253,10 +283,13 @@ class MainWindow(QWidget):
             QWidget {
                 background-color: #0f1b1c;
                 border-radius: 8px;
-                padding: 10px;
+                padding: 6px 10px;
             }
         """)
         player_layout = QVBoxLayout(player_widget)
+
+        player_layout.setContentsMargins(0, 0, 0, 0)
+        player_layout.setSpacing(5)
 
         self.song_label = QLabel("Sin reproducción")
         self.song_label.setStyleSheet("font-weight: bold; color: white; font-size: 13px;")
@@ -371,11 +404,23 @@ class MainWindow(QWidget):
         volume_icon = QLabel()
         volume_icon.setPixmap(self.icon_volume.pixmap(20, 20))
 
+
+        self.loop_button = QPushButton()
+        self.loop_button.setIcon(self.icon_loop_off)
+        self.loop_button.clicked.connect(self.on_toggle_loop)
+        self.loop_button.setFixedSize(30, 30)
+        self.loop_button.setToolTip("Repetir (Apagado)")
+        self.loop_button.setStyleSheet("""
+                QPushButton { border: none; background-color: transparent; border-radius: 15px; }
+                QPushButton:hover { background-color: #2a3738; }
+            """)
+
         controls_layout.addStretch()
         controls_layout.addWidget(self.prev_button)
         controls_layout.addWidget(self.play_button)
         controls_layout.addWidget(self.next_button)
         controls_layout.addStretch()
+        controls_layout.addWidget(self.loop_button)
         controls_layout.addWidget(volume_icon)
         controls_layout.addWidget(self.volume_slider)
 
@@ -409,6 +454,61 @@ class MainWindow(QWidget):
             QLabel {
                 color: white;
             }
+            QScrollBar:vertical {
+                border: none;
+                background: #0a1415; /* Color de fondo de tu lista */
+                width: 8px;          /* Ancho de la barra */
+                margin: 0px 0px 0px 0px;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #1a2728; /* Un gris oscuro de tu tema */
+                min-height: 20px;
+                border-radius: 4px;  /* Bordes redondeados */
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background: #03adb7; /* Tu color cian al pasar el mouse */
+            }
+
+            /* Ocultar las flechas de arriba y abajo */
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
+
+            /* --- Versión Horizontal --- */
+            QScrollBar:horizontal {
+                border: none;
+                background: #0a1415;
+                height: 8px; /* Alto de la barra */
+                margin: 0px 0px 0px 0px;
+            }
+
+            QScrollBar::handle:horizontal {
+                background: #1a2728;
+                min-width: 20px;
+                border-radius: 4px;
+            }
+
+            QScrollBar::handle:horizontal:hover {
+                background: #03adb7;
+            }
+
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                border: none;
+                background: none;
+                width: 0px;
+            }
+
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: none;
+            }
         """)
 
     def setup_quit_shortcut(self):
@@ -421,7 +521,6 @@ class MainWindow(QWidget):
         self.addAction(quit_action)
 
     def login_clicked(self):
-        # ... (el resto del archivo no cambia) ...
         instructions = """
             Para iniciar sesión, sigue estos pasos con atención:
 
@@ -440,14 +539,15 @@ class MainWindow(QWidget):
 
         if ok and text:
             headers_list = []
-
-            h_matches = re.findall(r"-H\s+'([^']*)'", text)
+            unwrapped_text = re.sub(r'[\^\\]\s*\n', ' ', text)
+            unwrapped_text = unwrapped_text.replace('\n', ' ')
+            h_matches = re.findall(r"-H\s+(['\"])(.*?)\1", unwrapped_text)
             if h_matches:
-                headers_list.extend(h_matches)
+                headers_list.extend([match[1] for match in h_matches])
 
-            cookie_match = re.search(r"(--cookie|-b)\s+'([^']*)'", text)
+            cookie_match = re.search(r"(--cookie|-b)\s+(['\"])(.*?)\2", unwrapped_text)
             if cookie_match:
-                cookie_data = cookie_match.group(2)
+                cookie_data = cookie_match.group(3)
                 headers_list.append(f"Cookie: {cookie_data}")
 
             headers_raw = "\n".join(headers_list)
@@ -518,6 +618,18 @@ class MainWindow(QWidget):
             self.play_button.setIcon(self.icon_play)
             if hasattr(self, 'play_pause_action'):
                 self.play_pause_action.setText("▶ Reproducir")
+
+    def update_loop_button_icon(self, mode):
+        # 0 = OFF, 1 = QUEUE, 2 = SONG
+        if mode == 1:
+            self.loop_button.setIcon(self.icon_loop_queue)
+            self.loop_button.setToolTip("Repetir Cola")
+        elif mode == 2:
+            self.loop_button.setIcon(self.icon_loop_song)
+            self.loop_button.setToolTip("Repetir Canción")
+        else:
+            self.loop_button.setIcon(self.icon_loop_off)
+            self.loop_button.setToolTip("Repetir (Apagado)")
 
     def volume_changed(self, value):
         self.on_volume_change(value)
@@ -593,6 +705,17 @@ class MainWindow(QWidget):
 
         if action == delete_action:
             self.remove_selected()
+
+    def queue_item_moved(self, source_parent_index, source_row, source_end_row, dest_parent_index, dest_row):
+        """
+        Se llama cuando el modelo de la lista detecta un drag-and-drop.
+        Informa al controlador para que actualice el backend (QueueManager).
+        """
+        if self.on_queue_item_moved:
+            # source_row es el índice original.
+            # dest_row es el índice *antes* del cual se inserta.
+            print(f"[UI] Movido item de {source_row} a {dest_row}")
+            self.on_queue_item_moved(source_row, dest_row)
 
     def show_results_context_menu(self, position):
         item = self.results_list.itemAt(position)
