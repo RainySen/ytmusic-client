@@ -142,6 +142,19 @@ def handle_add_to_queue(index):
                 video_id = song_data["videoId"]
                 player.preload_stream(video_id)
 
+def handle_add_next(index):
+    if 0 <= index < len(results_cache):
+        song_data = results_cache[index]
+
+        # queue_manager.add_next solo devuelve la canción si la cola estaba vacía
+        first_song = queue_manager.add_next(song_data)
+
+        if first_song:
+            play_song(first_song)
+            preload_next_songs(5)
+        else:
+            if "videoId" in song_data:
+                player.preload_stream(song_data["videoId"])
 
 def preload_next_songs(count=5):
     queue = queue_manager.get_queue()
@@ -312,6 +325,7 @@ window = MainWindow(
     on_search=handle_search,
     on_select_song=handle_song_selected,
     on_add_to_queue=handle_add_to_queue,
+    on_add_next=handle_add_next,
     on_toggle_play=handle_toggle_play,
     on_volume_change=handle_volume_change,
     on_seek=handle_seek,

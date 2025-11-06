@@ -67,6 +67,15 @@ class QueueManager(QObject):
 
         return None
 
+    def add_next(self, song_data):
+        if self.current_index == -1:
+            return self.add_song(song_data)
+        else:
+            self.queue.insert(self.current_index + 1, song_data)
+            self.queue_updated.emit()
+            print(f"[QUEUE] '{song_data['title']}' añadida como siguiente.")
+            return None
+
     def previous(self):
         if self.current_index > 0:
             self.current_index -= 1
