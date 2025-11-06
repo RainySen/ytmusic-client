@@ -8,6 +8,9 @@ from core.queue_manager import QueueManager
 from ui.main_window import MainWindow
 import re
 import json
+import atexit
+import os
+import traceback
 
 app = QApplication(sys.argv)
 
@@ -21,6 +24,26 @@ results_cache = []
 playlists_cache = []
 last_imported_playlist_data = None
 PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
+STATE_FILE = "queue_and_cache.json"
+
+def save_state_on_exit():
+    """Se ejecuta automáticamente al cerrar la app."""
+    print("[STATE] Guardando estado de la cola y caché...")
+    try:
+        state_data = {
+            "queue": queue_manager.get_queue(),
+            "current_index": queue_manager.get_current_index(),
+            "stream_cache": player.get_stream_cache_for_saving()
+        }
+
+        with open(STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state_data, f, indent=2, ensure_ascii=False)
+
+        print(f"[STATE] Estado guardado en {STATE_FILE}")
+
+    except Exception as e:
+        print(f"[STATE] Error fatal al guardar estado: {e}")
+        traceback.print_exc()
 
 def handle_result_highlighted(index):
     """
@@ -203,8 +226,16 @@ def on_stream_error(error_msg):
 
 
 def handle_toggle_play():
-    player.toggle_play()
-    window.update_play_button_icon(player.is_playing)
+    if not player.has_media_loaded() and not player.is_playing:
+        print("[PLAYER] No hay medios. Iniciando reproducción desde la cola.")
+        current_song = queue_manager.get_current()
+        if current_song:
+            play_song(current_song)
+        else:
+            print("[PLAYER] No hay nada en la cola para reproducir.")
+    else:
+        player.toggle_play()
+        window.update_play_button_icon(player.is_playing)
 
 
 def handle_volume_change(value):
@@ -272,8 +303,21 @@ def handle_login(headers_raw):
         window.show_auth_success()
         playlists_cache = service.get_library_playlists()
         window.update_playlists(playlists_cache)
+        window.update_auth_status(True)
     else:
         window.show_auth_error()
+        window.update_auth_status(False)
+
+def handle_logout():
+    """Cierra la sesión del usuario."""
+    global playlists_cache
+    if service.logout():
+        playlists_cache = []
+        window.update_playlists(playlists_cache) # Limpia la lista de playlists
+        window.update_auth_status(False)
+        print("[AUTH] Sesión cerrada y UI actualizada.")
+    else:
+        print("[AUTH] Error al cerrar sesión.")
 
 
 def handle_playlist_selected(index):
@@ -314,11 +358,47 @@ def handle_playlist_selected(index):
 
 def initial_load():
     global playlists_cache
+    # Cargar playlists
     if service.is_authenticated:
         playlists_cache = service.get_library_playlists()
         window.update_playlists(playlists_cache)
     else:
         window.update_playlists([])
+
+    window.update_auth_status(service.is_authenticated)
+
+    # Restaurar estado de la sesión anterior
+    if os.path.exists(STATE_FILE):
+        print(f"[STATE] Encontrado archivo de estado: {STATE_FILE}")
+        try:
+            with open(STATE_FILE, 'r', encoding='utf-8') as f:
+                state_data = json.load(f)
+
+            # Cargar datos en los managers
+            player.set_stream_cache(state_data.get("stream_cache", {}))
+            queue_manager.set_queue_state(
+                state_data.get("queue", []),
+                state_data.get("current_index", -1)
+            )
+
+            on_queue_updated()  # carga la cola
+            current_index = queue_manager.get_current_index()
+            if current_index >= 0:
+                window.queue_list.setCurrentRow(current_index)
+
+                # Mostrar la info de la canción (sin reproducirla)
+                current_song = queue_manager.get_current()
+                if current_song:  # Asegurar que no sea None
+                    artist_name = current_song.get('artists', [{}])[0].get('name', 'Desconocido')
+                    display_text = f"{current_song['title']} - {artist_name}"
+                    window.update_song_info(display_text)
+
+        except Exception as e:
+            print(f"[STATE] Error al cargar estado: {e}")
+            # Si está corrupto, se borra
+            os.remove(STATE_FILE)
+    else:
+        print("[STATE] No se encontró archivo de estado.")
 
 
 window = MainWindow(
@@ -334,6 +414,7 @@ window = MainWindow(
     on_remove_from_queue=handle_remove_from_queue,
     on_queue_item_selected=handle_queue_item_selected,
     on_login_requested=handle_login,
+    on_logout_requested=handle_logout,
     on_playlist_selected=handle_playlist_selected,
     on_import_playlist=handle_import_playlist,
     on_save_imported_playlist=handle_save_imported_playlist,
@@ -358,5 +439,6 @@ window.clear_btn.clicked.connect(queue_manager.clear)
 
 initial_load()
 window.resize(1080, 750)
+atexit.register(save_state_on_exit)
 window.show()
 sys.exit(app.exec())
