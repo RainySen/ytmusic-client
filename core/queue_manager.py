@@ -30,6 +30,15 @@ class QueueManager(QObject):
     def get_loop_mode(self):
         return self.loop_mode
 
+    def set_queue_state(self, queue, current_index):
+        if not queue:
+            print("[STATE] Cola guardada vacía.")
+            return
+
+        self.queue = queue
+        self.current_index = current_index
+        print(f"[STATE] Estado de la cola restaurado. {len(self.queue)} canciones, índice en {self.current_index}")
+
     def add_song(self, song_data):
         self.queue.append(song_data)
         self.queue_updated.emit()
