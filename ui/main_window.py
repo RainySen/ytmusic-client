@@ -10,7 +10,7 @@ import qtawesome as qta
 
 
 class MainWindow(QWidget):
-    def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play,
+    def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play, on_add_next,
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
                  on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
                  on_save_imported_playlist, on_result_highlighted, on_queue_item_moved, on_toggle_loop):
@@ -19,6 +19,7 @@ class MainWindow(QWidget):
         self.on_search = on_search
         self.on_select_song = on_select_song
         self.on_add_to_queue = on_add_to_queue
+        self.on_add_next = on_add_next
         self.on_toggle_play = on_toggle_play
         self.on_volume_change = on_volume_change
         self.on_seek = on_seek
@@ -201,17 +202,26 @@ class MainWindow(QWidget):
                 background-color: #1a2728;
                 outline: none;
             }
-            QListWidget::item:selected {
-                background-color: #1a2728
-                color: white;
-                border-left: 3px solid #03adb7;
-                padding-left: 5px
-                outline: none;
-            }
+            # QListWidget::item:selected {
+            #     background-color: #1a2728
+            #     color: white;
+            #     border-left: 3px solid #03adb7;
+            #     padding-left: 5px
+            #     outline: none;
+            # }
             QListWidget::item:selected:active {
                 background-color: #1a2728; 
+                color: white; 
                 border-left: 3px solid #03adb7;
-                padding-left: 5px;
+                padding-left: 5px; /* (8px padding - 3px border) */
+                outline: none;
+            }
+            
+            QListWidget::item:selected:!active {
+                background-color: #1a2728; 
+                color: white; 
+                border-left: 3px solid #03adb7;
+                padding-left: 5px; 
                 outline: none;
             }
         """)
@@ -735,15 +745,22 @@ class MainWindow(QWidget):
         """)
 
         play_now_action = menu.addAction(qta.icon('fa5s.play', color='white'), " Reproducir ahora")
+        icon_add_next = qta.icon('fa5s.level-down-alt', color='white', options=[{'rotation': -90}])
+        add_next_action = menu.addAction(icon_add_next, " Agregar Siguiente")
         add_queue_action = menu.addAction(qta.icon('fa5s.plus', color='white'), " Agregar a la cola")
 
         action = menu.exec(self.results_list.mapToGlobal(position))
 
         if action == play_now_action:
             self.play_selected_song_now()
+        elif action == add_next_action:
+            index = self.results_list.currentRow()
+            if index >= 0:
+                self.on_add_next(index)
         elif action == add_queue_action:
             index = self.results_list.currentRow()
-            self.on_add_to_queue(index)
+            if index >= 0:
+                self.on_add_to_queue(index)
 
     def init_tray_icon(self):
         self.tray_icon = QSystemTrayIcon(self.app_icon, self)
