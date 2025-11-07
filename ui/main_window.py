@@ -13,7 +13,8 @@ class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play, on_add_next,
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
                  on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
-                 on_save_imported_playlist, on_result_highlighted, on_queue_item_moved, on_toggle_loop):
+                 on_save_imported_playlist, on_result_highlighted, on_queue_item_moved, on_toggle_loop,
+                 on_logout_requested):
         super().__init__()
 
         self.on_search = on_search
@@ -34,6 +35,9 @@ class MainWindow(QWidget):
         self.on_result_highlighted = on_result_highlighted
         self.on_queue_item_moved = on_queue_item_moved
         self.on_toggle_loop = on_toggle_loop
+        self.on_logout_requested = on_logout_requested
+
+        self.is_logged_in = False
 
         self.app_icon = app_icon
         self.setWindowIcon(self.app_icon)
@@ -50,6 +54,7 @@ class MainWindow(QWidget):
         self.icon_trash = qta.icon('fa5s.trash', color='white')
         self.icon_clear = qta.icon('fa5s.broom', color='white')
         self.icon_login = qta.icon('fa5s.user-circle', color='white')
+        self.icon_login_active = qta.icon('fa5s.user-circle', color='#03adb7')
         self.icon_import = qta.icon('fa5s.file-import', color='white')
         self.icon_loop_off = qta.icon('fa5s.sync-alt', color='gray')
         self.icon_loop_queue = qta.icon('fa5s.sync-alt', color='#03adb7')
@@ -202,13 +207,6 @@ class MainWindow(QWidget):
                 background-color: #1a2728;
                 outline: none;
             }
-            # QListWidget::item:selected {
-            #     background-color: #1a2728
-            #     color: white;
-            #     border-left: 3px solid #03adb7;
-            #     padding-left: 5px
-            #     outline: none;
-            # }
             QListWidget::item:selected:active {
                 background-color: #1a2728; 
                 color: white; 
@@ -531,38 +529,52 @@ class MainWindow(QWidget):
         self.addAction(quit_action)
 
     def login_clicked(self):
-        instructions = """
-            Para iniciar sesión, sigue estos pasos con atención:
+        if self.is_logged_in:
+            # Preguntar si quiere salir
+            reply = QMessageBox.question(self, "Cerrar Sesión",
+                                         "¿Estás seguro de que deseas cerrar la sesión?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                         QMessageBox.StandardButton.No)
 
-            1. Abre YouTube Music en tu navegador (Chrome, Firefox, Opera).
-            2. **IMPORTANTE: Asegúrate de haber iniciado sesión con tu cuenta.**
-            3. Abre las herramientas de desarrollador (con F12).
-            4. Ve a la pestaña "Red" (o "Network").
-            5. **IMPORTANTE: Haz una recarga forzada de la página (Ctrl + Shift + R)** para evitar la caché.
-            6. En el filtro, escribe `browse` para encontrar la petición correcta.
-            7. Busca la petición a `music.youtube.com/youtubei...`, haz clic derecho sobre ella.
-            8. Ve a "Copiar" -> "Copiar como cURL (bash)".
-            9. Pega el texto completo en el campo de abajo.
-        """
+            if reply == QMessageBox.StandardButton.Yes:
+                if self.on_logout_requested:
+                    self.on_logout_requested()
+        else:
+            # Mostrar diálogo de login
+            instructions = """
+                Para iniciar sesión, sigue estos pasos con atención:
 
-        text, ok = QInputDialog.getMultiLineText(self, 'Iniciar Sesión - Obtener Credenciales', instructions, text="")
+                1. Abre YouTube Music en tu navegador (Chrome, Firefox, Opera).
+                2. **IMPORTANTE: Asegúrate de haber iniciado sesión con tu cuenta.**
+                3. Abre las herramientas de desarrollador (con F12).
+                4. Ve a la pestaña "Red" (o "Network").
+                5. **IMPORTANTE: Haz una recarga forzada de la página (Ctrl + Shift + R)** para evitar la caché.
+                6. En el filtro, escribe `browse` para encontrar la petición correcta.
+                7. Busca la petición a `music.youtube.com/youtubei...`, haz clic derecho sobre ella.
+                8. Ve a "Copiar" -> "Copiar como cURL (bash)".
+                9. Pega el texto completo en el campo de abajo.
+            """
 
-        if ok and text:
-            headers_list = []
-            unwrapped_text = re.sub(r'[\^\\]\s*\n', ' ', text)
-            unwrapped_text = unwrapped_text.replace('\n', ' ')
-            h_matches = re.findall(r"-H\s+(['\"])(.*?)\1", unwrapped_text)
-            if h_matches:
-                headers_list.extend([match[1] for match in h_matches])
+            text, ok = QInputDialog.getMultiLineText(self, 'Iniciar Sesión - Obtener Credenciales', instructions,
+                                                     text="")
 
-            cookie_match = re.search(r"(--cookie|-b)\s+(['\"])(.*?)\2", unwrapped_text)
-            if cookie_match:
-                cookie_data = cookie_match.group(3)
-                headers_list.append(f"Cookie: {cookie_data}")
+            if ok and text:
+                headers_list = []
+                unwrapped_text = re.sub(r'[\^\\]\s*\n', ' ', text)
+                unwrapped_text = unwrapped_text.replace('\n', ' ')
+                h_matches = re.findall(r"-H\s+(['\"])(.*?)\1", unwrapped_text)
+                if h_matches:
+                    headers_list.extend([match[1] for match in h_matches])
 
-            headers_raw = "\n".join(headers_list)
+                cookie_match = re.search(r"(--cookie|-b)\s+(['\"])(.*?)\2", unwrapped_text)
+                if cookie_match:
+                    cookie_data = cookie_match.group(3)
+                    headers_list.append(f"Cookie: {cookie_data}")
 
-            self.on_login_requested(headers_raw)
+                headers_raw = "\n".join(headers_list)
+
+                if self.on_login_requested:
+                    self.on_login_requested(headers_raw)
 
     def update_playlists(self, playlists):
         self.playlists_list.clear()
@@ -583,6 +595,15 @@ class MainWindow(QWidget):
     def show_auth_error(self):
         QMessageBox.warning(self, "Error",
                             "No se pudo completar el inicio de sesión. Por favor, verifica las cabeceras e inténtalo de nuevo.")
+
+    def update_auth_status(self, is_authenticated):
+        self.is_logged_in = is_authenticated
+        if is_authenticated:
+            self.login_button.setIcon(self.icon_login_active)
+            self.login_button.setToolTip("Sesión iniciada. Haz clic para cerrar sesión.")
+        else:
+            self.login_button.setIcon(self.icon_login)
+            self.login_button.setToolTip("Iniciar Sesión para ver tus playlists")
 
     def search_clicked(self):
         text = self.search_box.text()

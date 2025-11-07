@@ -1,4 +1,3 @@
-# app.py
 import sys
 import qtawesome as qta
 from PySide6.QtGui import QIcon
@@ -10,13 +9,15 @@ from ui.main_window import MainWindow
 from ui.login_window import LoginWindow  # <-- NUEVA IMPORTACIÓN
 import re
 import json
+import atexit
+import os
+import traceback
 
-# --- 1. CONFIGURACIÓN INICIAL (GLOBAL) ---
 app = QApplication(sys.argv)
+
 app.setQuitOnLastWindowClosed(False)
 app_icon = qta.icon('fa5s.music', color='#03adb7')
 app.setWindowIcon(app_icon)
-
 service = YTMusicService()
 player = None
 queue_manager = None
@@ -27,12 +28,32 @@ results_cache = []
 playlists_cache = []
 last_imported_playlist_data = None
 PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
+STATE_FILE = "queue_and_cache.json"
 
+def save_state_on_exit():
+    """Se ejecuta automáticamente al cerrar la app."""
+    print("[STATE] Guardando estado de la cola y caché...")
+    try:
+        state_data = {
+            "queue": queue_manager.get_queue(),
+            "current_index": queue_manager.get_current_index(),
+            "stream_cache": player.get_stream_cache_for_saving()
+        }
 
-# --- 2. TODAS LAS FUNCIONES DE LÓGICA (HANDLERS) ---
-# (Todo este bloque es idéntico a tu archivo anterior)
+        with open(STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state_data, f, indent=2, ensure_ascii=False)
+
+        print(f"[STATE] Estado guardado en {STATE_FILE}")
+
+    except Exception as e:
+        print(f"[STATE] Error fatal al guardar estado: {e}")
+        traceback.print_exc()
 
 def handle_result_highlighted(index):
+    """
+    Se llama cuando el usuario resalta un ítem en la búsqueda.
+    Inicia la precarga del stream.
+    """
     if 0 <= index < len(results_cache):
         song_data = results_cache[index]
         if "videoId" in song_data:
@@ -42,10 +63,8 @@ def handle_result_highlighted(index):
 def handle_queue_item_moved(source_index, dest_index):
     queue_manager.move_song(source_index, dest_index)
 
-
 def handle_toggle_loop():
     queue_manager.toggle_loop_mode()
-
 
 def handle_search(query):
     global results_cache
@@ -61,27 +80,36 @@ def handle_import_playlist(url):
     if match:
         playlist_id = match.group(1)
         print(f"Detectada playlist ID: {playlist_id}")
+
         playlist_data = service.get_playlist_songs(playlist_id)
 
         if playlist_data and playlist_data['tracks']:
             playlist_songs = playlist_data['tracks']
             playlist_title = playlist_data['title']
+
             results_cache = []
             window.update_results(results_cache)
             queue_manager.clear()
+
             print(f"Cargando {len(playlist_songs)} canciones en la cola...")
+
             first_song_to_play = None
             for song in playlist_songs:
                 maybe_first = queue_manager.add_song(song)
                 if maybe_first and first_song_to_play is None:
                     first_song_to_play = maybe_first
+
             if first_song_to_play:
                 play_song(first_song_to_play)
                 preload_next_songs(5)
+
             window.search_box.clear()
+
             last_imported_playlist_data = playlist_data
+
             if service.is_authenticated:
                 window.ask_to_save_playlist(playlist_title)
+
         else:
             print("Error al cargar la playlist o está vacía")
     else:
@@ -89,14 +117,20 @@ def handle_import_playlist(url):
 
 
 def handle_save_imported_playlist():
+    """
+    Se llama cuando el usuario hace clic en "Sí" en el diálogo de guardado.
+    """
     global last_imported_playlist_data, playlists_cache
     if not last_imported_playlist_data:
         return
+
     title = last_imported_playlist_data['title']
     songs = last_imported_playlist_data['tracks']
     description = f"Importada desde URL. Contiene {len(songs)} canciones."
+
     print(f"Intentando guardar la playlist '{title}' en la biblioteca...")
     playlist_id = service.create_playlist(title, description, songs)
+
     if playlist_id:
         print(f"Playlist guardada con éxito. ID: {playlist_id}")
         playlists_cache = service.get_library_playlists()
@@ -105,6 +139,7 @@ def handle_save_imported_playlist():
     else:
         print("Error al guardar la playlist.")
         window.show_save_playlist_error(title)
+
     last_imported_playlist_data = None
 
 
@@ -114,6 +149,7 @@ def handle_song_selected(index):
         current_song = queue_manager.play_now(song_data)
         if current_song:
             play_song(current_song)
+            # Precargar las siguientes 5 canciones
             preload_next_songs(5)
 
 
@@ -123,8 +159,10 @@ def handle_add_to_queue(index):
         first_song = queue_manager.add_song(song_data)
         if first_song:
             play_song(first_song)
+            # Precargar las siguientes 5 canciones
             preload_next_songs(5)
         else:
+            # Si no es la primera canción, precargar la que acabamos de agregar
             if "videoId" in song_data:
                 player.preload_stream(song_data["videoId"])
 
@@ -132,7 +170,10 @@ def handle_add_to_queue(index):
 def handle_add_next(index):
     if 0 <= index < len(results_cache):
         song_data = results_cache[index]
+
+        # queue_manager.add_next solo devuelve la canción si la cola estaba vacía
         first_song = queue_manager.add_next(song_data)
+
         if first_song:
             play_song(first_song)
             preload_next_songs(5)
@@ -140,10 +181,10 @@ def handle_add_next(index):
             if "videoId" in song_data:
                 player.preload_stream(song_data["videoId"])
 
-
 def preload_next_songs(count=5):
     queue = queue_manager.get_queue()
     current_index = queue_manager.get_current_index()
+
     for i in range(1, count + 1):
         next_index = current_index + i
         if next_index < len(queue):
@@ -156,18 +197,21 @@ def play_song(song_data):
     if not song_data or "videoId" not in song_data:
         window.update_song_info("Error al cargar la canción")
         return
+
     video_id = song_data["videoId"]
     artist_name = song_data.get('artists', [{}])[0].get('name', 'Desconocido')
     display_text = f"{song_data['title']} - {artist_name}"
     window.update_play_button_icon(True)
     window.update_song_info(f"Cargando: {display_text}")
     title_from_cache = player.play(video_id)
+
     if title_from_cache:
         print("[UI] Cache hit, actualizando título final.")
         window.update_song_info(display_text)
 
 
 def on_stream_ready(video_id, title):
+    """Callback cuando el stream está listo y empieza a reproducir"""
     current_song = queue_manager.get_current()
     if current_song and current_song.get("videoId") == video_id:
         artist_name = current_song.get('artists', [{}])[0].get('name', 'Desconocido')
@@ -177,13 +221,22 @@ def on_stream_ready(video_id, title):
 
 
 def on_stream_error(error_msg):
+    """Callback cuando hay error al obtener el stream"""
     window.update_song_info(f"Error al reproducir: {error_msg}")
     window.update_play_button_icon(False)
 
 
 def handle_toggle_play():
-    player.toggle_play()
-    window.update_play_button_icon(player.is_playing)
+    if not player.has_media_loaded() and not player.is_playing:
+        print("[PLAYER] No hay medios. Iniciando reproducción desde la cola.")
+        current_song = queue_manager.get_current()
+        if current_song:
+            play_song(current_song)
+        else:
+            print("[PLAYER] No hay nada en la cola para reproducir.")
+    else:
+        player.toggle_play()
+        window.update_play_button_icon(player.is_playing)
 
 
 def handle_volume_change(value):
@@ -198,6 +251,7 @@ def handle_next():
     next_song = queue_manager.next()
     if next_song:
         play_song(next_song)
+        # Precargar las siguientes 5 canciones
         preload_next_songs(5)
 
 
@@ -220,17 +274,21 @@ def handle_queue_item_selected(index):
 
 def on_song_finished():
     mode = queue_manager.get_loop_mode()
+
     if mode == QueueManager.LOOP_SONG:
         print("[LOOP] Repitiendo canción actual.")
         current_song = queue_manager.get_current()
         if current_song:
             play_song(current_song)
     else:
+        # Modo LOOP_OFF o LOOP_QUEUE
+        # El metodo next() ya se encarga de la lógica de LOOP_QUEUE
         next_song = queue_manager.next()
         if next_song:
             play_song(next_song)
             preload_next_songs(5)
         else:
+            # Se llegó al final de la cola y el modo es LOOP_OFF
             window.update_song_info("Cola terminada")
             window.update_play_button_icon(False)
 
@@ -240,37 +298,57 @@ def on_queue_updated():
 
 
 def handle_login(headers_raw):
-    """
-    Esta función ahora es solo para el botón "Login" DENTRO de la app principal.
-    """
     global playlists_cache
     success = service.setup_authentication(headers_raw)
     if success:
         window.show_auth_success()
         playlists_cache = service.get_library_playlists()
         window.update_playlists(playlists_cache)
+        window.update_auth_status(True)
     else:
         window.show_auth_error()
+        window.update_auth_status(False)
+
+def handle_logout():
+    """Cierra la sesión del usuario."""
+    global playlists_cache
+    if service.logout():
+        playlists_cache = []
+        window.update_playlists(playlists_cache) # Limpia la lista de playlists
+        window.update_auth_status(False)
+        print("[AUTH] Sesión cerrada y UI actualizada.")
+    else:
+        print("[AUTH] Error al cerrar sesión.")
 
 
 def handle_playlist_selected(index):
+    """
+    Se llama al hacer doble clic en una playlist de "Mis Playlists".
+    """
     global results_cache
     if 0 <= index < len(playlists_cache):
         playlist = playlists_cache[index]
         playlist_id = playlist.get('playlistId')
+
         if not playlist_id:
             print(f"[ERROR] La playlist '{playlist.get('title')}' no tiene un 'playlistId' válido.")
             return
+
         songs_data = service.get_playlist_songs(playlist_id)
+
         if songs_data and 'tracks' in songs_data:
             songs_list = songs_data['tracks']
             playlist_title = songs_data.get('title', 'Playlist')
+
             print(f"Cargando {len(songs_list)} canciones de la playlist '{playlist_title}' a la cola.")
+
             results_cache = []
             window.update_results([])
             queue_manager.clear()
+
             for song in songs_list:
                 queue_manager.add_song(song)
+
             first_song = queue_manager.jump_to(0)
             if first_song:
                 play_song(first_song)
@@ -281,11 +359,47 @@ def handle_playlist_selected(index):
 
 def initial_load():
     global playlists_cache
+    # Cargar playlists
     if service.is_authenticated:
         playlists_cache = service.get_library_playlists()
         window.update_playlists(playlists_cache)
     else:
         window.update_playlists([])
+
+    window.update_auth_status(service.is_authenticated)
+
+    # Restaurar estado de la sesión anterior
+    if os.path.exists(STATE_FILE):
+        print(f"[STATE] Encontrado archivo de estado: {STATE_FILE}")
+        try:
+            with open(STATE_FILE, 'r', encoding='utf-8') as f:
+                state_data = json.load(f)
+
+            # Cargar datos en los managers
+            player.set_stream_cache(state_data.get("stream_cache", {}))
+            queue_manager.set_queue_state(
+                state_data.get("queue", []),
+                state_data.get("current_index", -1)
+            )
+
+            on_queue_updated()  # carga la cola
+            current_index = queue_manager.get_current_index()
+            if current_index >= 0:
+                window.queue_list.setCurrentRow(current_index)
+
+                # Mostrar la info de la canción (sin reproducirla)
+                current_song = queue_manager.get_current()
+                if current_song:  # Asegurar que no sea None
+                    artist_name = current_song.get('artists', [{}])[0].get('name', 'Desconocido')
+                    display_text = f"{current_song['title']} - {artist_name}"
+                    window.update_song_info(display_text)
+
+        except Exception as e:
+            print(f"[STATE] Error al cargar estado: {e}")
+            # Si está corrupto, se borra
+            os.remove(STATE_FILE)
+    else:
+        print("[STATE] No se encontró archivo de estado.")
 
 
 # --- 3. LÓGICA DE ARRANQUE MODIFICADA ---
@@ -315,6 +429,7 @@ def start_main_application():
         on_remove_from_queue=handle_remove_from_queue,
         on_queue_item_selected=handle_queue_item_selected,
         on_login_requested=handle_login,  # Para el botón de login *dentro* de la app
+        on_logout_requested=handle_logout,
         on_playlist_selected=handle_playlist_selected,
         on_import_playlist=handle_import_playlist,
         on_save_imported_playlist=handle_save_imported_playlist,
@@ -337,7 +452,11 @@ def start_main_application():
     queue_manager.loop_mode_changed.connect(window.update_loop_button_icon)
     window.clear_btn.clicked.connect(queue_manager.clear)
 
-    # Cargar datos iniciales (playlists si se logueó)
+    initial_load()
+    window.resize(1080, 750)
+    atexit.register(save_state_on_exit)
+    window.show()
+
     initial_load()
 
     window.resize(1080, 750)
