@@ -457,11 +457,6 @@ def start_main_application():
     atexit.register(save_state_on_exit)
     window.show()
 
-    initial_load()
-
-    window.resize(1080, 750)
-    window.show()
-
     # Cerrar la ventana de login
     login_window.close()
 
