@@ -45,8 +45,9 @@ class Player(QObject):
         self.player = self.instance.media_player_new()
         self.is_playing = False
 
-        self.cache_file = 'stream_cache.json'
-        self.stream_cache = self._load_cache()
+        # self.cache_file = 'stream_cache.json'
+        # self.stream_cache = self._load_cache()
+        self.stream_cache = {}
         self.cache_duration = timedelta(hours=4)
 
         self.fetcher_threads = []
@@ -61,34 +62,60 @@ class Player(QObject):
         self.event_manager = self.player.event_manager()
         self.event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_end_reached)
 
-    def _load_cache(self):
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    for video_id, entry in data.items():
-                        entry['timestamp'] = datetime.fromisoformat(entry['timestamp'])
-                    print(f"[CACHE] Cargado caché con {len(data)} entradas")
-                    return data
-            except Exception as e:
-                print(f"[CACHE] Error cargando caché: {e}")
-                return {}
-        return {}
-
-    def _save_cache(self):
+    def set_stream_cache(self, cache_data):
         try:
-            cache_to_save = {}
+            for video_id, entry in cache_data.items():
+                if isinstance(entry.get('timestamp'), str):
+                    entry['timestamp'] = datetime.fromisoformat(entry['timestamp'])
+
+            self.stream_cache = cache_data
+            print(f"[CACHE] Caché de streaming restaurado con {len(self.stream_cache)} entradas.")
+        except Exception as e:
+            print(f"[CACHE] Error restaurando caché: {e}")
+            self.stream_cache = {}
+
+    def get_stream_cache_for_saving(self):
+        cache_to_save = {}
+        try:
             for video_id, entry in self.stream_cache.items():
                 cache_to_save[video_id] = {
                     'url': entry['url'],
                     'title': entry['title'],
                     'timestamp': entry['timestamp'].isoformat()
                 }
-
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_to_save, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"[CACHE] Error guardando caché: {e}")
+            print(f"[CACHE] Error preparando caché para guardar: {e}")
+
+        return cache_to_save
+
+    # def _load_cache(self):
+    #     if os.path.exists(self.cache_file):
+    #         try:
+    #             with open(self.cache_file, 'r', encoding='utf-8') as f:
+    #                 data = json.load(f)
+    #                 for video_id, entry in data.items():
+    #                     entry['timestamp'] = datetime.fromisoformat(entry['timestamp'])
+    #                 print(f"[CACHE] Cargado caché con {len(data)} entradas")
+    #                 return data
+    #         except Exception as e:
+    #             print(f"[CACHE] Error cargando caché: {e}")
+    #             return {}
+    #     return {}
+    #
+    # def _save_cache(self):
+    #     try:
+    #         cache_to_save = {}
+    #         for video_id, entry in self.stream_cache.items():
+    #             cache_to_save[video_id] = {
+    #                 'url': entry['url'],
+    #                 'title': entry['title'],
+    #                 'timestamp': entry['timestamp'].isoformat()
+    #             }
+    #
+    #         with open(self.cache_file, 'w', encoding='utf-8') as f:
+    #             json.dump(cache_to_save, f, indent=2, ensure_ascii=False)
+    #     except Exception as e:
+    #         print(f"[CACHE] Error guardando caché: {e}")
 
     def _is_cache_valid(self, video_id):
         if video_id not in self.stream_cache:
@@ -186,6 +213,9 @@ class Player(QObject):
         self.fetcher_threads.insert(0, fetcher)
 
         return None
+
+    def has_media_loaded(self):
+        return self.player.get_media() is not None
 
     def toggle_play(self):
         self.player.pause()

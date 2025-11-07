@@ -49,6 +49,19 @@ class YTMusicService:
             self.is_authenticated = False
             return False
 
+    def logout(self):
+        """Cierra la sesión eliminando el archivo de autenticación."""
+        try:
+            if os.path.exists(AUTH_FILE):
+                os.remove(AUTH_FILE)
+            self.is_authenticated = False
+            self.ytmusic = YTMusic() # Reinicializa la API sin autenticación
+            print("[AUTH] Sesión cerrada.")
+            return True
+        except Exception as e:
+            print(f"[AUTH] Error al cerrar sesión: {e}")
+            return False
+
     def get_library_playlists(self):
         if not self.is_authenticated:
             return []
