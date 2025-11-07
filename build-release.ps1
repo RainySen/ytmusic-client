@@ -3,13 +3,14 @@
 # ==========================================
 
 Write-Host "Limpiando builds anteriores..." -ForegroundColor Yellow
-Remove-Item -Recurse -Force build, dist, release, "*.spec" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force build, dist, release -ErrorAction SilentlyContinue
 
 Write-Host "Compilando ejecutable Release..." -ForegroundColor Cyan
 
 # === INICIO DE CAMBIOS ===
 # Añadimos --collect-datas ytmusicapi para que también incluya sus archivos de traducción.
-& ".\.venv\Scripts\python.exe" -m nuitka --standalone --output-dir=release --plugin-enable=pyside6 --windows-icon-from-ico="icon.ico" --windows-product-name="YTMusicClient" --windows-file-description="YTMusic Minimal Client" --windows-file-version="1.0.0.0" --output-filename="YTMusicClient.exe" --nofollow-import-to=yt_dlp --include-package-data=yt_dlp --include-package-data=ytmusicapi --include-package-data=qtawesome app.py
+& ".\.venv\Scripts\pyinstaller.exe" --onefile --noconsole --clean --distpath release --name "YTMusicClient" --icon "icon.ico" --version-file "version_info.txt" --collect-datas yt_dlp --collect-datas qtawesome --collect-datas ytmusicapi --hidden-import "PySide6.QtSvg" "app.py"
+# === FIN DE CAMBIOS ===
 
 Write-Host "Compilación completada." -ForegroundColor Green
 Write-Host "Ejecutable disponible en: release\YTMusicClient.exe"
