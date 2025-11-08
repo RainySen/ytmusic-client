@@ -14,7 +14,7 @@ class MainWindow(QWidget):
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
                  on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
                  on_save_imported_playlist, on_result_highlighted, on_queue_item_moved, on_toggle_loop,
-                 on_logout_requested):
+                 on_logout_requested, on_toggle_autoplay):
         super().__init__()
 
         self.on_search = on_search
@@ -36,6 +36,7 @@ class MainWindow(QWidget):
         self.on_queue_item_moved = on_queue_item_moved
         self.on_toggle_loop = on_toggle_loop
         self.on_logout_requested = on_logout_requested
+        self.on_toggle_autoplay = on_toggle_autoplay
 
         self.is_logged_in = False
 
@@ -59,6 +60,8 @@ class MainWindow(QWidget):
         self.icon_loop_off = qta.icon('fa5s.sync-alt', color='gray')
         self.icon_loop_queue = qta.icon('fa5s.sync-alt', color='#03adb7')
         self.icon_loop_song = qta.icon('fa5s.redo', color='#03adb7')
+        self.icon_autoplay_off = qta.icon('fa5s.magic', color='gray')
+        self.icon_autoplay_on = qta.icon('fa5s.magic', color='#03adb7')
 
         # Layout principal
         main_layout = QVBoxLayout(self)
@@ -423,12 +426,23 @@ class MainWindow(QWidget):
                 QPushButton:hover { background-color: #2a3738; }
             """)
 
+        self.autoplay_button = QPushButton()
+        self.autoplay_button.setIcon(self.icon_autoplay_off)
+        self.autoplay_button.clicked.connect(self.on_toggle_autoplay)
+        self.autoplay_button.setFixedSize(30, 30)
+        self.autoplay_button.setToolTip("Reproducción Automática (Apagado)")
+        self.autoplay_button.setStyleSheet("""
+                QPushButton { border: none; background-color: transparent; border-radius: 15px; }
+                QPushButton:hover { background-color: #2a3738; }
+            """)
+
         controls_layout.addStretch()
         controls_layout.addWidget(self.prev_button)
         controls_layout.addWidget(self.play_button)
         controls_layout.addWidget(self.next_button)
         controls_layout.addStretch()
         controls_layout.addWidget(self.loop_button)
+        controls_layout.addWidget(self.autoplay_button)
         controls_layout.addWidget(volume_icon)
         controls_layout.addWidget(self.volume_slider)
 
@@ -848,3 +862,12 @@ class MainWindow(QWidget):
 
     def show_save_playlist_error(self, title):
         QMessageBox.warning(self, "Error", f"No se pudo guardar la playlist '{title}'.")
+
+    def update_autoplay_button_icon(self, is_enabled):
+        """Actualiza el icono del botón de autoplay según su estado"""
+        if is_enabled:
+            self.autoplay_button.setIcon(self.icon_autoplay_on)
+            self.autoplay_button.setToolTip("Reproducción Automática (Activado)")
+        else:
+            self.autoplay_button.setIcon(self.icon_autoplay_off)
+            self.autoplay_button.setToolTip("Reproducción Automática (Apagado)")

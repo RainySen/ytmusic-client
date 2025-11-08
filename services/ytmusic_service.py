@@ -176,3 +176,40 @@ class YTMusicService:
             print(f"Error al crear la playlist en la biblioteca: {e}")
             traceback.print_exc()
             return None
+
+    def get_song_recommendations(self, video_id, limit=5):
+        """
+        Obtiene canciones recomendadas basadas en un video_id.
+        Retorna una lista de canciones en formato normalizado.
+        """
+        try:
+            print(f"[RECOMMENDATIONS] Obteniendo recomendaciones para: {video_id}")
+
+            # Usamos get_watch_playlist que nos da canciones relacionadas
+            watch_playlist = self.ytmusic.get_watch_playlist(videoId=video_id, limit=limit)
+
+            if 'tracks' in watch_playlist and watch_playlist['tracks']:
+                recommendations = []
+
+                for track in watch_playlist['tracks']:
+                    # Evitar agregar la misma canción que estamos usando como referencia
+                    if track.get('videoId') == video_id:
+                        continue
+
+                    if track.get('videoId'):
+                        recommendations.append({
+                            'videoId': track['videoId'],
+                            'title': track.get('title', 'Título Desconocido'),
+                            'artists': track.get('artists', [{'name': 'Desconocido'}])
+                        })
+
+                print(f"[RECOMMENDATIONS] Se encontraron {len(recommendations)} recomendaciones")
+                return recommendations
+            else:
+                print("[RECOMMENDATIONS] No se encontraron recomendaciones")
+                return []
+
+        except Exception as e:
+            print(f"[RECOMMENDATIONS] Error obteniendo recomendaciones: {e}")
+            traceback.print_exc()
+            return []

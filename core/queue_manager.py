@@ -1,3 +1,5 @@
+# Modificaciones para queue_manager.py
+
 from PySide6.QtCore import QObject, Signal
 
 
@@ -5,6 +7,7 @@ class QueueManager(QObject):
     queue_updated = Signal()
     current_changed = Signal(int)
     loop_mode_changed = Signal(int)
+    autoplay_mode_changed = Signal(bool)  # Nueva señal
 
     LOOP_OFF = 0
     LOOP_QUEUE = 1
@@ -15,10 +18,43 @@ class QueueManager(QObject):
         self.queue = []
         self.current_index = -1
         self.loop_mode = self.LOOP_OFF
+        self.autoplay_enabled = False  # Nueva propiedad
+
+    def toggle_autoplay(self):
+        """Activa o desactiva el modo de reproducción automática"""
+        self.autoplay_enabled = not self.autoplay_enabled
+
+        # Si se activa autoplay y hay un modo de loop activo, desactiva el loop
+        if self.autoplay_enabled and self.loop_mode != self.LOOP_OFF:
+            self.loop_mode = self.LOOP_OFF
+            self.loop_mode_changed.emit(self.loop_mode)
+            print("[LOOP] Desactivado automáticamente (autoplay activado)")
+
+        print(f"[AUTOPLAY] Modo {'activado' if self.autoplay_enabled else 'desactivado'}")
+        self.autoplay_mode_changed.emit(self.autoplay_enabled)
+
+    def is_autoplay_enabled(self):
+        return self.autoplay_enabled
+
+    def should_autoplay(self):
+        if not self.autoplay_enabled:
+            return False
+
+        # Si hay modo de repetición activo, no usa autoplay
+        if self.loop_mode != self.LOOP_OFF:
+            return False
+
+        # Verificar si estamos en la última canción
+        return self.current_index >= len(self.queue) - 1
 
     def toggle_loop_mode(self):
         if self.loop_mode == self.LOOP_OFF:
             self.loop_mode = self.LOOP_QUEUE
+            # Desactivar autoplay cuando se activa el loop
+            if self.autoplay_enabled:
+                self.autoplay_enabled = False
+                self.autoplay_mode_changed.emit(self.autoplay_enabled)
+                print("[AUTOPLAY] Desactivado automáticamente (loop activado)")
         elif self.loop_mode == self.LOOP_QUEUE:
             self.loop_mode = self.LOOP_SONG
         else:
@@ -91,12 +127,6 @@ class QueueManager(QObject):
             self.current_changed.emit(self.current_index)
             return self.queue[self.current_index]
 
-        # elif self.loop_mode == self.LOOP_QUEUE and len(self.queue) > 0:
-        #     print("[LOOP] Repitiendo cola (hacia atrás), yendo al final.")
-        #     self.current_index = len(self.queue) - 1
-        #     self.current_changed.emit(self.current_index)
-        #     return self.queue[self.current_index]
-
         return None
 
     def remove_at(self, index):
@@ -131,46 +161,32 @@ class QueueManager(QObject):
             print(f"[QUEUE] Error: dest_index {dest_index} fuera de límites")
             return
 
-        # Sacar la canción de la lista
         song_to_move = self.queue.pop(source_index)
 
-        # Si el destino estaba *después* de la fuente, su índice bajó en 1
         final_dest_index = dest_index
         if source_index < final_dest_index:
             final_dest_index -= 1
 
-        # Insertar la canción en la nueva posición
         self.queue.insert(final_dest_index, song_to_move)
 
-        # Si movimos la canción que ESTÁ SONANDO
         if self.current_index == source_index:
             self.current_index = final_dest_index
-
-        # Si movimos algo de ANTES a DESPUÉS de la canción actual
-        # (El índice actual debe bajar 1)
         elif source_index < self.current_index <= final_dest_index:
             self.current_index -= 1
-
-        # Si movimos algo de DESPUÉS a ANTES de la canción actual
-        # (El índice actual debe subir 1)
         elif source_index > self.current_index >= final_dest_index:
             self.current_index += 1
 
-        # Esto llama a 'on_queue_updated' en app.py, que actualiza la UI
         self.queue_updated.emit()
 
     def get_current(self):
-
         if 0 <= self.current_index < len(self.queue):
             return self.queue[self.current_index]
         return None
 
     def get_queue(self):
-
         return self.queue
 
     def get_current_index(self):
-
         return self.current_index
 
     def jump_to(self, index):

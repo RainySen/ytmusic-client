@@ -288,16 +288,20 @@ def on_song_finished():
         if current_song:
             play_song(current_song)
     else:
-        # Modo LOOP_OFF o LOOP_QUEUE
-        # El metodo next() ya se encarga de la lógica de LOOP_QUEUE
-        next_song = queue_manager.next()
-        if next_song:
-            play_song(next_song)
-            preload_next_songs(5)
+        # Verificar si debemos usar autoplay
+        if queue_manager.should_autoplay():
+            print("[AUTOPLAY] Activando reproducción automática...")
+            handle_fetch_and_play_recommendation()
         else:
-            # Se llegó al final de la cola y el modo es LOOP_OFF
-            window.update_song_info("Cola terminada")
-            window.update_play_button_icon(False)
+            # Modo LOOP_OFF o LOOP_QUEUE normal
+            next_song = queue_manager.next()
+            if next_song:
+                play_song(next_song)
+                preload_next_songs(5)
+            else:
+                # Se llegó al final de la cola y el modo es LOOP_OFF
+                window.update_song_info("Cola terminada")
+                window.update_play_button_icon(False)
 
 
 def on_queue_updated():
@@ -409,6 +413,57 @@ def initial_load():
         print("[STATE] No se encontró archivo de estado.")
 
 
+def handle_toggle_autoplay():
+    """Activa/desactiva el modo de reproducción automática"""
+    queue_manager.toggle_autoplay()
+
+
+def handle_fetch_and_play_recommendation():
+    """
+    Obtiene una canción recomendada basada en la actual y la reproduce.
+    """
+    current_song = queue_manager.get_current()
+
+    if not current_song or 'videoId' not in current_song:
+        print("[AUTOPLAY] No hay canción actual para obtener recomendaciones")
+        return
+
+    print(f"[AUTOPLAY] Obteniendo recomendación basada en: {current_song['title']}")
+
+    # Obtener recomendaciones
+    recommendations = service.get_song_recommendations(current_song['videoId'], limit=10)
+
+    if not recommendations:
+        print("[AUTOPLAY] No se encontraron recomendaciones")
+        window.update_song_info("No se encontraron recomendaciones")
+        return
+
+    # Filtrar canciones que ya están en la cola
+    queue_video_ids = {song.get('videoId') for song in queue_manager.get_queue()}
+    new_recommendations = [song for song in recommendations if song.get('videoId') not in queue_video_ids]
+
+    if not new_recommendations:
+        # Si todas las recomendaciones ya están en la cola, usar la primera de todas formas
+        new_recommendations = recommendations[:1]
+
+    # Tomar la primera recomendación
+    recommended_song = new_recommendations[0]
+
+    print(f"[AUTOPLAY] Agregando a la cola: {recommended_song['title']}")
+
+    # Agregar a la cola y reproducir
+    first_song = queue_manager.add_song(recommended_song)
+    if first_song:
+        play_song(first_song)
+        preload_next_songs(5)
+    else:
+        # La canción se agregó pero no es la primera, avanzar a ella
+        next_song = queue_manager.next()
+        if next_song:
+            play_song(next_song)
+            preload_next_songs(5)
+
+
 # --- 3. LÓGICA DE ARRANQUE MODIFICADA ---
 
 def start_main_application():
@@ -443,6 +498,7 @@ def start_main_application():
         on_result_highlighted=handle_result_highlighted,
         on_queue_item_moved=handle_queue_item_moved,
         on_toggle_loop=handle_toggle_loop,
+        on_toggle_autoplay=handle_toggle_autoplay,
         app_icon=app_icon
     )
 
@@ -457,6 +513,7 @@ def start_main_application():
     queue_manager.queue_updated.connect(on_queue_updated)
     queue_manager.current_changed.connect(on_queue_updated)
     queue_manager.loop_mode_changed.connect(window.update_loop_button_icon)
+    queue_manager.autoplay_mode_changed.connect(window.update_autoplay_button_icon)
     window.clear_btn.clicked.connect(queue_manager.clear)
 
     initial_load()
