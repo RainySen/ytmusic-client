@@ -7,13 +7,18 @@ AUTH_FILE = "oauth.json"
 
 
 class YTMusicService:
-    def __init__(self):
-        # Crear directorio de caché para yt-dlp si no existe
-        os.makedirs('.yt-dlp-cache', exist_ok=True)
+    def __init__(self, base_dir):
+        self.base_dir = base_dir
+        self.AUTH_FILE = os.path.join(self.base_dir, "oauth.json")
+        self.CACHE_DIR = os.path.join(self.base_dir, ".yt-dlp-cache")
 
-        if os.path.exists(AUTH_FILE):
+        # Crear directorio de caché para yt-dlp si no existe
+        os.makedirs(self.CACHE_DIR, exist_ok=True)
+        # Crear directorio de caché para yt-dlp si no existe
+
+        if os.path.exists(self.AUTH_FILE):
             try:
-                self.ytmusic = YTMusic(AUTH_FILE)
+                self.ytmusic = YTMusic(self.AUTH_FILE)
                 self.is_authenticated = True
             except Exception:
                 self.ytmusic = YTMusic()
@@ -37,23 +42,23 @@ class YTMusicService:
                 return False
             self.ytmusic = YTMusic(auth=auth_headers)
             self.ytmusic.get_library_playlists(limit=1)
-            with open(AUTH_FILE, 'w') as f:
+            with open(self.AUTH_FILE, 'w') as f:
                 json.dump(auth_headers, f, indent=4)
             self.is_authenticated = True
             return True
         except Exception:
             print("Error durante la autenticación:")
             traceback.print_exc()
-            if os.path.exists(AUTH_FILE):
-                os.remove(AUTH_FILE)
+            if os.path.exists(self.AUTH_FILE):
+                os.remove(self.AUTH_FILE)
             self.is_authenticated = False
             return False
 
     def logout(self):
         """Cierra la sesión eliminando el archivo de autenticación."""
         try:
-            if os.path.exists(AUTH_FILE):
-                os.remove(AUTH_FILE)
+            if os.path.exists(self.AUTH_FILE):
+                os.remove(self.AUTH_FILE)
             self.is_authenticated = False
             self.ytmusic = YTMusic() # Reinicializa la API sin autenticación
             print("[AUTH] Sesión cerrada.")
@@ -128,7 +133,7 @@ class YTMusicService:
                 'fragment_retries': 1,
                 'file_access_retries': 1,
                 'extractor_retries': 1,
-                'cachedir': '.yt-dlp-cache',
+                'cachedir': self.CACHE_DIR,
                 'nocheckcertificate': True,
                 'youtube_include_dash_manifest': False,
                 'youtube_include_hls_manifest': False,

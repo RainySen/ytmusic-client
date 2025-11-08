@@ -13,12 +13,19 @@ import atexit
 import os
 import traceback
 
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+elif __file__:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+else:
+    BASE_DIR = os.getcwd()
+
 app = QApplication(sys.argv)
 
 app.setQuitOnLastWindowClosed(False)
 app_icon = qta.icon('fa5s.music', color='#03adb7')
 app.setWindowIcon(app_icon)
-service = YTMusicService()
+service = YTMusicService(BASE_DIR)
 player = None
 queue_manager = None
 window = None
@@ -28,7 +35,7 @@ results_cache = []
 playlists_cache = []
 last_imported_playlist_data = None
 PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
-STATE_FILE = "queue_and_cache.json"
+STATE_FILE = os.path.join(BASE_DIR, "queue_and_cache.json")
 
 def save_state_on_exit():
     """Se ejecuta automáticamente al cerrar la app."""
@@ -465,6 +472,7 @@ def start_main_application():
 
 def main():
     global login_window, service
+
 
     # Crear la ventana de login primero
     # === CAMBIO CLAVE AQUÍ ===
