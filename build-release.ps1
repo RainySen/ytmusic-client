@@ -3,7 +3,7 @@
 # ==========================================
 
 Write-Host "Limpiando builds anteriores..." -ForegroundColor Yellow
-Remove-Item -Recurse -Force build, dist, release -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force build, dist, release, "*.spec" -ErrorAction SilentlyContinue
 
 Write-Host "Compilando ejecutable Release..." -ForegroundColor Cyan
 
