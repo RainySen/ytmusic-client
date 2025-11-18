@@ -845,20 +845,51 @@ class MainWindow(QWidget):
             2000
         )
 
-    def ask_to_save_playlist(self, title):
+    def ask_to_save_playlist(self, title, is_authenticated):
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Guardar Playlist")
-        msg_box.setText(f"¿Quieres guardar '{title}' en tu biblioteca 'Mis Playlists'?")
-        msg_box.setInformativeText("Esto creará una nueva playlist en tu cuenta (requiere inicio de sesión).")
-        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        msg_box.setDefaultButton(QMessageBox.Yes)
         msg_box.setIcon(QMessageBox.Question)
 
-        if msg_box.exec() == QMessageBox.Yes:
-            self.on_save_imported_playlist()
+        if is_authenticated:
+            msg_box.setText(f"¿Dónde quieres guardar '{title}'?")
+            msg_box.setInformativeText(
+                "Puedes guardarla localmente en tu dispositivo "
+                "o en tu biblioteca de YouTube Music."
+            )
 
-    def show_save_playlist_success(self, title):
-        QMessageBox.information(self, "Éxito", f"La playlist '{title}' se ha guardado en tu biblioteca.")
+            local_btn = msg_box.addButton("💾 Guardar Localmente", QMessageBox.ActionRole)
+            ytmusic_btn = msg_box.addButton("☁️ Guardar en YouTube Music", QMessageBox.ActionRole)
+            cancel_btn = msg_box.addButton("Cancelar", QMessageBox.RejectRole)
+
+            msg_box.setDefaultButton(local_btn)
+            msg_box.exec()
+
+            clicked = msg_box.clickedButton()
+            if clicked == local_btn:
+                # Guardar localmente
+                self.on_save_imported_playlist(save_to_ytmusic=False)
+            elif clicked == ytmusic_btn:
+                # Guardar en YouTube Music
+                self.on_save_imported_playlist(save_to_ytmusic=True)
+        else:
+            msg_box.setText(f"¿Quieres guardar '{title}' en tus playlists?")
+            msg_box.setInformativeText(
+                "La playlist se guardará localmente en tu dispositivo.\n"
+                "Si inicias sesión, también podrás guardar en YouTube Music."
+            )
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg_box.setDefaultButton(QMessageBox.Yes)
+
+            if msg_box.exec() == QMessageBox.Yes:
+                self.on_save_imported_playlist(save_to_ytmusic=False)
+
+    def show_save_playlist_success(self, title, location="local"):
+        location_text = "localmente" if location == "local" else "en YouTube Music"
+        QMessageBox.information(
+            self,
+            "✅ Éxito",
+            f"La playlist '{title}' se ha guardado {location_text}."
+        )
 
     def show_save_playlist_error(self, title):
         QMessageBox.warning(self, "Error", f"No se pudo guardar la playlist '{title}'.")

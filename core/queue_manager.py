@@ -67,13 +67,42 @@ class QueueManager(QObject):
         return self.loop_mode
 
     def set_queue_state(self, queue, current_index):
+        """
+        Restaura el estado completo de la cola.
+
+        Args:
+            queue: Lista de canciones
+            current_index: Índice de la canción actual
+        """
         if not queue:
-            print("[STATE] Cola guardada vacía.")
+            print("[QUEUE] ⚠️ Cola guardada vacía, no se restaura nada")
+            self.queue = []
+            self.current_index = -1
             return
 
-        self.queue = queue
-        self.current_index = current_index
-        print(f"[STATE] Estado de la cola restaurado. {len(self.queue)} canciones, índice en {self.current_index}")
+        try:
+            self.queue = queue
+            self.current_index = current_index
+
+            # Validar que el índice esté en rango
+            if self.current_index >= len(self.queue):
+                print(f"[QUEUE] ⚠️ Índice fuera de rango ({self.current_index} >= {len(self.queue)}), ajustando a -1")
+                self.current_index = -1
+            elif self.current_index < -1:
+                print(f"[QUEUE] ⚠️ Índice inválido ({self.current_index}), ajustando a -1")
+                self.current_index = -1
+
+            print(f"[QUEUE] ✅ Estado restaurado: {len(self.queue)} canciones, índice {self.current_index}")
+
+            # Emitir señales para actualizar la UI
+            self.queue_updated.emit()
+            if self.current_index >= 0:
+                self.current_changed.emit(self.current_index)
+
+        except Exception as e:
+            print(f"[QUEUE] ❌ Error restaurando estado: {e}")
+            self.queue = []
+            self.current_index = -1
 
     def add_song(self, song_data):
         self.queue.append(song_data)
