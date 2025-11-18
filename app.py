@@ -6,12 +6,14 @@ from services.ytmusic_service import YTMusicService
 from core.player import Player
 from core.queue_manager import QueueManager
 from ui.main_window import MainWindow
-from ui.login_window import LoginWindow  # <-- NUEVA IMPORTACIÓN
+from ui.login_window import LoginWindow
+from core.playlist_manager import PlaylistManager
 import re
 import json
 import atexit
 import os
 import traceback
+from datetime import datetime
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
@@ -28,6 +30,7 @@ app.setWindowIcon(app_icon)
 service = YTMusicService(BASE_DIR)
 player = None
 queue_manager = None
+playlist_manager = None
 window = None
 login_window = None
 
@@ -41,16 +44,18 @@ def save_state_on_exit():
     """Se ejecuta automáticamente al cerrar la app."""
     print("[STATE] Guardando estado de la cola y caché...")
     try:
+        queue = queue_manager.get_queue()
+        current_index = queue_manager.get_current_index()
+        stream_cache = player.get_stream_cache_for_saving()
+
         state_data = {
-            "queue": queue_manager.get_queue(),
-            "current_index": queue_manager.get_current_index(),
-            "stream_cache": player.get_stream_cache_for_saving()
+            "queue": queue,
+            "current_index": current_index,
+            "stream_cache": stream_cache,
         }
 
         with open(STATE_FILE, 'w', encoding='utf-8') as f:
             json.dump(state_data, f, indent=2, ensure_ascii=False)
-
-        print(f"[STATE] Estado guardado en {STATE_FILE}")
 
     except Exception as e:
         print(f"[STATE] Error fatal al guardar estado: {e}")
@@ -114,8 +119,7 @@ def handle_import_playlist(url):
 
             last_imported_playlist_data = playlist_data
 
-            if service.is_authenticated:
-                window.ask_to_save_playlist(playlist_title)
+            window.ask_to_save_playlist(playlist_title, service.is_authenticated)
 
         else:
             print("Error al cargar la playlist o está vacía")
@@ -123,31 +127,63 @@ def handle_import_playlist(url):
         print("La URL de la playlist no es válida")
 
 
-def handle_save_imported_playlist():
-    """
-    Se llama cuando el usuario hace clic en "Sí" en el diálogo de guardado.
-    """
+def handle_save_imported_playlist(save_to_ytmusic=False):
     global last_imported_playlist_data, playlists_cache
     if not last_imported_playlist_data:
         return
 
     title = last_imported_playlist_data['title']
     songs = last_imported_playlist_data['tracks']
-    description = f"Importada desde URL. Contiene {len(songs)} canciones."
 
-    print(f"Intentando guardar la playlist '{title}' en la biblioteca...")
-    playlist_id = service.create_playlist(title, description, songs)
+    if save_to_ytmusic and service.is_authenticated:
+        # Guardar en YouTube Music
+        description = f"Importada desde URL. Contiene {len(songs)} canciones."
+        print(f"Intentando guardar la playlist '{title}' en YouTube Music...")
+        playlist_id = service.create_playlist(title, description, songs)
 
-    if playlist_id:
-        print(f"Playlist guardada con éxito. ID: {playlist_id}")
-        playlists_cache = service.get_library_playlists()
-        window.update_playlists(playlists_cache)
-        window.show_save_playlist_success(title)
+        if playlist_id:
+            print(f"Playlist guardada en YouTube Music con éxito. ID: {playlist_id}")
+            playlists_cache = get_combined_playlists()
+            window.update_playlists(playlists_cache)
+            window.show_save_playlist_success(title, "YouTube Music")
+        else:
+            print("Error al guardar la playlist en YouTube Music.")
+            window.show_save_playlist_error(title)
     else:
-        print("Error al guardar la playlist.")
-        window.show_save_playlist_error(title)
+        # Guardar localmente
+        print(f"Guardando la playlist '{title}' localmente...")
+        playlist_id = playlist_manager.add_playlist(title, songs, source="imported")
+
+        if playlist_id:
+            print(f"Playlist guardada localmente con éxito. ID: {playlist_id}")
+            playlists_cache = get_combined_playlists()
+            window.update_playlists(playlists_cache)
+            window.show_save_playlist_success(title, "local")
+        else:
+            print("Error al guardar la playlist localmente.")
+            window.show_save_playlist_error(title)
 
     last_imported_playlist_data = None
+
+
+def get_combined_playlists():
+    """
+    Combina playlists locales con las de YouTube Music.
+    Retorna una lista unificada.
+    """
+    local_playlists = playlist_manager.get_all_playlists()
+
+    if service.is_authenticated:
+        ytmusic_playlists = service.get_library_playlists()
+        return playlist_manager.merge_with_ytmusic_playlists(ytmusic_playlists)
+    else:
+        # Solo playlists locales
+        return [{
+            'playlistId': p['playlistId'],
+            'title': p['title'],
+            'source': p.get('source', 'local'),
+            'track_count': len(p.get('tracks', []))
+        } for p in local_playlists]
 
 
 def handle_song_selected(index):
@@ -313,7 +349,7 @@ def handle_login(headers_raw):
     success = service.setup_authentication(headers_raw)
     if success:
         window.show_auth_success()
-        playlists_cache = service.get_library_playlists()
+        playlists_cache = get_combined_playlists()
         window.update_playlists(playlists_cache)
         window.update_auth_status(True)
     else:
@@ -324,8 +360,8 @@ def handle_logout():
     """Cierra la sesión del usuario."""
     global playlists_cache
     if service.logout():
-        playlists_cache = []
-        window.update_playlists(playlists_cache) # Limpia la lista de playlists
+        playlists_cache = get_combined_playlists()
+        window.update_playlists(playlists_cache)
         window.update_auth_status(False)
         print("[AUTH] Sesión cerrada y UI actualizada.")
     else:
@@ -340,77 +376,119 @@ def handle_playlist_selected(index):
     if 0 <= index < len(playlists_cache):
         playlist = playlists_cache[index]
         playlist_id = playlist.get('playlistId')
+        source = playlist.get('source', 'ytmusic')
 
         if not playlist_id:
             print(f"[ERROR] La playlist '{playlist.get('title')}' no tiene un 'playlistId' válido.")
             return
 
-        songs_data = service.get_playlist_songs(playlist_id)
+        # local o de YouTube Music
+        if source in ['local', 'imported', 'user_created']:
+            # Es una playlist local
+            local_playlist = playlist_manager.get_playlist(playlist_id)
+            if local_playlist and 'tracks' in local_playlist:
+                songs_list = local_playlist['tracks']
+                playlist_title = local_playlist['title']
 
-        if songs_data and 'tracks' in songs_data:
-            songs_list = songs_data['tracks']
-            playlist_title = songs_data.get('title', 'Playlist')
+                print(f"Cargando {len(songs_list)} canciones de la playlist local '{playlist_title}' a la cola.")
 
-            print(f"Cargando {len(songs_list)} canciones de la playlist '{playlist_title}' a la cola.")
+                results_cache = []
+                window.update_results([])
+                queue_manager.clear()
 
-            results_cache = []
-            window.update_results([])
-            queue_manager.clear()
+                for song in songs_list:
+                    queue_manager.add_song(song)
 
-            for song in songs_list:
-                queue_manager.add_song(song)
-
-            first_song = queue_manager.jump_to(0)
-            if first_song:
-                play_song(first_song)
-                preload_next_songs(5)
+                first_song = queue_manager.jump_to(0)
+                if first_song:
+                    play_song(first_song)
+                    preload_next_songs(5)
+            else:
+                print(f"No se pudo cargar la playlist local '{playlist.get('title')}'")
         else:
-            print(f"La playlist '{playlist.get('title')}' está vacía o no se pudo cargar.")
+            # Es una playlist de YouTube Music
+            songs_data = service.get_playlist_songs(playlist_id)
+
+            if songs_data and 'tracks' in songs_data:
+                songs_list = songs_data['tracks']
+                playlist_title = songs_data.get('title', 'Playlist')
+
+                print(f"Cargando {len(songs_list)} canciones de la playlist de YTMusic '{playlist_title}' a la cola.")
+
+                results_cache = []
+                window.update_results([])
+                queue_manager.clear()
+
+                for song in songs_list:
+                    queue_manager.add_song(song)
+
+                first_song = queue_manager.jump_to(0)
+                if first_song:
+                    play_song(first_song)
+                    preload_next_songs(5)
+            else:
+                print(f"La playlist '{playlist.get('title')}' está vacía o no se pudo cargar.")
 
 
 def initial_load():
     global playlists_cache
-    # Cargar playlists
-    if service.is_authenticated:
-        playlists_cache = service.get_library_playlists()
-        window.update_playlists(playlists_cache)
-    else:
-        window.update_playlists([])
 
+    # Cargar playlists combinadas (locales + YTMusic si hay sesión)
+    playlists_cache = get_combined_playlists()
+    window.update_playlists(playlists_cache)
     window.update_auth_status(service.is_authenticated)
 
     # Restaurar estado de la sesión anterior
     if os.path.exists(STATE_FILE):
-        print(f"[STATE] Encontrado archivo de estado: {STATE_FILE}")
+
         try:
+            # Leer y mostrar tamaño
+            file_size = os.path.getsize(STATE_FILE)
+
             with open(STATE_FILE, 'r', encoding='utf-8') as f:
                 state_data = json.load(f)
 
-            # Cargar datos en los managers
-            player.set_stream_cache(state_data.get("stream_cache", {}))
-            queue_manager.set_queue_state(
-                state_data.get("queue", []),
-                state_data.get("current_index", -1)
-            )
+            # Verificar contenido
+            saved_at = state_data.get('saved_at', 'desconocido')
+            queue_data = state_data.get("queue", [])
+            current_index = state_data.get("current_index", -1)
+            stream_cache = state_data.get("stream_cache", {})
 
-            on_queue_updated()  # carga la cola
-            current_index = queue_manager.get_current_index()
-            if current_index >= 0:
-                window.queue_list.setCurrentRow(current_index)
+            # Restaurar en el player
+            if stream_cache:
+                player.set_stream_cache(stream_cache)
 
-                # Mostrar la info de la canción (sin reproducirla)
-                current_song = queue_manager.get_current()
-                if current_song:  # Asegurar que no sea None
-                    artist_name = current_song.get('artists', [{}])[0].get('name', 'Desconocido')
-                    display_text = f"{current_song['title']} - {artist_name}"
-                    window.update_song_info(display_text)
+            # Restaurar en el queue manager
+            if queue_data:
+                queue_manager.set_queue_state(queue_data, current_index)
+
+                # Actualizar UI
+                on_queue_updated()
+
+                # Seleccionar el ítem actual en la lista
+                if 0 <= current_index < len(queue_data):
+                    window.queue_list.setCurrentRow(current_index)
+
+                    # Mostrar info de la canción (sin reproducirla)
+                    current_song = queue_manager.get_current()
+                    if current_song:
+                        artist_name = current_song.get('artists', [{}])[0].get('name', 'Desconocido')
+                        display_text = f"{current_song['title']} - {artist_name}"
+                        window.update_song_info(display_text)
+
+
+        except json.JSONDecodeError as e:
+            try:
+                os.remove(STATE_FILE)
+            except:
+                pass
 
         except Exception as e:
-            print(f"[STATE] Error al cargar estado: {e}")
-            # Si está corrupto, se borra
-            os.remove(STATE_FILE)
-    else:
-        print("[STATE] No se encontró archivo de estado.")
+            traceback.print_exc()
+            try:
+                os.remove(STATE_FILE)
+            except:
+                pass
 
 
 def handle_toggle_autoplay():
@@ -467,17 +545,12 @@ def handle_fetch_and_play_recommendation():
 # --- 3. LÓGICA DE ARRANQUE MODIFICADA ---
 
 def start_main_application():
-    """
-    Esta función se llama DESPUÉS de que el usuario interactúa
-    con la ventana de login.
-    """
-    global player, queue_manager, window, app_icon, service
+    global player, queue_manager, window, app_icon, service, playlist_manager
 
-    # Ahora sí, inicializamos los componentes principales
+    playlist_manager = PlaylistManager(BASE_DIR)
     player = Player(service)
     queue_manager = QueueManager()
 
-    # Crear la ventana principal
     window = MainWindow(
         on_search=handle_search,
         on_select_song=handle_song_selected,
@@ -490,7 +563,7 @@ def start_main_application():
         on_previous=handle_previous,
         on_remove_from_queue=handle_remove_from_queue,
         on_queue_item_selected=handle_queue_item_selected,
-        on_login_requested=handle_login,  # Para el botón de login *dentro* de la app
+        on_login_requested=handle_login,
         on_logout_requested=handle_logout,
         on_playlist_selected=handle_playlist_selected,
         on_import_playlist=handle_import_playlist,
@@ -516,9 +589,11 @@ def start_main_application():
     queue_manager.autoplay_mode_changed.connect(window.update_autoplay_button_icon)
     window.clear_btn.clicked.connect(queue_manager.clear)
 
-    initial_load()
-    window.resize(1080, 750)
     atexit.register(save_state_on_exit)
+
+    initial_load()
+
+    window.resize(1080, 750)
     window.show()
 
     # Cerrar la ventana de login

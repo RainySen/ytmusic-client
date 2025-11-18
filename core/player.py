@@ -63,30 +63,62 @@ class Player(QObject):
         self.event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_end_reached)
 
     def set_stream_cache(self, cache_data):
-        try:
-            for video_id, entry in cache_data.items():
-                if isinstance(entry.get('timestamp'), str):
-                    entry['timestamp'] = datetime.fromisoformat(entry['timestamp'])
+        """
+        Restaura el caché de streams desde el JSON guardado.
+        Convierte los strings de timestamp de vuelta a objetos datetime.
+        """
+        if not cache_data:
+            print("[CACHE] ℹ️ No hay caché para restaurar")
+            return
 
-            self.stream_cache = cache_data
-            print(f"[CACHE] Caché de streaming restaurado con {len(self.stream_cache)} entradas.")
+        try:
+            restored_count = 0
+            for video_id, entry in cache_data.items():
+                try:
+                    # Convertir el timestamp de string a datetime
+                    if isinstance(entry.get('timestamp'), str):
+                        entry['timestamp'] = datetime.fromisoformat(entry['timestamp'])
+
+                    self.stream_cache[video_id] = entry
+                    restored_count += 1
+                except Exception as e:
+                    print(f"[CACHE] ⚠️ Error restaurando entrada {video_id}: {e}")
+                    continue
+
+            print(f"[CACHE] ✅ Caché restaurado: {restored_count}/{len(cache_data)} streams")
+
         except Exception as e:
-            print(f"[CACHE] Error restaurando caché: {e}")
+            print(f"[CACHE] ❌ Error restaurando caché: {e}")
+            traceback.print_exc()
             self.stream_cache = {}
 
     def get_stream_cache_for_saving(self):
+        """
+        Prepara el caché de streams para ser guardado en JSON.
+        Convierte los objetos datetime a strings.
+        """
         cache_to_save = {}
         try:
-            for video_id, entry in self.stream_cache.items():
-                cache_to_save[video_id] = {
-                    'url': entry['url'],
-                    'title': entry['title'],
-                    'timestamp': entry['timestamp'].isoformat()
-                }
-        except Exception as e:
-            print(f"[CACHE] Error preparando caché para guardar: {e}")
+            print(f"[CACHE] 📦 Preparando {len(self.stream_cache)} streams para guardar")
 
-        return cache_to_save
+            for video_id, entry in self.stream_cache.items():
+                try:
+                    cache_to_save[video_id] = {
+                        'url': entry['url'],
+                        'title': entry['title'],
+                        'timestamp': entry['timestamp'].isoformat()
+                    }
+                except Exception as e:
+                    print(f"[CACHE] ⚠️ Error procesando {video_id}: {e}")
+                    continue
+
+            print(f"[CACHE] ✅ {len(cache_to_save)} streams listos para guardar")
+            return cache_to_save
+
+        except Exception as e:
+            print(f"[CACHE] ❌ Error preparando caché para guardar: {e}")
+            traceback.print_exc()
+            return {}
 
     # def _load_cache(self):
     #     if os.path.exists(self.cache_file):
