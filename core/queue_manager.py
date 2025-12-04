@@ -1,5 +1,3 @@
-# Modificaciones para queue_manager.py
-
 from PySide6.QtCore import QObject, Signal
 
 
@@ -69,10 +67,6 @@ class QueueManager(QObject):
     def set_queue_state(self, queue, current_index):
         """
         Restaura el estado completo de la cola.
-
-        Args:
-            queue: Lista de canciones
-            current_index: Índice de la canción actual
         """
         if not queue:
             print("[QUEUE] ⚠️ Cola guardada vacía, no se restaura nada")
@@ -116,6 +110,11 @@ class QueueManager(QObject):
         return None
 
     def play_now(self, song_data):
+        # --- CORRECCIÓN DE SEGURIDAD ---
+        # Si el índice actual apunta fuera de la lista (ej. después de borrar), lo corregimos
+        if self.current_index >= len(self.queue):
+            self.current_index = len(self.queue) - 1
+
         if self.current_index >= 0:
             self.queue.insert(self.current_index + 1, song_data)
             self.current_index += 1
@@ -125,7 +124,11 @@ class QueueManager(QObject):
 
         self.queue_updated.emit()
         self.current_changed.emit(self.current_index)
-        return self.queue[self.current_index]
+
+        # Validación final para evitar IndexError
+        if 0 <= self.current_index < len(self.queue):
+            return self.queue[self.current_index]
+        return None
 
     def next(self):
         if self.current_index < len(self.queue) - 1:
@@ -142,6 +145,10 @@ class QueueManager(QObject):
         return None
 
     def add_next(self, song_data):
+        # Validación de seguridad
+        if self.current_index >= len(self.queue):
+            self.current_index = len(self.queue) - 1
+
         if self.current_index == -1:
             return self.add_song(song_data)
         else:
@@ -165,7 +172,11 @@ class QueueManager(QObject):
             if index < self.current_index:
                 self.current_index -= 1
             elif index == self.current_index:
-                pass
+                # --- CORRECCIÓN DE BUG ---
+                # Si borramos la canción actual y era la última o la única,
+                # el índice queda fuera de rango. Debemos ajustarlo.
+                if self.current_index >= len(self.queue):
+                    self.current_index = len(self.queue) - 1
 
             self.queue_updated.emit()
 
