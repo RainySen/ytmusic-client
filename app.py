@@ -196,6 +196,10 @@ def handle_add_next(index):
             player.preload_stream(s.get("videoId"))
 
 
+def handle_clear_queue():
+    queue_manager.clear()
+
+
 def preload_next_songs(count=5):
     q = queue_manager.get_queue();
     curr = queue_manager.get_current_index()
@@ -476,7 +480,8 @@ def start_main_application():
         handle_volume_change, handle_seek, handle_next, handle_previous, handle_remove_from_queue,
         handle_queue_item_selected, handle_login, handle_playlist_selected, handle_import_playlist,
         app_icon, handle_save_imported_playlist, handle_result_highlighted, handle_queue_item_moved,
-        handle_toggle_loop, handle_logout, handle_toggle_autoplay, handle_show_lyrics, handle_home
+        handle_toggle_loop, handle_logout, handle_toggle_autoplay, handle_show_lyrics, handle_home,
+        handle_clear_queue
     )
     player.position_changed.connect(window.update_progress)
     player.time_changed.connect(window.update_time)

@@ -189,7 +189,9 @@ class MainWindow(QWidget):
                  on_volume_change, on_seek, on_next, on_previous, on_remove_from_queue,
                  on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
                  on_save_imported_playlist, on_result_highlighted, on_queue_item_moved, on_toggle_loop,
-                 on_logout_requested, on_toggle_autoplay, on_show_lyrics_requested, on_home_requested):
+                 on_logout_requested, on_toggle_autoplay, on_show_lyrics_requested, on_home_requested,
+                 on_clear_queue
+                 ):
         super().__init__()
 
         self.on_search = on_search
@@ -214,6 +216,7 @@ class MainWindow(QWidget):
         self.on_toggle_autoplay = on_toggle_autoplay
         self.on_show_lyrics_requested = on_show_lyrics_requested
         self.on_home_requested = on_home_requested
+        self.on_clear_queue = on_clear_queue
 
         self.is_logged_in = False
         self.app_icon = app_icon
@@ -482,8 +485,10 @@ class MainWindow(QWidget):
             "¿Eliminar todas las canciones excepto la actual?",
             QMessageBox.Yes | QMessageBox.No
         )
+
         if reply == QMessageBox.Yes:
-            pass
+            if self.on_clear_queue:
+                self.on_clear_queue()
 
     def _create_player_widget(self):
         player_widget = QWidget()
