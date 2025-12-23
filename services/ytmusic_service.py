@@ -177,3 +177,40 @@ class YTMusicService:
         except Exception:
             traceback.print_exc()
             return None
+
+    def get_home(self):
+        try:
+            return self.ytmusic.get_home(limit=20)
+        except Exception:
+            return []
+
+    def parse_home_section(self, section):
+        items = []
+
+        for item in section.get("contents", []):
+            # Canción
+            if "videoId" in item:
+                items.append({
+                    "type": "song",
+                    "videoId": item.get("videoId"),
+                    "title": item.get("title", "Sin título"),
+                    "artists": item.get("artists", []),
+                })
+
+            # Playlist o Mix
+            elif "playlistId" in item:
+                items.append({
+                    "type": "playlist",
+                    "playlistId": item.get("playlistId"),
+                    "title": item.get("title", "Playlist"),
+                })
+
+            # Álbum
+            elif "browseId" in item and item.get("subtitle") == "Álbum":
+                items.append({
+                    "type": "album",
+                    "browseId": item.get("browseId"),
+                    "title": item.get("title", "Álbum"),
+                })
+
+        return items
