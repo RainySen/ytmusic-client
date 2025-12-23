@@ -16,10 +16,8 @@ import traceback
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
-elif __file__:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 else:
-    BASE_DIR = os.getcwd()
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = QApplication(sys.argv)
 app.setQuitOnLastWindowClosed(False)
@@ -81,45 +79,90 @@ def handle_search(query):
 
 def handle_import_playlist(url):
     global results_cache, last_imported_playlist_data
+
     match = PLAYLIST_RE.search(url)
-    if match:
-        data = service.get_playlist_songs(match.group(1))
-        if data and data['tracks']:
-            results_cache = [];
-            window.update_results(results_cache)
-            queue_manager.clear()
-            for s in data['tracks']: queue_manager.add_song(s)
-            play_song(queue_manager.jump_to(0));
+    if not match:
+        window.show_import_error("URL inválida. Formato esperado: https://music.youtube.com/playlist?list=PLxxxxxx")
+        return
+
+    playlist_id = match.group(1)
+
+    try:
+        data = service.get_playlist_songs(playlist_id)
+
+        if not data:
+            window.show_import_error(
+                "No se pudo acceder a la playlist. Verifica:\n- La URL es correcta\n- La playlist no está privada\n- Tienes conexión a internet")
+            return
+
+        if not data.get('tracks'):
+            window.show_import_error("La playlist está vacía o no tiene canciones accesibles.")
+            return
+
+        results_cache = []
+        window.update_results(results_cache)
+        queue_manager.clear()
+
+        for song in data['tracks']:
+            queue_manager.add_song(song)
+
+        first_song = queue_manager.jump_to(0)
+        if first_song:
+            play_song(first_song)
             preload_next_songs(5)
-            window.search_box.clear()
-            last_imported_playlist_data = data
-            window.ask_to_save_playlist(data['title'], service.is_authenticated)
-        else:
-            print("Error playlist vacía")
-    else:
-        print("URL inválida")
+
+        window.search_box.clear()
+        last_imported_playlist_data = data
+
+        window.ask_to_save_playlist(data['title'], service.is_authenticated)
+
+    except Exception as e:
+        traceback.print_exc()
+        window.show_import_error(f"Error al importar:\n{str(e)}")
 
 
 def handle_save_imported_playlist(save_to_ytmusic=False):
     global last_imported_playlist_data, playlists_cache
-    if not last_imported_playlist_data: return
+
+    if not last_imported_playlist_data:
+        print("[SAVE] ️ No hay datos para guardar")
+        return
+
     title = last_imported_playlist_data['title']
     songs = last_imported_playlist_data['tracks']
-    if save_to_ytmusic and service.is_authenticated:
-        if service.create_playlist(title, "Importada", songs):
-            playlists_cache = get_combined_playlists()
-            window.update_playlists(playlists_cache)
-            window.show_save_playlist_success(title, "YouTube Music")
+
+    try:
+        if save_to_ytmusic and service.is_authenticated:
+            result = service.create_playlist(title, "Importada desde YTMusic Client", songs)
+
+            if result:
+                playlists_cache = get_combined_playlists()
+                window.update_playlists(playlists_cache)
+                window.show_save_playlist_success(title, "YouTube Music")
+            else:
+                window.show_save_playlist_error(title)
         else:
-            window.show_save_playlist_error(title)
-    else:
-        if playlist_manager.add_playlist(title, songs, "imported"):
-            playlists_cache = get_combined_playlists()
-            window.update_playlists(playlists_cache)
-            window.show_save_playlist_success(title, "local")
-        else:
-            window.show_save_playlist_error(title)
-    last_imported_playlist_data = None
+
+            # Verificar que el archivo es escribible
+            playlists_dir = os.path.dirname(playlist_manager.playlists_file)
+
+            if not os.path.exists(playlists_dir):
+                os.makedirs(playlists_dir, exist_ok=True)
+
+            result = playlist_manager.add_playlist(title, songs, "imported")
+
+            if result:
+                playlists_cache = get_combined_playlists()
+                window.update_playlists(playlists_cache)
+                window.show_save_playlist_success(title, "local")
+            else:
+                window.show_save_playlist_error(title)
+
+        last_imported_playlist_data = None
+
+    except Exception as e:
+        traceback.print_exc()
+        window.show_save_playlist_error(title)
 
 
 def get_combined_playlists():
