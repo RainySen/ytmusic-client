@@ -63,9 +63,11 @@ class ImprovedQueueItem(QWidget):
         self.index = index
         self.song = song
 
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
 
         self.play_indicator = QLabel()
         if is_current:
@@ -73,29 +75,48 @@ class ImprovedQueueItem(QWidget):
         else:
             self.play_indicator.setPixmap(qta.icon('fa5s.grip-vertical', color='#666').pixmap(14, 14))
         self.play_indicator.setFixedWidth(20)
+        self.play_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         thumb = QLabel()
-        thumb.setFixedSize(48, 48)
-        thumb.setPixmap(qta.icon('fa5s.music', color='#666').pixmap(48, 48))
+        thumb.setFixedSize(40, 40)
+        thumb.setPixmap(qta.icon('fa5s.music', color='#666').pixmap(40, 40))
         thumb.setScaledContents(True)
         thumb.setStyleSheet("border-radius: 4px; background: #1a1a1a;")
+        thumb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         info_layout = QVBoxLayout()
         info_layout.setSpacing(2)
+        info_layout.setContentsMargins(0, 0, 0, 0)
 
-        title = QLabel(song.get('title', 'Desconocido'))
-        title.setStyleSheet("font-weight: 600; font-size: 13px;")
-        title.setWordWrap(False)
+        self.title_label = QLabel(song.get('title', 'Desconocido'))
+        self.title_label.setStyleSheet("font-weight: 600; font-size: 13px;")
+        self.title_label.setWordWrap(False)
+        self.title_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        from PySide6.QtCore import Qt
+        self.title_label.setTextFormat(Qt.PlainText)
+        self.title_label.setTextInteractionFlags(Qt.NoTextInteraction)
+
+        self.full_title = song.get('title', 'Desconocido')
 
         artist_text = ", ".join([a.get('name', '') for a in song.get('artists', [])]) if song.get(
             'artists') else "Desconocido"
-        artist = QLabel(artist_text)
-        artist.setStyleSheet("color: #999; font-size: 11px;")
-        artist.setWordWrap(False)
+        self.artist_label = QLabel(artist_text)
+        self.artist_label.setStyleSheet("color: #999; font-size: 11px;")
+        self.artist_label.setWordWrap(False)
+        self.artist_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.artist_label.setTextInteractionFlags(Qt.NoTextInteraction)
 
-        info_layout.addWidget(title)
-        info_layout.addWidget(artist)
-        info_layout.addStretch()
+        self.full_artist = artist_text
+
+        info_layout.addWidget(self.title_label)
+        info_layout.addWidget(self.artist_label)
+
+        buttons_container = QWidget()
+        buttons_container.setFixedWidth(64)
+        buttons_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        buttons_layout = QHBoxLayout(buttons_container)
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setSpacing(4)
 
         btn_play = QPushButton()
         btn_play.setIcon(qta.icon('fa5s.play', color='white'))
@@ -127,11 +148,15 @@ class ImprovedQueueItem(QWidget):
             }
         """)
 
+        buttons_layout.addWidget(btn_play)
+        buttons_layout.addWidget(btn_remove)
+
         layout.addWidget(self.play_indicator)
         layout.addWidget(thumb)
         layout.addLayout(info_layout, stretch=1)
-        layout.addWidget(btn_play)
-        layout.addWidget(btn_remove)
+        layout.addWidget(buttons_container)
+
+        self.setFixedHeight(56)
 
         bg_color = "rgba(255,0,0,0.08)" if is_current else "transparent"
         border_color = "rgba(255,0,0,0.3)" if is_current else "transparent"
@@ -145,6 +170,19 @@ class ImprovedQueueItem(QWidget):
                 background: rgba(255,255,255,0.03);
             }}
         """)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        available_width = self.width() - 156
+
+        if available_width > 50:
+            font_metrics = self.title_label.fontMetrics()
+            elided_title = font_metrics.elidedText(self.full_title, Qt.ElideRight, available_width)
+            self.title_label.setText(elided_title)
+
+            elided_artist = font_metrics.elidedText(self.full_artist, Qt.ElideRight, available_width)
+            self.artist_label.setText(elided_artist)
+
 
 class MainWindow(QWidget):
     def __init__(self, on_search, on_select_song, on_add_to_queue, on_toggle_play, on_add_next,
@@ -337,7 +375,6 @@ class MainWindow(QWidget):
         return center_widget
 
     def _create_improved_right_panel(self):
-        """Panel derecho mejorado con mejor organización"""
         right_panel = QWidget()
         right_panel.setObjectName("right_panel")
         right_layout = QVBoxLayout(right_panel)
@@ -348,16 +385,20 @@ class MainWindow(QWidget):
         self.right_tabs = QTabWidget()
         self.right_tabs.setObjectName("right_tabs")
 
-        # ===== TAB 1: BIBLIOTECA (Playlists + Cola) =====
+        # ===== TAB 1: Playlists + Cola =====
         library_tab = QWidget()
         library_layout = QVBoxLayout(library_tab)
         library_layout.setContentsMargins(8, 8, 8, 8)
         library_layout.setSpacing(12)
 
-        # Sección de Playlists (colapsable)
         playlists_section = CollapsibleSection("Mis Playlists")
+        playlists_section.is_collapsed = True
+        playlists_section.content.setVisible(False)
+        playlists_section.toggle_button.setIcon(qta.icon('fa5s.chevron-right', color='white'))
+
         self.playlists_list = QListWidget()
         self.playlists_list.setObjectName("compact_list")
+        self.playlists_list.setMaximumHeight(150)
         self.playlists_list.itemDoubleClicked.connect(self.playlist_selected)
         playlists_section.add_content(self.playlists_list)
         library_layout.addWidget(playlists_section)
@@ -400,10 +441,10 @@ class MainWindow(QWidget):
 
         library_layout.addWidget(queue_header)
 
-        # Lista de cola mejorada
         self.queue_scroll = QScrollArea()
         self.queue_scroll.setWidgetResizable(True)
         self.queue_scroll.setFrameShape(QFrame.NoFrame)
+        self.queue_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.queue_container = QWidget()
         self.queue_layout = QVBoxLayout(self.queue_container)
@@ -412,9 +453,8 @@ class MainWindow(QWidget):
         self.queue_layout.addStretch()
 
         self.queue_scroll.setWidget(self.queue_container)
-        library_layout.addWidget(self.queue_scroll, stretch=1)
+        library_layout.addWidget(self.queue_scroll, stretch=10)
 
-        # Mantenemos la lista antigua pero oculta (para compatibilidad)
         self.queue_list = QListWidget()
         self.queue_list.hide()
 
@@ -704,21 +744,86 @@ class MainWindow(QWidget):
             background: transparent;
         }
 
+        /* Scrollbar Vertical */
         QScrollBar:vertical {
             background: transparent;
-            width: 10px;
+            width: 12px;
             margin: 0;
+            border-radius: 6px;
         }
+        
         QScrollBar::handle:vertical {
-            background: #2a2a2a;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            min-height: 30px;
+            margin: 2px;
+        }
+        
+        QScrollBar::handle:vertical:hover {
+            background: rgba(255, 0, 0, 0.5);
+        }
+        
+        QScrollBar::handle:vertical:pressed {
+            background: rgba(255, 0, 0, 0.7);
+        }
+        
+        QScrollBar::add-line:vertical,
+        QScrollBar::sub-line:vertical {
+            height: 0px;
+            background: transparent;
+        }
+        
+        QScrollBar::add-page:vertical,
+        QScrollBar::sub-page:vertical {
+            background: transparent;
+        }
+
+        /* Scrollbar Horizontal */
+        QScrollBar:horizontal {
+            background: transparent;
+            height: 12px;
+            margin: 0;
+            border-radius: 6px;
+        }
+        
+        QScrollBar::handle:horizontal {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            min-width: 30px;
+            margin: 2px;
+        }
+        
+        QScrollBar::handle:horizontal:hover {
+            background: rgba(255, 0, 0, 0.5);
+        }
+        
+        QScrollBar::handle:horizontal:pressed {
+            background: rgba(255, 0, 0, 0.7);
+        }
+        
+        QScrollBar::add-line:horizontal,
+        QScrollBar::sub-line:horizontal {
+            width: 0px;
+            background: transparent;
+        }
+        
+        QScrollBar::add-page:horizontal,
+        QScrollBar::sub-page:horizontal {
+            background: transparent;
+        }
+        QListWidget QScrollBar:vertical {
+            background: transparent;
+            width: 10px;
+        }
+        
+        QListWidget QScrollBar::handle:vertical {
+            background: rgba(255, 255, 255, 0.08);
             border-radius: 5px;
             min-height: 20px;
         }
-        QScrollBar::handle:vertical:hover {
-            background: #FF0000;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            height: 0px;
+        
+        QListWidget QScrollBar::handle:vertical:hover {
+            background: rgba(255, 0, 0, 0.4);
         }
 
         #results_list {
