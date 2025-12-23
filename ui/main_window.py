@@ -1143,6 +1143,9 @@ class MainWindow(QWidget):
         elif action == add_queue and self.on_add_to_queue:
             self.on_add_to_queue(self.results_list.currentRow())
 
+    def show_import_error(self, message):
+        QMessageBox.warning(self, "Error al Importar Playlist", message)
+
     def set_lyrics_lines(self, lines):
         self.lyrics_list_widget.clear()
         for line in lines:
