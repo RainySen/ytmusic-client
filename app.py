@@ -411,6 +411,17 @@ def initial_load():
         except:
             pass
 
+def handle_home():
+    home_raw = service.get_home()
+    parsed_sections = []
+
+    for section in home_raw:
+        title = section.get("title", "Sección")
+        content = service.parse_home_section(section)
+        if content:
+            parsed_sections.append((title, content))
+
+    window.show_home(parsed_sections)
 
 def start_main_application():
     global player, queue_manager, window, app_icon, service, playlist_manager
@@ -422,7 +433,7 @@ def start_main_application():
         handle_volume_change, handle_seek, handle_next, handle_previous, handle_remove_from_queue,
         handle_queue_item_selected, handle_login, handle_playlist_selected, handle_import_playlist,
         app_icon, handle_save_imported_playlist, handle_result_highlighted, handle_queue_item_moved,
-        handle_toggle_loop, handle_logout, handle_toggle_autoplay, handle_show_lyrics
+        handle_toggle_loop, handle_logout, handle_toggle_autoplay, handle_show_lyrics, handle_home
     )
     player.position_changed.connect(window.update_progress)
     player.time_changed.connect(window.update_time)
@@ -434,10 +445,9 @@ def start_main_application():
     queue_manager.current_changed.connect(on_queue_updated)
     queue_manager.loop_mode_changed.connect(window.update_loop_button_icon)
     queue_manager.autoplay_mode_changed.connect(window.update_autoplay_button_icon)
-    window.clear_btn.clicked.connect(queue_manager.clear)
     atexit.register(save_state_on_exit)
     initial_load()
-    window.resize(1080, 750)
+    window.resize(1240, 750)
     window.show()
     login_window.close()
 
