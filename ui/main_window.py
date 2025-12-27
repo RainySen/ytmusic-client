@@ -54,14 +54,18 @@ class CollapsibleSection(QWidget):
     def add_content(self, widget):
         self.content_layout.addWidget(widget)
 
+
 class ImprovedQueueItem(QWidget):
     play_clicked = Signal(int)
     remove_clicked = Signal(int)
+    drag_started = Signal(int)
 
     def __init__(self, song, index, is_current=False):
         super().__init__()
         self.index = index
         self.song = song
+        self.is_current = is_current
+        self.drag_start_position = None
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -76,6 +80,7 @@ class ImprovedQueueItem(QWidget):
             self.play_indicator.setPixmap(qta.icon('fa5s.grip-vertical', color='#666').pixmap(14, 14))
         self.play_indicator.setFixedWidth(20)
         self.play_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.play_indicator.setCursor(Qt.OpenHandCursor)
 
         thumb = QLabel()
         thumb.setFixedSize(40, 40)
@@ -92,7 +97,6 @@ class ImprovedQueueItem(QWidget):
         self.title_label.setStyleSheet("font-weight: 600; font-size: 13px;")
         self.title_label.setWordWrap(False)
         self.title_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        from PySide6.QtCore import Qt
         self.title_label.setTextFormat(Qt.PlainText)
         self.title_label.setTextInteractionFlags(Qt.NoTextInteraction)
 
@@ -171,6 +175,42 @@ class ImprovedQueueItem(QWidget):
             }}
         """)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            if self.play_indicator.geometry().contains(event.pos()):
+                self.drag_start_position = event.pos()
+                self.play_indicator.setCursor(Qt.ClosedHandCursor)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if not (event.buttons() & Qt.LeftButton):
+            return
+        if self.drag_start_position is None:
+            return
+        if (event.pos() - self.drag_start_position).manhattanLength() < 10:
+            return
+
+        from PySide6.QtCore import QMimeData
+        from PySide6.QtGui import QDrag
+
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setText(str(self.index))
+        drag.setMimeData(mime_data)
+
+        pixmap = self.grab()
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(event.pos())
+        drag.exec(Qt.MoveAction)
+
+        self.play_indicator.setCursor(Qt.OpenHandCursor)
+        self.drag_start_position = None
+
+    def mouseReleaseEvent(self, event):
+        self.play_indicator.setCursor(Qt.OpenHandCursor)
+        self.drag_start_position = None
+        super().mouseReleaseEvent(event)
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         available_width = self.width() - 156
@@ -182,6 +222,93 @@ class ImprovedQueueItem(QWidget):
 
             elided_artist = font_metrics.elidedText(self.full_artist, Qt.ElideRight, available_width)
             self.artist_label.setText(elided_artist)
+
+
+class DroppableQueueContainer(QWidget):
+    item_dropped = Signal(int, int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.drag_source_index = -1
+        self.drop_indicator_pos = -1
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasText():
+            pos = event.position().toPoint()
+            self.drop_indicator_pos = self._get_drop_position(pos)
+            self.update()
+            event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event):
+        self.drop_indicator_pos = -1
+        self.update()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasText():
+            try:
+                source_index = int(event.mimeData().text())
+                target_index = self._get_drop_position(event.position().toPoint())
+
+                if source_index != target_index and target_index >= 0:
+                    self.item_dropped.emit(source_index, target_index)
+
+                event.acceptProposedAction()
+            except ValueError:
+                pass
+
+        self.drop_indicator_pos = -1
+        self.update()
+
+    def _get_drop_position(self, pos):
+        layout = self.layout()
+        if not layout:
+            return -1
+
+        count = layout.count() - 1
+
+        for i in range(count):
+            item = layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                widget_rect = widget.geometry()
+
+                if widget_rect.contains(pos):
+                    mid_point = widget_rect.top() + widget_rect.height() // 2
+                    if pos.y() < mid_point:
+                        return i
+                    else:
+                        return i + 1
+
+        return count
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        if self.drop_indicator_pos >= 0:
+            from PySide6.QtGui import QPainter, QPen
+            painter = QPainter(self)
+            pen = QPen(Qt.red, 2)
+            painter.setPen(pen)
+
+            layout = self.layout()
+            if layout:
+                count = layout.count() - 1
+
+                if self.drop_indicator_pos < count:
+                    item = layout.itemAt(self.drop_indicator_pos)
+                    if item and item.widget():
+                        y = item.widget().geometry().top()
+                        painter.drawLine(0, y, self.width(), y)
+                elif count > 0:
+                    item = layout.itemAt(count - 1)
+                    if item and item.widget():
+                        y = item.widget().geometry().bottom()
+                        painter.drawLine(0, y, self.width(), y)
 
 
 class MainWindow(QWidget):
@@ -448,8 +575,9 @@ class MainWindow(QWidget):
         self.queue_scroll.setWidgetResizable(True)
         self.queue_scroll.setFrameShape(QFrame.NoFrame)
         self.queue_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.queue_container = DroppableQueueContainer()
+        self.queue_container.item_dropped.connect(self._on_queue_item_dropped)
 
-        self.queue_container = QWidget()
         self.queue_layout = QVBoxLayout(self.queue_container)
         self.queue_layout.setContentsMargins(0, 0, 0, 0)
         self.queue_layout.setSpacing(4)
@@ -611,6 +739,11 @@ class MainWindow(QWidget):
         player_layout.addLayout(ctrl_layout)
 
         return player_widget
+
+    def _on_queue_item_dropped(self, source_index, target_index):
+        print(f"[DRAG] Moviendo item de {source_index} a {target_index}")
+        if self.on_queue_item_moved:
+            self.on_queue_item_moved(source_index, target_index)
 
     def _apply_styles(self):
         self.setStyleSheet("""
