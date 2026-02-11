@@ -105,7 +105,7 @@ class YTMusicService:
                 'no_warnings': True,
                 'extract_flat': False,
                 'skip_download': True,
-                'socket_timeout': 8,
+                'socket_timeout': 15,
                 'retries': 1,
                 'fragment_retries': 1,
                 'file_access_retries': 1,
@@ -114,6 +114,9 @@ class YTMusicService:
                 'nocheckcertificate': True,
                 'youtube_include_dash_manifest': False,
                 'youtube_include_hls_manifest': False,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
             }
             url = f"https://music.youtube.com/watch?v={video_id}"
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

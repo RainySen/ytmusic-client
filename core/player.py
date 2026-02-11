@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 
 
 class StreamFetcher(QThread):
-    """Thread separado para obtener URLs de stream sin bloquear la UI"""
     finished = Signal(str, str, str)  # video_id, stream_url, title
     error = Signal(str, str)  # video_id, error_message
 
@@ -31,21 +30,20 @@ class StreamFetcher(QThread):
 class Player(QObject):
     position_changed = Signal(float)
     time_changed = Signal(int, int)
-    # --- NUEVO: Señal para el Karaoke (milisegundos) ---
     current_time_ms = Signal(int)
     song_finished = Signal()
-    stream_ready = Signal(str, str)  # video_id, title
-    stream_error = Signal(str)  # error_message
+    stream_ready = Signal(str, str)
+    stream_error = Signal(str)
 
     def __init__(self, ytmusic_service):
         super().__init__()
         self.ytmusic_service = ytmusic_service
-        self.instance = vlc.Instance('--no-video', '--network-caching=2000')
+        self.instance = vlc.Instance('--no-video', '--network-caching=3000')
         self.player = self.instance.media_player_new()
         self.is_playing = False
 
         self.stream_cache = {}
-        self.cache_duration = timedelta(hours=4)
+        self.cache_duration = timedelta(hours=2)
 
         self.fetcher_threads = []
         self.max_concurrent_fetchers = 5
@@ -53,7 +51,6 @@ class Player(QObject):
 
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_position)
-        # --- CAMBIO: Actualizar cada 100ms para fluidez en la letra ---
         self.timer.start(100)
 
         self.event_manager = self.player.event_manager()
@@ -61,46 +58,74 @@ class Player(QObject):
 
     def set_stream_cache(self, cache_data):
         if not cache_data:
-            print("[CACHE] ℹ️ No hay caché para restaurar")
+            print("[CACHE] No hay caché para restaurar")
             return
         try:
             restored_count = 0
+            expired_count = 0
+            now = datetime.now()
+
             for video_id, entry in cache_data.items():
                 try:
                     if isinstance(entry.get('timestamp'), str):
                         entry['timestamp'] = datetime.fromisoformat(entry['timestamp'])
-                    self.stream_cache[video_id] = entry
-                    restored_count += 1
+
+                    cache_age = now - entry['timestamp']
+                    if cache_age < self.cache_duration:
+                        self.stream_cache[video_id] = entry
+                        restored_count += 1
+                    else:
+                        expired_count += 1
+                        print(f"[CACHE] Stream expirado descartado: {entry.get('title', video_id)}")
+
                 except Exception as e:
-                    print(f"[CACHE] ⚠️ Error restaurando entrada {video_id}: {e}")
+                    print(f"[CACHE] Error restaurando entrada {video_id}: {e}")
                     continue
-            print(f"[CACHE] ✅ Caché restaurado: {restored_count}/{len(cache_data)} streams")
+
+            print(f"[CACHE] Caché restaurado: {restored_count} válidos, {expired_count} expirados")
+
         except Exception as e:
-            print(f"[CACHE] ❌ Error restaurando caché: {e}")
+            print(f"[CACHE] Error restaurando caché: {e}")
             self.stream_cache = {}
 
     def get_stream_cache_for_saving(self):
         cache_to_save = {}
         try:
+            now = datetime.now()
+            saved_count = 0
+
             for video_id, entry in self.stream_cache.items():
                 try:
-                    cache_to_save[video_id] = {
-                        'url': entry['url'],
-                        'title': entry['title'],
-                        'timestamp': entry['timestamp'].isoformat()
-                    }
+                    cache_age = now - entry['timestamp']
+                    if cache_age < self.cache_duration:
+                        cache_to_save[video_id] = {
+                            'url': entry['url'],
+                            'title': entry['title'],
+                            'timestamp': entry['timestamp'].isoformat()
+                        }
+                        saved_count += 1
                 except Exception as e:
                     continue
+
+            print(f"[CACHE] Guardando {saved_count} streams válidos")
             return cache_to_save
+
         except Exception as e:
-            print(f"[CACHE] ❌ Error preparando caché para guardar: {e}")
+            print(f"[CACHE] Error preparando caché para guardar: {e}")
             return {}
 
     def _is_cache_valid(self, video_id):
         if video_id not in self.stream_cache:
             return False
         cached_time = self.stream_cache[video_id]['timestamp']
-        return datetime.now() - cached_time < self.cache_duration
+        age = datetime.now() - cached_time
+
+        # CORRECCIÓN: Log cuando el caché expira
+        if age >= self.cache_duration:
+            print(f"[CACHE] Caché expirado para {self.stream_cache[video_id].get('title', video_id)} (edad: {age})")
+            return False
+
+        return True
 
     def _get_cached_stream(self, video_id):
         if self._is_cache_valid(video_id):
@@ -114,11 +139,12 @@ class Player(QObject):
             'title': title,
             'timestamp': datetime.now()
         }
+        print(f"[CACHE] Stream cacheado: {title}")
 
     def _on_stream_fetched(self, video_id, stream_url, title):
         self._cache_stream(video_id, stream_url, title)
         if video_id == self.pending_video_id:
-            print(f"[STREAM READY] ▶ Reproduciendo: {title}")
+            print(f"[STREAM READY] Reproduciendo: {title}")
             media = self.instance.media_new(stream_url)
             self.player.set_media(media)
             self.player.play()
@@ -150,10 +176,23 @@ class Player(QObject):
     def play(self, video_id):
         stream_url, title = self._get_cached_stream(video_id)
         if stream_url:
+            print(f"[PLAY] Usando caché: {title}")
             media = self.instance.media_new(stream_url)
             self.player.set_media(media)
             self.player.play()
             self.is_playing = True
+
+            import time
+            time.sleep(0.3)
+            state = self.player.get_state()
+
+            if state == vlc.State.Error:
+                print(f"[ERROR] VLC reportó error, el stream probablemente expiró")
+                print(f"[CACHE] Descartando caché y obteniendo nuevo stream...")
+                # Eliminar de caché y reintentar
+                del self.stream_cache[video_id]
+                return self.play(video_id)
+
             return title
 
         self.pending_video_id = video_id
@@ -194,9 +233,7 @@ class Player(QObject):
 
     def _update_position(self):
         if self.player.get_media() and self.is_playing:
-            # --- CAMBIO: Obtener tiempo exacto en ms ---
             current_time_ms = self.player.get_time()
-
             position = self.player.get_position()
             current_seconds = current_time_ms // 1000
             total_time = self.player.get_length() // 1000
@@ -204,7 +241,6 @@ class Player(QObject):
             if position >= 0 and total_time > 0:
                 self.position_changed.emit(position)
                 self.time_changed.emit(current_seconds, total_time)
-                # --- CAMBIO: Emitir señal para el karaoke ---
                 self.current_time_ms.emit(current_time_ms)
 
     def _on_end_reached(self, event):
@@ -212,8 +248,9 @@ class Player(QObject):
         self.song_finished.emit()
 
     def clear_cache(self):
+        count = len(self.stream_cache)
         self.stream_cache.clear()
-        print("[CACHE] Caché limpiado")
+        print(f"[CACHE] Caché limpiado ({count} streams eliminados)")
 
     def get_cache_size(self):
         return len(self.stream_cache)
