@@ -1,510 +1,840 @@
-import sys
-import qtawesome as qta
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
-from services.ytmusic_service import YTMusicService
-from core.player import Player
-from core.queue_manager import QueueManager
-from ui.main_window import MainWindow
-from ui.login_window import LoginWindow
-from core.playlist_manager import PlaylistManager
-import re
-import json
 import atexit
+import json
 import os
+import re
+import sys
 import traceback
 
+import qtawesome as qta
+from PySide6.QtWidgets import QApplication
+
+from core.player import Player
+from core.playlist_manager import PlaylistManager
+from core.queue_manager import QueueManager
+from services.ytmusic_service import YTMusicService
+from ui.login_window import LoginWindow
+from ui.main_window import MainWindow
+from platform_utils import get_config_dir, get_base_dir, get_platform, print_platform_info
+
+if "--debug" in sys.argv:
+    print_platform_info()
+
 if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
+    BASE_DIR = get_base_dir()
+    CONFIG_DIR = get_config_dir()
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    CONFIG_DIR = BASE_DIR
 
-app = QApplication(sys.argv)
-app.setQuitOnLastWindowClosed(False)
-app_icon = qta.icon('fa5s.music', color='#03adb7')
-app.setWindowIcon(app_icon)
+print(f"[PLATFORM] Sistema: {get_platform()}")
+print(f"[PLATFORM] Directorio base: {BASE_DIR}")
+print(f"[PLATFORM] Directorio de configuración: {CONFIG_DIR}")
 
-service = YTMusicService(BASE_DIR)
-player = None
-queue_manager = None
-playlist_manager = None
-window = None
-login_window = None
+# Const
+DEFAULT_PRELOAD_COUNT = 5
+PLAYLIST_URL_PATTERN = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
+STATE_FILENAME = "queue_and_cache.json"
+STATE_FILE = os.path.join(CONFIG_DIR, STATE_FILENAME)
 
-results_cache = []
-playlists_cache = []
-last_imported_playlist_data = None
-PLAYLIST_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
-STATE_FILE = os.path.join(BASE_DIR, "queue_and_cache.json")
+# Application state
 
-# --- VARIABLES GLOBALES PARA LA LETRA ---
-current_lyrics_lines = []
-lyrics_active = False
-last_highlighted_index = -1
+class ApplicationState:
+    def __init__(self, base_dir):
+        self.base_dir = base_dir
+        self.state_file = os.path.join(base_dir, STATE_FILENAME)
 
+        # Core services
+        self.service = None
+        self.player = None
+        self.queue_manager = None
+        self.playlist_manager = None
 
-# ---------------------------------------
+        self.window = None
+        self.login_window = None
 
-def save_state_on_exit():
-    print("[STATE] Guardando estado...")
-    try:
-        if queue_manager and player:
-            queue = queue_manager.get_queue()
-            current_index = queue_manager.get_current_index()
-            stream_cache = player.get_stream_cache_for_saving()
-            state_data = {"queue": queue, "current_index": current_index, "stream_cache": stream_cache}
-            with open(STATE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(state_data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"[STATE] Error: {e}")
+        # Cache
+        self.results_cache = []
+        self.playlists_cache = []
+        self.last_imported_playlist_data = None
 
+        # Lyrics
+        self.current_lyrics_lines = []
+        self.lyrics_active = False
+        self.last_highlighted_index = -1
 
-def handle_result_highlighted(index):
-    if 0 <= index < len(results_cache):
-        song = results_cache[index]
-        if "videoId" in song: player.preload_stream(song["videoId"])
+    def save_state(self):
+        """Save current queue and player state"""
+        print("[STATE] Guardando estado...")
+        try:
+            if self.queue_manager and self.player:
+                state_data = {
+                    "queue": self.queue_manager.get_queue(),
+                    "current_index": self.queue_manager.get_current_index(),
+                    "stream_cache": self.player.get_stream_cache_for_saving()
+                }
 
+                with open(self.state_file, 'w', encoding='utf-8') as f:
+                    json.dump(state_data, f, indent=2, ensure_ascii=False)
+                print(f"[STATE] Estado guardado en: {self.state_file}")
+        except Exception as e:
+            print(f"[STATE] Error: {e}")
 
-def handle_queue_item_moved(src, dst): queue_manager.move_song(src, dst)
-
-
-def handle_toggle_loop(): queue_manager.toggle_loop_mode()
-
-
-def handle_search(query):
-    global results_cache
-    results_cache = service.search(query)
-    window.update_results(results_cache)
-
-
-def handle_import_playlist(url):
-    global results_cache, last_imported_playlist_data
-
-    match = PLAYLIST_RE.search(url)
-    if not match:
-        window.show_import_error("URL inválida. Formato esperado: https://music.youtube.com/playlist?list=PLxxxxxx")
-        return
-
-    playlist_id = match.group(1)
-
-    try:
-        data = service.get_playlist_songs(playlist_id)
-
-        if not data:
-            window.show_import_error(
-                "No se pudo acceder a la playlist. Verifica:\n- La URL es correcta\n- La playlist no está privada\n- Tienes conexión a internet")
+    def load_state(self):
+        """Load saved state"""
+        if not os.path.exists(self.state_file):
             return
 
-        if not data.get('tracks'):
-            window.show_import_error("La playlist está vacía o no tiene canciones accesibles.")
+        try:
+            print(f"[STATE] Cargando estado desde: {self.state_file}")
+            with open(self.state_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            self.player.set_stream_cache(data.get("stream_cache", {}))
+            self.queue_manager.set_queue_state(
+                data.get("queue", []),
+                data.get("current_index", -1)
+            )
+
+            # Update UI
+            idx = self.queue_manager.get_current_index()
+            if idx >= 0:
+                self.window.queue_list.setCurrentRow(idx)
+                song = self.queue_manager.get_current()
+                if song:
+                    artist = song.get('artists', [{}])[0].get('name', 'Desconocido')
+                    self.window.update_song_info(f"{song['title']} - {artist}")
+        except Exception as e:
+            print(f"[STATE] Error loading state: {e}")
+            traceback.print_exc()
+
+
+# Search and result
+
+class SearchHandler:
+    """search-related operations"""
+
+    def __init__(self, state):
+        self.state = state
+
+    def search(self, query):
+        """search and update results"""
+        self.state.results_cache = self.state.service.search(query)
+        self.state.window.update_results(self.state.results_cache)
+
+    def handle_result_highlighted(self, index):
+        """Preload stream when result is highlighted"""
+        if 0 <= index < len(self.state.results_cache):
+            song = self.state.results_cache[index]
+            if "videoId" in song:
+                self.state.player.preload_stream(song["videoId"])
+
+    def handle_song_selected(self, index):
+        """Play selected song from search results"""
+        if 0 <= index < len(self.state.results_cache):
+            song = self.state.queue_manager.play_now(self.state.results_cache[index])
+            PlaybackController(self.state).play_song(song)
+            self._preload_upcoming_songs()
+
+    def handle_add_to_queue(self, index):
+        """Add song to end"""
+        if 0 <= index < len(self.state.results_cache):
+            song = self.state.results_cache[index]
+
+            if self.state.queue_manager.add_song(song):
+                PlaybackController(self.state).play_song(song)
+                self._preload_upcoming_songs()
+            else:
+                self.state.player.preload_stream(song.get("videoId"))
+
+    def handle_add_next(self, index):
+        """Add song to play next"""
+        if 0 <= index < len(self.state.results_cache):
+            song = self.state.results_cache[index]
+
+            if self.state.queue_manager.add_next(song):
+                PlaybackController(self.state).play_song(song)
+                self._preload_upcoming_songs()
+            else:
+                self.state.player.preload_stream(song.get("videoId"))
+
+    def _preload_upcoming_songs(self, count=DEFAULT_PRELOAD_COUNT):
+        """Preload next songs"""
+        queue = self.state.queue_manager.get_queue()
+        current_idx = self.state.queue_manager.get_current_index()
+
+        for i in range(1, count + 1):
+            if current_idx + i < len(queue):
+                video_id = queue[current_idx + i].get("videoId")
+                self.state.player.preload_stream(video_id)
+
+
+# Playback
+
+class PlaybackController:
+    """playback operations"""
+
+    def __init__(self, state):
+        self.state = state
+
+    def play_song(self, song_data):
+        if not song_data or "videoId" not in song_data:
+            self.state.window.update_song_info("Error canción")
             return
 
-        results_cache = []
-        window.update_results(results_cache)
-        queue_manager.clear()
+        # Reset lyrics state
+        self.state.current_lyrics_lines = []
+        self.state.lyrics_active = False
+        self.state.last_highlighted_index = -1
+        self.state.window.set_lyrics_message("...", switch_focus=False)
+
+        # song info
+        video_id = song_data["videoId"]
+        artist = song_data.get('artists', [{}])[0].get('name', 'Desconocido')
+
+        # Update UI
+        self.state.window.update_play_button_icon(True)
+        self.state.window.update_song_info(f"Cargando: {song_data['title']} - {artist}")
+
+        # Start playback
+        if self.state.player.play(video_id):
+            self.state.window.update_song_info(f"{song_data['title']} - {artist}")
+
+    def toggle_play(self):
+        """play/pause state"""
+        if not self.state.player.has_media_loaded() and not self.state.player.is_playing:
+            song = self.state.queue_manager.get_current()
+            if song:
+                self.play_song(song)
+        else:
+            self.state.player.toggle_play()
+            self.state.window.update_play_button_icon(self.state.player.is_playing)
+
+    def next_song(self):
+        song = self.state.queue_manager.next()
+        if song:
+            self.play_song(song)
+            self._preload_upcoming_songs()
+
+    def previous_song(self):
+        song = self.state.queue_manager.previous()
+        if song:
+            self.play_song(song)
+
+    def seek(self, position):
+        """Seek to position in current song"""
+        self.state.player.seek(position)
+
+    def set_volume(self, value):
+        self.state.player.set_volume(value)
+
+    def on_song_finished(self):
+        # loop mode
+        if self.state.queue_manager.get_loop_mode() == QueueManager.LOOP_SONG:
+            song = self.state.queue_manager.get_current()
+            if song:
+                self.play_song(song)
+            return
+
+        # autoplay
+        if self.state.queue_manager.should_autoplay():
+            RecommendationHandler(self.state).fetch_and_play_recommendation()
+            return
+
+        # Normal flow
+        song = self.state.queue_manager.next()
+        if song:
+            self.play_song(song)
+            self._preload_upcoming_songs()
+        else:
+            self.state.window.update_song_info("Cola terminada")
+            self.state.window.update_play_button_icon(False)
+
+    def on_stream_ready(self, video_id, title):
+        song = self.state.queue_manager.get_current()
+        if song and song.get("videoId") == video_id:
+            artist = song.get('artists', [{}])[0].get('name', 'Desconocido')
+            self.state.window.update_song_info(f"{title} - {artist}")
+            self.state.window.update_play_button_icon(True)
+
+    def on_stream_error(self, message):
+        self.state.window.update_song_info(f"Error: {message}")
+        self.state.window.update_play_button_icon(False)
+
+    def _preload_upcoming_songs(self, count=DEFAULT_PRELOAD_COUNT):
+        queue = self.state.queue_manager.get_queue()
+        current_idx = self.state.queue_manager.get_current_index()
+
+        for i in range(1, count + 1):
+            if current_idx + i < len(queue):
+                video_id = queue[current_idx + i].get("videoId")
+                self.state.player.preload_stream(video_id)
+
+
+# Queue management
+
+class QueueHandler:
+    """queue-related operations"""
+
+    def __init__(self, state):
+        self.state = state
+
+    def clear_queue(self):
+        self.state.queue_manager.clear()
+
+    def remove_from_queue(self, index):
+        self.state.queue_manager.remove_at(index)
+
+    def jump_to_song(self, index):
+        song = self.state.queue_manager.jump_to(index)
+        if song:
+            PlaybackController(self.state).play_song(song)
+            self._preload_upcoming_songs()
+
+    def move_song(self, source_index, dest_index):
+        self.state.queue_manager.move_song(source_index, dest_index)
+
+    def toggle_loop_mode(self):
+        self.state.queue_manager.toggle_loop_mode()
+
+    def toggle_autoplay(self):
+        self.state.queue_manager.toggle_autoplay()
+
+    def on_queue_updated(self):
+        self.state.window.update_queue(
+            self.state.queue_manager.get_queue(),
+            self.state.queue_manager.get_current_index()
+        )
+
+    def _preload_upcoming_songs(self, count=DEFAULT_PRELOAD_COUNT):
+        queue = self.state.queue_manager.get_queue()
+        current_idx = self.state.queue_manager.get_current_index()
+
+        for i in range(1, count + 1):
+            if current_idx + i < len(queue):
+                video_id = queue[current_idx + i].get("videoId")
+                self.state.player.preload_stream(video_id)
+
+
+# Playlist
+
+class PlaylistHandler:
+    """Handles playlist operations"""
+
+    def __init__(self, state):
+        self.state = state
+
+    def get_combined_playlists(self):
+        """Get both local and YTMusic playlists"""
+        local_playlists = self.state.playlist_manager.get_all_playlists()
+
+        if self.state.service.is_authenticated:
+            ytmusic_playlists = self.state.service.get_library_playlists()
+            return self.state.playlist_manager.merge_with_ytmusic_playlists(ytmusic_playlists)
+
+        return [{
+            'playlistId': p['playlistId'],
+            'title': p['title'],
+            'source': p.get('source', 'local')
+        } for p in local_playlists]
+
+    def select_playlist(self, index):
+        """Load and play a playlist"""
+        if not (0 <= index < len(self.state.playlists_cache)):
+            return
+
+        playlist = self.state.playlists_cache[index]
+        playlist_id = playlist.get('playlistId')
+        source = playlist.get('source', 'ytmusic')
+
+        # Get playlist data based on source
+        if source in ['local', 'imported', 'user_created']:
+            data = self.state.playlist_manager.get_playlist(playlist_id)
+        else:
+            data = self.state.service.get_playlist_songs(playlist_id)
+
+        if not data or 'tracks' not in data:
+            print("Error loading playlist")
+            return
+
+        # Clear current state and load playlist
+        self.state.results_cache = []
+        self.state.window.update_results([])
+        self.state.queue_manager.clear()
 
         for song in data['tracks']:
-            queue_manager.add_song(song)
+            self.state.queue_manager.add_song(song)
+
+        # Start playing
+        song = self.state.queue_manager.jump_to(0)
+        PlaybackController(self.state).play_song(song)
+        SearchHandler(self.state)._preload_upcoming_songs()
+
+    def import_playlist(self, url):
+        match = PLAYLIST_URL_PATTERN.search(url)
+        if not match:
+            self.state.window.show_import_error(
+                "URL inválida. Formato esperado: https://music.youtube.com/playlist?list=PLxxxxxx"
+            )
+            return
+
+        playlist_id = match.group(1)
 
-        first_song = queue_manager.jump_to(0)
-        if first_song:
-            play_song(first_song)
-            preload_next_songs(5)
-
-        window.search_box.clear()
-        last_imported_playlist_data = data
-
-        window.ask_to_save_playlist(data['title'], service.is_authenticated)
-
-    except Exception as e:
-        traceback.print_exc()
-        window.show_import_error(f"Error al importar:\n{str(e)}")
-
-
-def handle_save_imported_playlist(save_to_ytmusic=False):
-    global last_imported_playlist_data, playlists_cache
-
-    if not last_imported_playlist_data:
-        print("[SAVE] ️ No hay datos para guardar")
-        return
-
-    title = last_imported_playlist_data['title']
-    songs = last_imported_playlist_data['tracks']
-
-    try:
-        if save_to_ytmusic and service.is_authenticated:
-            result = service.create_playlist(title, "Importada desde YTMusic Client", songs)
-
-            if result:
-                playlists_cache = get_combined_playlists()
-                window.update_playlists(playlists_cache)
-                window.show_save_playlist_success(title, "YouTube Music")
-            else:
-                window.show_save_playlist_error(title)
-        else:
-
-            # Verificar que el archivo es escribible
-            playlists_dir = os.path.dirname(playlist_manager.playlists_file)
-
-            if not os.path.exists(playlists_dir):
-                os.makedirs(playlists_dir, exist_ok=True)
-
-            result = playlist_manager.add_playlist(title, songs, "imported")
-
-            if result:
-                playlists_cache = get_combined_playlists()
-                window.update_playlists(playlists_cache)
-                window.show_save_playlist_success(title, "local")
-            else:
-                window.show_save_playlist_error(title)
-
-        last_imported_playlist_data = None
-
-    except Exception as e:
-        traceback.print_exc()
-        window.show_save_playlist_error(title)
-
-
-def get_combined_playlists():
-    local = playlist_manager.get_all_playlists()
-    if service.is_authenticated:
-        return playlist_manager.merge_with_ytmusic_playlists(service.get_library_playlists())
-    return [{'playlistId': p['playlistId'], 'title': p['title'], 'source': p.get('source', 'local')} for p in local]
-
-
-def handle_song_selected(index):
-    if 0 <= index < len(results_cache):
-        play_song(queue_manager.play_now(results_cache[index]));
-        preload_next_songs(5)
-
-
-def handle_add_to_queue(index):
-    if 0 <= index < len(results_cache):
-        s = results_cache[index]
-        if queue_manager.add_song(s):
-            play_song(s); preload_next_songs(5)
-        else:
-            player.preload_stream(s.get("videoId"))
-
-
-def handle_add_next(index):
-    if 0 <= index < len(results_cache):
-        s = results_cache[index]
-        if queue_manager.add_next(s):
-            play_song(s); preload_next_songs(5)
-        else:
-            player.preload_stream(s.get("videoId"))
-
-
-def handle_clear_queue():
-    queue_manager.clear()
-
-
-def preload_next_songs(count=5):
-    q = queue_manager.get_queue();
-    curr = queue_manager.get_current_index()
-    for i in range(1, count + 1):
-        if curr + i < len(q): player.preload_stream(q[curr + i].get("videoId"))
-
-
-def play_song(song_data):
-    global current_lyrics_lines, lyrics_active, last_highlighted_index
-    if not song_data or "videoId" not in song_data:
-        window.update_song_info("Error canción")
-        return
-
-    # Reseteamos variables de letra sin cambiar de pestaña
-    current_lyrics_lines = []
-    lyrics_active = False
-    last_highlighted_index = -1
-
-    # IMPORTANTE: switch_focus=False evita que se cambie la pestaña
-    window.set_lyrics_message("...", switch_focus=False)
-
-    video_id = song_data["videoId"]
-    artist = song_data.get('artists', [{}])[0].get('name', 'Desconocido')
-    window.update_play_button_icon(True)
-    window.update_song_info(f"Cargando: {song_data['title']} - {artist}")
-
-    if player.play(video_id):
-        window.update_song_info(f"{song_data['title']} - {artist}")
-
-
-def on_stream_ready(video_id, title):
-    s = queue_manager.get_current()
-    if s and s.get("videoId") == video_id:
-        artist = s.get('artists', [{}])[0].get('name', 'Desconocido')
-        window.update_song_info(f"{title} - {artist}")
-        window.update_play_button_icon(True)
-
-
-def on_stream_error(msg): window.update_song_info(f"Error: {msg}"); window.update_play_button_icon(False)
-
-
-def handle_toggle_play():
-    if not player.has_media_loaded() and not player.is_playing:
-        s = queue_manager.get_current()
-        if s: play_song(s)
-    else:
-        player.toggle_play()
-        window.update_play_button_icon(player.is_playing)
-
-
-def handle_volume_change(val): player.set_volume(val)
-
-
-def handle_seek(pos): player.seek(pos)
-
-
-def handle_next():
-    s = queue_manager.next()
-    if s: play_song(s); preload_next_songs(5)
-
-
-def handle_previous():
-    s = queue_manager.previous()
-    if s: play_song(s)
-
-
-def handle_remove_from_queue(idx): queue_manager.remove_at(idx)
-
-
-def handle_queue_item_selected(idx):
-    s = queue_manager.jump_to(idx)
-    if s: play_song(s); preload_next_songs(5)
-
-
-def on_song_finished():
-    if queue_manager.get_loop_mode() == QueueManager.LOOP_SONG:
-        s = queue_manager.get_current()
-        if s: play_song(s)
-    else:
-        if queue_manager.should_autoplay():
-            handle_fetch_and_play_recommendation()
-        else:
-            s = queue_manager.next()
-            if s:
-                play_song(s); preload_next_songs(5)
-            else:
-                window.update_song_info("Cola terminada"); window.update_play_button_icon(False)
-
-
-def on_queue_updated(): window.update_queue(queue_manager.get_queue(), queue_manager.get_current_index())
-
-
-def handle_login(headers):
-    global playlists_cache
-    if service.setup_authentication(headers):
-        window.show_auth_success()
-        playlists_cache = get_combined_playlists()
-        window.update_playlists(playlists_cache)
-        window.update_auth_status(True)
-    else:
-        window.show_auth_error(); window.update_auth_status(False)
-
-
-def handle_logout():
-    if service.logout():
-        playlists_cache = get_combined_playlists()
-        window.update_playlists(playlists_cache)
-        window.update_auth_status(False)
-
-
-def handle_playlist_selected(index):
-    global results_cache
-    if 0 <= index < len(playlists_cache):
-        p = playlists_cache[index]
-        pid = p.get('playlistId')
-        src = p.get('source', 'ytmusic')
-        if src in ['local', 'imported', 'user_created']:
-            data = playlist_manager.get_playlist(pid)
-        else:
-            data = service.get_playlist_songs(pid)
-        if data and 'tracks' in data:
-            results_cache = [];
-            window.update_results([])
-            queue_manager.clear()
-            for s in data['tracks']: queue_manager.add_song(s)
-            play_song(queue_manager.jump_to(0));
-            preload_next_songs(5)
-        else:
-            print("Error playlist")
-
-
-def handle_toggle_autoplay(): queue_manager.toggle_autoplay()
-
-
-def handle_fetch_and_play_recommendation():
-    s = queue_manager.get_current()
-    if not s: return
-    recs = service.get_song_recommendations(s['videoId'], 10)
-    if not recs: return
-    q_ids = {x.get('videoId') for x in queue_manager.get_queue()}
-    new_recs = [x for x in recs if x.get('videoId') not in q_ids]
-    rec = new_recs[0] if new_recs else recs[0]
-    if queue_manager.add_song(rec):
-        play_song(rec); preload_next_songs(5)
-    else:
-        play_song(queue_manager.next()); preload_next_songs(5)
-
-
-# --- MANEJO DE LETRAS ---
-
-def time_str_to_ms(time_str):
-    if not time_str: return 0
-    try:
-        parts = time_str.split(':')
-        seconds = 0
-        if len(parts) == 2:
-            seconds = int(parts[0]) * 60 + float(parts[1])
-        elif len(parts) == 3:
-            seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
-        else:
-            seconds = float(time_str)
-        return int(seconds * 1000)
-    except:
-        return 0
-
-
-def handle_show_lyrics():
-    """Obtiene la letra y la muestra en la lista"""
-    global current_lyrics_lines, lyrics_active, last_highlighted_index
-
-    s = queue_manager.get_current()
-    # Si no hay canción, mensaje y NO cambio de pestaña
-    if not s: window.set_lyrics_message("Sin canción", switch_focus=False); return
-
-    # Si hay canción y el usuario pidió la letra, cambiamos de pestaña
-    window.set_lyrics_message(f"Buscando letra de:\n{s['title']}...", switch_focus=True)
-
-    lyrics_data = service.get_song_lyrics(s.get("videoId"))
-
-    if s != queue_manager.get_current(): return
-
-    if lyrics_data:
-        # 1. Caso: Letra sincronizada
-        if 'lines' in lyrics_data and lyrics_data['lines']:
-            raw_lines = lyrics_data['lines']
-            processed_lines = []
-            has_timing = False
-
-            for line in raw_lines:
-                text = line.get('text', '')
-                t_str = line.get('time', '0:00')
-                t_ms = time_str_to_ms(t_str)
-
-                if t_ms > 0: has_timing = True
-                processed_lines.append({'text': text, 'time_ms': t_ms})
-
-            current_lyrics_lines = processed_lines
-            lyrics_active = has_timing
-            last_highlighted_index = -1
-
-            text_only = [l['text'] for l in processed_lines]
-            window.set_lyrics_lines(text_only)
-
-        # 2. Caso: Texto plano
-        elif lyrics_data.get('lyrics'):
-            current_lyrics_lines = []
-            lyrics_active = False
-            text_lines = lyrics_data['lyrics'].split('\n')
-            window.set_lyrics_lines(text_lines)
-        else:
-            window.set_lyrics_message("Formato desconocido.", switch_focus=True)
-    else:
-        window.set_lyrics_message("Letra no encontrada.", switch_focus=True)
-
-
-def on_time_ms_updated(current_ms):
-    global last_highlighted_index
-
-    if not lyrics_active or not current_lyrics_lines:
-        return
-
-    active_index = -1
-    start = max(0, last_highlighted_index)
-
-    for i in range(len(current_lyrics_lines)):
-        line_time = current_lyrics_lines[i]['time_ms']
-        if current_ms >= line_time:
-            active_index = i
-        else:
-            break
-
-    if active_index != -1 and active_index != last_highlighted_index:
-        window.highlight_lyric_index(active_index)
-        last_highlighted_index = active_index
-
-
-# ----------------------------------------------
-
-def initial_load():
-    global playlists_cache
-    playlists_cache = get_combined_playlists()
-    window.update_playlists(playlists_cache)
-    window.update_auth_status(service.is_authenticated)
-    if os.path.exists(STATE_FILE):
         try:
-            with open(STATE_FILE, 'r', encoding='utf-8') as f:
-                d = json.load(f)
-            player.set_stream_cache(d.get("stream_cache", {}))
-            queue_manager.set_queue_state(d.get("queue", []), d.get("current_index", -1))
-            on_queue_updated()
-            idx = queue_manager.get_current_index()
-            if idx >= 0:
-                window.queue_list.setCurrentRow(idx)
-                s = queue_manager.get_current()
-                if s: window.update_song_info(f"{s['title']} - {s['artists'][0]['name']}")
+            data = self.state.service.get_playlist_songs(playlist_id)
+
+            if not data:
+                self.state.window.show_import_error(
+                    "No se pudo acceder a la playlist. Verifica:\n"
+                    "- La URL es correcta\n"
+                    "- La playlist no está privada\n"
+                    "- Tienes conexión a internet"
+                )
+                return
+
+            if not data.get('tracks'):
+                self.state.window.show_import_error(
+                    "La playlist está vacía o no tiene canciones accesibles."
+                )
+                return
+
+            # Clear and load playlist
+            self.state.results_cache = []
+            self.state.window.update_results([])
+            self.state.queue_manager.clear()
+
+            for song in data['tracks']:
+                self.state.queue_manager.add_song(song)
+
+            # Start playing
+            first_song = self.state.queue_manager.jump_to(0)
+            if first_song:
+                PlaybackController(self.state).play_song(first_song)
+                SearchHandler(self.state)._preload_upcoming_songs()
+
+            self.state.window.search_box.clear()
+            self.state.last_imported_playlist_data = data
+
+            # Ask user to save
+            self.state.window.ask_to_save_playlist(
+                data['title'],
+                self.state.service.is_authenticated
+            )
+
+        except Exception as e:
+            traceback.print_exc()
+            self.state.window.show_import_error(f"Error al importar:\n{str(e)}")
+
+    def save_imported_playlist(self, save_to_ytmusic=False):
+        """Save the last imported playlist"""
+        if not self.state.last_imported_playlist_data:
+            print("[SAVE] ⚠️ No hay datos para guardar")
+            return
+
+        title = self.state.last_imported_playlist_data['title']
+        songs = self.state.last_imported_playlist_data['tracks']
+
+        try:
+            if save_to_ytmusic and self.state.service.is_authenticated:
+                result = self.state.service.create_playlist(
+                    title,
+                    "Importada desde YTMusic Client",
+                    songs
+                )
+
+                if result:
+                    self._update_playlists_cache()
+                    self.state.window.show_save_playlist_success(title, "YouTube Music")
+                else:
+                    self.state.window.show_save_playlist_error(title)
+            else:
+                # Save locally
+                self._ensure_playlists_directory()
+                result = self.state.playlist_manager.add_playlist(title, songs, "imported")
+
+                if result:
+                    self._update_playlists_cache()
+                    self.state.window.show_save_playlist_success(title, "local")
+                else:
+                    self.state.window.show_save_playlist_error(title)
+
+            self.state.last_imported_playlist_data = None
+
+        except Exception as e:
+            traceback.print_exc()
+            self.state.window.show_save_playlist_error(title)
+
+    def _ensure_playlists_directory(self):
+        """Ensure playlists directory exists"""
+        playlists_dir = os.path.dirname(self.state.playlist_manager.playlists_file)
+        if not os.path.exists(playlists_dir):
+            os.makedirs(playlists_dir, exist_ok=True)
+
+    def _update_playlists_cache(self):
+        self.state.playlists_cache = self.get_combined_playlists()
+        self.state.window.update_playlists(self.state.playlists_cache)
+
+
+# Auth
+
+class AuthenticationHandler:
+    """Authentication operations"""
+
+    def __init__(self, state):
+        self.state = state
+
+    def login(self, headers):
+        """Authenticate with YTMusic"""
+        if self.state.service.setup_authentication(headers):
+            self.state.window.show_auth_success()
+            self._update_after_auth(True)
+        else:
+            self.state.window.show_auth_error()
+            self.state.window.update_auth_status(False)
+
+    def logout(self):
+        """Logout from YTMusic"""
+        if self.state.service.logout():
+            self._update_after_auth(False)
+
+    def _update_after_auth(self, is_authenticated):
+        """Update UI and cache after authentication change"""
+        playlist_handler = PlaylistHandler(self.state)
+        self.state.playlists_cache = playlist_handler.get_combined_playlists()
+        self.state.window.update_playlists(self.state.playlists_cache)
+        self.state.window.update_auth_status(is_authenticated)
+
+
+# Recommendations
+
+class RecommendationHandler:
+    """Handles song recommendations"""
+
+    def __init__(self, state):
+        self.state = state
+
+    def fetch_and_play_recommendation(self):
+        current_song = self.state.queue_manager.get_current()
+        if not current_song:
+            return
+
+        recommendations = self.state.service.get_song_recommendations(
+            current_song['videoId'],
+            10
+        )
+
+        if not recommendations:
+            return
+
+        # Filter out songs already in queue
+        queue_video_ids = {
+            song.get('videoId')
+            for song in self.state.queue_manager.get_queue()
+        }
+
+        new_recommendations = [
+            rec for rec in recommendations
+            if rec.get('videoId') not in queue_video_ids
+        ]
+
+        # Pick first new recommendation or fallback to first overall
+        recommendation = (
+            new_recommendations[0] if new_recommendations
+            else recommendations[0]
+        )
+
+        # Add to queue and play
+        if self.state.queue_manager.add_song(recommendation):
+            PlaybackController(self.state).play_song(recommendation)
+            SearchHandler(self.state)._preload_upcoming_songs()
+        else:
+            next_song = self.state.queue_manager.next()
+            PlaybackController(self.state).play_song(next_song)
+            SearchHandler(self.state)._preload_upcoming_songs()
+
+
+# lyrics
+
+class LyricsHandler:
+    """Lyrics display and synchronization"""
+
+    def __init__(self, state):
+        self.state = state
+
+    def show_lyrics(self):
+        """Fetch and display lyrics for current song"""
+        current_song = self.state.queue_manager.get_current()
+
+        if not current_song:
+            self.state.window.set_lyrics_message("Sin canción", switch_focus=False)
+            return
+
+        # Show loading message
+        self.state.window.set_lyrics_message(
+            f"Buscando letra de:\n{current_song['title']}...",
+            switch_focus=True
+        )
+
+        # Fetch lyrics
+        lyrics_data = self.state.service.get_song_lyrics(current_song.get("videoId"))
+
+        # Check if song changed while fetching
+        if current_song != self.state.queue_manager.get_current():
+            return
+
+        if not lyrics_data:
+            self.state.window.set_lyrics_message("Letra no encontrada.", switch_focus=True)
+            return
+
+        # Process synced lyrics
+        if 'lines' in lyrics_data and lyrics_data['lines']:
+            self._process_synced_lyrics(lyrics_data['lines'])
+        # Process plain text lyrics
+        elif lyrics_data.get('lyrics'):
+            self._process_plain_lyrics(lyrics_data['lyrics'])
+        else:
+            self.state.window.set_lyrics_message("Formato desconocido.", switch_focus=True)
+
+    def update_lyrics_highlight(self, current_time_ms):
+        """Update highlighted lyric line based on playback time"""
+        if not self.state.lyrics_active or not self.state.current_lyrics_lines:
+            return
+
+        active_index = self._find_active_lyric_index(current_time_ms)
+
+        if active_index != -1 and active_index != self.state.last_highlighted_index:
+            self.state.window.highlight_lyric_index(active_index)
+            self.state.last_highlighted_index = active_index
+
+    def _process_synced_lyrics(self, raw_lines):
+        """Process lyrics with timing information"""
+        processed_lines = []
+        has_timing = False
+
+        for line in raw_lines:
+            text = line.get('text', '')
+            time_str = line.get('time', '0:00')
+            time_ms = self._parse_time_string(time_str)
+
+            if time_ms > 0:
+                has_timing = True
+
+            processed_lines.append({
+                'text': text,
+                'time_ms': time_ms
+            })
+
+        self.state.current_lyrics_lines = processed_lines
+        self.state.lyrics_active = has_timing
+        self.state.last_highlighted_index = -1
+
+        text_only = [line['text'] for line in processed_lines]
+        self.state.window.set_lyrics_lines(text_only)
+
+    def _process_plain_lyrics(self, lyrics_text):
+        """Process plain text lyrics without timing"""
+        self.state.current_lyrics_lines = []
+        self.state.lyrics_active = False
+
+        text_lines = lyrics_text.split('\n')
+        self.state.window.set_lyrics_lines(text_lines)
+
+    def _find_active_lyric_index(self, current_time_ms):
+        """Find which lyric line should be highlighted"""
+        active_index = -1
+
+        for i, line in enumerate(self.state.current_lyrics_lines):
+            if current_time_ms >= line['time_ms']:
+                active_index = i
+            else:
+                break
+
+        return active_index
+
+    @staticmethod
+    def _parse_time_string(time_str):
+        """Convert time string to milliseconds"""
+        if not time_str:
+            return 0
+
+        try:
+            parts = time_str.split(':')
+            seconds = 0
+
+            if len(parts) == 2:
+                seconds = int(parts[0]) * 60 + float(parts[1])
+            elif len(parts) == 3:
+                seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+            else:
+                seconds = float(time_str)
+
+            return int(seconds * 1000)
         except:
-            pass
+            return 0
 
-def handle_home():
-    home_raw = service.get_home()
-    parsed_sections = []
 
-    for section in home_raw:
-        title = section.get("title", "Sección")
-        content = service.parse_home_section(section)
-        if content:
-            parsed_sections.append((title, content))
+# Home
 
-    window.show_home(parsed_sections)
+class HomeHandler:
+    """Home screen"""
 
-def start_main_application():
-    global player, queue_manager, window, app_icon, service, playlist_manager
-    playlist_manager = PlaylistManager(BASE_DIR)
-    player = Player(service)
-    queue_manager = QueueManager()
-    window = MainWindow(
-        handle_search, handle_song_selected, handle_add_to_queue, handle_toggle_play, handle_add_next,
-        handle_volume_change, handle_seek, handle_next, handle_previous, handle_remove_from_queue,
-        handle_queue_item_selected, handle_login, handle_playlist_selected, handle_import_playlist,
-        app_icon, handle_save_imported_playlist, handle_result_highlighted, handle_queue_item_moved,
-        handle_toggle_loop, handle_logout, handle_toggle_autoplay, handle_show_lyrics, handle_home,
-        handle_clear_queue
-    )
-    player.position_changed.connect(window.update_progress)
-    player.time_changed.connect(window.update_time)
-    player.current_time_ms.connect(on_time_ms_updated)
-    player.song_finished.connect(on_song_finished)
-    player.stream_ready.connect(on_stream_ready)
-    player.stream_error.connect(on_stream_error)
-    queue_manager.queue_updated.connect(on_queue_updated)
-    queue_manager.current_changed.connect(on_queue_updated)
-    queue_manager.loop_mode_changed.connect(window.update_loop_button_icon)
-    queue_manager.autoplay_mode_changed.connect(window.update_autoplay_button_icon)
-    atexit.register(save_state_on_exit)
-    initial_load()
-    window.resize(1240, 750)
-    window.show()
-    login_window.close()
+    def __init__(self, state):
+        self.state = state
 
+    def show_home(self):
+        home_data = self.state.service.get_home()
+        parsed_sections = []
+
+        for section in home_data:
+            title = section.get("title", "Sección")
+            content = self.state.service.parse_home_section(section)
+
+            if content:
+                parsed_sections.append({
+                    "title": title,
+                    "items": content
+                })
+
+        self.state.window.show_home(parsed_sections)
+
+
+# Application controllers
+
+class ApplicationController:
+    """Main application controller - wires everything together"""
+
+    def __init__(self, base_dir, service):
+        self.state = ApplicationState(base_dir)
+        self.state.service = service
+
+        # Initialize handlers
+        self.search_handler = None
+        self.playback_controller = None
+        self.queue_handler = None
+        self.playlist_handler = None
+        self.auth_handler = None
+        self.recommendation_handler = None
+        self.lyrics_handler = None
+        self.home_handler = None
+
+    def initialize_handlers(self):
+        self.search_handler = SearchHandler(self.state)
+        self.playback_controller = PlaybackController(self.state)
+        self.queue_handler = QueueHandler(self.state)
+        self.playlist_handler = PlaylistHandler(self.state)
+        self.auth_handler = AuthenticationHandler(self.state)
+        self.recommendation_handler = RecommendationHandler(self.state)
+        self.lyrics_handler = LyricsHandler(self.state)
+        self.home_handler = HomeHandler(self.state)
+
+    def start_main_application(self, app_icon=None):
+        # Initialize core components
+        self.state.playlist_manager = PlaylistManager(CONFIG_DIR)
+        self.state.player = Player(self.state.service)
+        self.state.queue_manager = QueueManager()
+
+        self.initialize_handlers()
+
+        # Create main window with all handlers
+        self.state.window = MainWindow(
+            self.search_handler.search,
+            self.search_handler.handle_song_selected,
+            self.search_handler.handle_add_to_queue,
+            self.playback_controller.toggle_play,
+            self.search_handler.handle_add_next,
+            self.playback_controller.set_volume,
+            self.playback_controller.seek,
+            self.playback_controller.next_song,
+            self.playback_controller.previous_song,
+            self.queue_handler.remove_from_queue,
+            self.queue_handler.jump_to_song,
+            self.auth_handler.login,
+            self.playlist_handler.select_playlist,
+            self.playlist_handler.import_playlist,
+            app_icon,
+            self.playlist_handler.save_imported_playlist,
+            self.search_handler.handle_result_highlighted,
+            self.queue_handler.move_song,
+            self.queue_handler.toggle_loop_mode,
+            self.auth_handler.logout,
+            self.queue_handler.toggle_autoplay,
+            self.lyrics_handler.show_lyrics,
+            self.home_handler.show_home,
+            self.queue_handler.clear_queue
+        )
+
+        if app_icon:
+            self.state.window.setWindowIcon(app_icon)
+
+        # Connect signals
+        self._connect_signals()
+
+        # Register exit handler
+        atexit.register(self.state.save_state)
+
+        # Initial load
+        self._initial_load()
+
+        # Show window
+        self.state.window.resize(1240, 750)
+        self.state.window.show()
+
+        if self.state.login_window:
+            self.state.login_window.close()
+
+    def _connect_signals(self):
+        # Player signals
+        self.state.player.position_changed.connect(self.state.window.update_progress)
+        self.state.player.time_changed.connect(self.state.window.update_time)
+        self.state.player.current_time_ms.connect(self.lyrics_handler.update_lyrics_highlight)
+        self.state.player.song_finished.connect(self.playback_controller.on_song_finished)
+        self.state.player.stream_ready.connect(self.playback_controller.on_stream_ready)
+        self.state.player.stream_error.connect(self.playback_controller.on_stream_error)
+
+        # Queue manager signals
+        self.state.queue_manager.queue_updated.connect(self.queue_handler.on_queue_updated)
+        self.state.queue_manager.current_changed.connect(self.queue_handler.on_queue_updated)
+        self.state.queue_manager.loop_mode_changed.connect(
+            self.state.window.update_loop_button_icon
+        )
+        self.state.queue_manager.autoplay_mode_changed.connect(
+            self.state.window.update_autoplay_button_icon
+        )
+
+    def _initial_load(self):
+        # Load playlists
+        self.state.playlists_cache = self.playlist_handler.get_combined_playlists()
+        self.state.window.update_playlists(self.state.playlists_cache)
+        self.state.window.update_auth_status(self.state.service.is_authenticated)
+
+        self.state.player.set_volume(50)
+
+        # Load saved state
+        self.state.load_state()
+        self.queue_handler.on_queue_updated()
+
+
+# Main entrypoint
 
 def main():
-    global login_window, service
+    # Initialize Qt application
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    app_icon = qta.icon('fa5s.music', color='#03adb7')
+    app.setWindowIcon(app_icon)
+
+    # Initialize service and controller
+    service = YTMusicService(CONFIG_DIR)
+    controller = ApplicationController(CONFIG_DIR, service)
+
+    # Login window
     login_window = LoginWindow(service, app_icon, service.is_authenticated)
-    login_window.login_success.connect(start_main_application)
-    login_window.login_skipped.connect(start_main_application)
+    controller.state.login_window = login_window
+
+    # Connect signals - pass app_icon to start_main_application
+    login_window.login_success.connect(lambda: controller.start_main_application(app_icon))
+    login_window.login_skipped.connect(lambda: controller.start_main_application(app_icon))
+
+    # Show login window and start app
     login_window.show()
     sys.exit(app.exec())
 

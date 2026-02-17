@@ -1,15 +1,19 @@
 import json
 import os
 from datetime import datetime, timedelta
+from platform_utils import get_config_dir, get_base_dir
 
 
 def clean_cache():
     """Limpia el caché de streams expirados"""
 
-    # Buscar el archivo de estado
+    config_dir = get_config_dir()
+    base_dir = get_base_dir()
+
     possible_locations = [
+        os.path.join(config_dir, "queue_and_cache.json"),
+        os.path.join(base_dir, "queue_and_cache.json"),
         "queue_and_cache.json",
-        os.path.join(os.path.dirname(__file__), "queue_and_cache.json"),
         os.path.expanduser("~/.ytmusic_player/queue_and_cache.json"),
     ]
 
@@ -62,7 +66,7 @@ def clean_cache():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("LIMPIADOR DE CACHÉ DE STREAMS")
+    print("LIMPIADOR DE CACHÉ DE STREAMS - MULTIPLATAFORMA")
     print("=" * 60)
     print("\nEste script elimina los URLs de YouTube expirados")
     print("manteniendo tu cola de reproducción intacta.\n")
