@@ -483,13 +483,22 @@ class AuthenticationHandler:
         self.state = state
 
     def login(self, headers):
-        """Authenticate with YTMusic"""
-        if self.state.service.setup_authentication(headers):
-            self.state.window.show_auth_success()
-            self._update_after_auth(True)
+        success = self.state.service.setup_authentication(headers)
+
+        if success:
+            if self.state.window:
+                self.state.window.show_auth_success()
+                self._update_after_auth(True)
+
+            if self.state.login_window:
+                self.state.login_window.login_success.emit()
+
         else:
-            self.state.window.show_auth_error()
-            self.state.window.update_auth_status(False)
+            if self.state.window:
+                self.state.window.show_auth_error()
+                self.state.window.update_auth_status(False)
+            elif self.state.login_window:
+                self.state.login_window._show_error_message()
 
     def logout(self):
         """Logout from YTMusic"""
@@ -706,17 +715,7 @@ class ApplicationController:
         self.state = ApplicationState(base_dir)
         self.state.service = service
 
-        # Initialize handlers
-        self.search_handler = None
-        self.playback_controller = None
-        self.queue_handler = None
-        self.playlist_handler = None
-        self.auth_handler = None
-        self.recommendation_handler = None
-        self.lyrics_handler = None
-        self.home_handler = None
-
-    def initialize_handlers(self):
+        # Initialize handlers immediately so signals can connect before start_main_application
         self.search_handler = SearchHandler(self.state)
         self.playback_controller = PlaybackController(self.state)
         self.queue_handler = QueueHandler(self.state)
@@ -731,8 +730,6 @@ class ApplicationController:
         self.state.playlist_manager = PlaylistManager(CONFIG_DIR)
         self.state.player = Player(self.state.service)
         self.state.queue_manager = QueueManager()
-
-        self.initialize_handlers()
 
         # Create main window with all handlers
         self.state.window = MainWindow(
@@ -816,25 +813,21 @@ class ApplicationController:
 # Main entrypoint
 
 def main():
-    # Initialize Qt application
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app_icon = qta.icon('fa5s.music', color='#03adb7')
     app.setWindowIcon(app_icon)
 
-    # Initialize service and controller
     service = YTMusicService(CONFIG_DIR)
     controller = ApplicationController(CONFIG_DIR, service)
 
-    # Login window
     login_window = LoginWindow(service, app_icon, service.is_authenticated)
     controller.state.login_window = login_window
 
-    # Connect signals - pass app_icon to start_main_application
+    login_window.login_requested.connect(controller.auth_handler.login)
     login_window.login_success.connect(lambda: controller.start_main_application(app_icon))
     login_window.login_skipped.connect(lambda: controller.start_main_application(app_icon))
 
-    # Show login window and start app
     login_window.show()
     sys.exit(app.exec())
 
