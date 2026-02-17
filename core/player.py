@@ -38,8 +38,19 @@ class Player(QObject):
     def __init__(self, ytmusic_service):
         super().__init__()
         self.ytmusic_service = ytmusic_service
-        self.instance = vlc.Instance('--no-video', '--network-caching=3000')
-        self.player = self.instance.media_player_new()
+
+        from platform_utils import get_vlc_instance_args
+        vlc_args = get_vlc_instance_args()
+
+        try:
+            self.instance = vlc.Instance(*vlc_args)
+            self.player = self.instance.media_player_new()
+        except Exception as e:
+            print(f"[VLC] Error al inicializar VLC: {e}")
+            print(f"[VLC] Intentando inicialización básica...")
+            self.instance = vlc.Instance()
+            self.player = self.instance.media_player_new()
+
         self.is_playing = False
 
         self.stream_cache = {}
@@ -120,7 +131,7 @@ class Player(QObject):
         cached_time = self.stream_cache[video_id]['timestamp']
         age = datetime.now() - cached_time
 
-        # CORRECCIÓN: Log cuando el caché expira
+        # Log cuando el caché expira
         if age >= self.cache_duration:
             print(f"[CACHE] Caché expirado para {self.stream_cache[video_id].get('title', video_id)} (edad: {age})")
             return False

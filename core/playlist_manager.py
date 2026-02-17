@@ -7,6 +7,9 @@ class PlaylistManager:
 
     def __init__(self, base_dir):
         self.base_dir = base_dir
+
+        os.makedirs(self.base_dir, exist_ok=True)
+
         self.playlists_file = os.path.join(base_dir, "local_playlists.json")
         self.playlists = self._load_playlists()
 
@@ -15,18 +18,20 @@ class PlaylistManager:
             try:
                 with open(self.playlists_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    print(f"[PLAYLISTS] Cargadas {len(data)} playlists locales")
                     return data
             except Exception as e:
                 print(f"[PLAYLISTS] Error cargando playlists: {e}")
                 return []
+        else:
+            print(f"[PLAYLISTS] No se encontró archivo de playlists en: {self.playlists_file}")
         return []
 
     def _save_playlists(self):
         try:
+            os.makedirs(os.path.dirname(self.playlists_file), exist_ok=True)
+
             with open(self.playlists_file, 'w', encoding='utf-8') as f:
                 json.dump(self.playlists, f, indent=2, ensure_ascii=False)
-            print(f"[PLAYLISTS] Guardadas {len(self.playlists)} playlists")
             return True
         except Exception as e:
             print(f"[PLAYLISTS] Error guardando playlists: {e}")
