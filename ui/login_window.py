@@ -58,7 +58,7 @@ class ImprovedLoginDialog(QDialog):
         """)
         layout.addWidget(self.text_input)
 
-        # Botones
+        # Buttons
         buttons_layout = QHBoxLayout()
 
         self.cancel_btn = QPushButton("Cancelar")
@@ -111,14 +111,14 @@ class ImprovedLoginDialog(QDialog):
         layout.setSpacing(12)
 
         steps = [
-            ("1️⃣", "Abre YouTube Music", "Ve a https://music.youtube.com en tu navegador"),
-            ("2️⃣", "Inicia Sesión", "Asegúrate de estar logueado con tu cuenta de Google"),
-            ("3️⃣", "Abre DevTools", "Presiona F12 o Ctrl+Shift+I (Cmd+Opt+I en Mac)"),
-            ("4️⃣", "Ve a la pestaña Network", "Busca la pestaña 'Red' o 'Network' en DevTools"),
-            ("5️⃣", "Filtra por 'browse'", "En el campo de filtro, escribe: browse"),
-            ("6️⃣", "Haz clic en Biblioteca", "⚠️ Click en 'Biblioteca' o reproduce una canción"),
-            ("7️⃣", "Encuentra la petición", "Busca POST a 'youtubei/v1/browse' con status 200"),
-            ("8️⃣", "Copia como cURL", "Clic derecho → Copy → Copy as cURL (bash)"),
+            ("1️", "Abre YouTube Music", "Ve a https://music.youtube.com en tu navegador"),
+            ("2️", "Inicia Sesión", "Asegúrate de estar logueado con tu cuenta de Google"),
+            ("3️", "Abre DevTools", "Presiona F12 o Ctrl+Shift+I (Cmd+Opt+I en Mac)"),
+            ("4️", "Ve a la pestaña Network", "Busca la pestaña 'Red' o 'Network' en DevTools"),
+            ("5️", "Filtra por 'browse'", "En el campo de filtro, escribe: browse"),
+            ("6️", "Haz clic en Biblioteca", "⚠ Click en 'Biblioteca' o reproduce una canción"),
+            ("7️", "Encuentra la petición", "Busca POST a 'youtubei/v1/browse' con status 200"),
+            ("8️", "Copia como cURL", "Clic derecho → Copy → Copy as cURL (bash)"),
         ]
 
         for emoji, title, description in steps:
@@ -127,7 +127,7 @@ class ImprovedLoginDialog(QDialog):
 
         # Nota importante
         note = QLabel(
-            "⚠️ Las peticiones 'browse' NO aparecen en la página principal.\nHaz clic en 'Biblioteca' o reproduce una canción PRIMERO.")
+            "⚠ Las peticiones 'browse' NO aparecen en la página principal.\nHaz clic en 'Biblioteca' o reproduce una canción PRIMERO.")
         note.setStyleSheet("""
             color: #FF9800;
             font-weight: bold;
@@ -178,7 +178,7 @@ class ImprovedLoginDialog(QDialog):
 
 class LoginWindow(QWidget):
     """Ventana de bienvenida mejorada"""
-
+    login_requested = Signal(str)
     login_success = Signal()
     login_skipped = Signal()
 
@@ -284,7 +284,7 @@ class LoginWindow(QWidget):
 
         # Info de persistencia
         if not self.is_authenticated:
-            persistence_info = QLabel("💡 Tu sesión se mantendrá activa por semanas")
+            persistence_info = QLabel("• Tu sesión se mantendrá activa por semanas")
             persistence_info.setAlignment(Qt.AlignCenter)
             persistence_info.setStyleSheet("font-size: 11px; color: #666; margin-top: 8px;")
             layout.addWidget(persistence_info)
@@ -298,9 +298,6 @@ class LoginWindow(QWidget):
         self.setStyleSheet("background-color: #060d0e;")
 
     def start_login(self):
-        """Iniciar proceso de login con diálogo mejorado"""
-
-        # Si ya está autenticado, preguntar si quiere cambiar
         if self.is_authenticated:
             reply = QMessageBox.question(
                 self,
@@ -314,7 +311,6 @@ class LoginWindow(QWidget):
 
             self.service.logout()
 
-        # Mostrar diálogo mejorado
         dialog = ImprovedLoginDialog(self)
 
         if dialog.exec() == QDialog.Accepted:
@@ -328,14 +324,8 @@ class LoginWindow(QWidget):
                 )
                 return
 
-            # Intentar autenticar
-            success = self.service.setup_authentication(curl_text)
+            self.login_requested.emit(curl_text)
 
-            if success:
-                self._show_success_message()
-                self.login_success.emit()
-            else:
-                self._show_error_message()
 
     def _show_success_message(self):
         """Mostrar mensaje de éxito detallado"""
@@ -347,12 +337,12 @@ class LoginWindow(QWidget):
         msg.setText("✅ Inicio de sesión completado")
         msg.setInformativeText(
             "Tu sesión se ha guardado de forma segura y permanecerá activa.\n\n"
-            "📁 Archivos guardados:\n"
+            "  Archivos guardados:\n"
             "  • oauth.json (credenciales principales)\n"
             "  • browser.json (respaldo para recuperación)\n\n"
-            "⏰ Duración: Semanas o meses\n"
-            "🔄 Auto-recuperación: Activada\n\n"
-            f"📊 Estado: {auth_status.get('message', 'Activo')}"
+            "  Duración: Semanas o meses\n"
+            "  Auto-recuperación: Activada\n\n"
+            f"  Estado: {auth_status.get('message', 'Activo')}"
         )
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
@@ -362,18 +352,18 @@ class LoginWindow(QWidget):
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Warning)
         msg.setWindowTitle("Error de Autenticación")
-        msg.setText("❌ No se pudo completar el inicio de sesión")
+        msg.setText("No se pudo completar el inicio de sesión")
         msg.setInformativeText(
             "Posibles causas:\n\n"
-            "1. ❌ El comando cURL está incompleto\n"
+            "1. × El comando cURL está incompleto\n"
             "   → Asegúrate de copiar TODO el comando\n\n"
-            "2. ❌ No estás en YouTube Music\n"
+            "2. × No estás en YouTube Music\n"
             "   → Usa music.youtube.com, no youtube.com\n\n"
-            "3. ❌ La sesión del navegador expiró\n"
+            "3. × La sesión del navegador expiró\n"
             "   → Cierra sesión y vuelve a iniciar\n\n"
-            "4. ❌ Las cookies no son válidas\n"
+            "4. × Las cookies no son válidas\n"
             "   → Verifica que la petición sea de 'browse'\n\n"
-            "💡 Consejo: Intenta en modo incógnito para\n"
+            " • Consejo: Intenta en modo incógnito para\n"
             "   evitar conflictos con extensiones."
         )
         msg.setStandardButtons(QMessageBox.Ok)
