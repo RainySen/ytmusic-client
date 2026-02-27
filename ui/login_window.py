@@ -26,7 +26,7 @@ class ImprovedLoginDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
 
         # Título
-        title = QLabel("🔐 Autenticación con Cookies")
+        title = QLabel(" Autenticación con Cookies")
         title.setStyleSheet("font-size: 20px; font-weight: bold;")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)

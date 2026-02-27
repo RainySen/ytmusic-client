@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 
 
 class StreamFetcher(QThread):
-    finished = Signal(str, str, str)  # video_id, stream_url, title
-    error = Signal(str, str)  # video_id, error_message
+    finished = Signal(str, str, str)
+    error = Signal(str, str)
 
     def __init__(self, video_id, ytmusic_service):
         super().__init__()
@@ -44,12 +44,14 @@ class Player(QObject):
 
         try:
             self.instance = vlc.Instance(*vlc_args)
+            if not self.instance:
+                raise RuntimeError("libVLC no disponible")
+
             self.player = self.instance.media_player_new()
+
         except Exception as e:
-            print(f"[VLC] Error al inicializar VLC: {e}")
-            print(f"[VLC] Intentando inicialización básica...")
-            self.instance = vlc.Instance()
-            self.player = self.instance.media_player_new()
+            print("[VLC ERROR] No se pudo inicializar libVLC")
+            print(e)
 
         self.is_playing = False
 
@@ -198,9 +200,6 @@ class Player(QObject):
             state = self.player.get_state()
 
             if state == vlc.State.Error:
-                print(f"[ERROR] VLC reportó error, el stream probablemente expiró")
-                print(f"[CACHE] Descartando caché y obteniendo nuevo stream...")
-                # Eliminar de caché y reintentar
                 del self.stream_cache[video_id]
                 return self.play(video_id)
 

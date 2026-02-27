@@ -69,7 +69,7 @@ class QueueManager(QObject):
         Restaura el estado completo de la cola.
         """
         if not queue:
-            print("[QUEUE] ⚠️ Cola guardada vacía, no se restaura nada")
+            print("[QUEUE] Cola guardada vacía, no se restaura nada")
             self.queue = []
             self.current_index = -1
             return
@@ -80,13 +80,13 @@ class QueueManager(QObject):
 
             # Validar que el índice esté en rango
             if self.current_index >= len(self.queue):
-                print(f"[QUEUE] ⚠️ Índice fuera de rango ({self.current_index} >= {len(self.queue)}), ajustando a -1")
+                print(f"[QUEUE] Índice fuera de rango ({self.current_index} >= {len(self.queue)}), ajustando a -1")
                 self.current_index = -1
             elif self.current_index < -1:
-                print(f"[QUEUE] ⚠️ Índice inválido ({self.current_index}), ajustando a -1")
+                print(f"[QUEUE] Índice inválido ({self.current_index}), ajustando a -1")
                 self.current_index = -1
 
-            print(f"[QUEUE] ✅ Estado restaurado: {len(self.queue)} canciones, índice {self.current_index}")
+            print(f"[QUEUE] Estado restaurado: {len(self.queue)} canciones, índice {self.current_index}")
 
             # Emitir señales para actualizar la UI
             self.queue_updated.emit()
@@ -94,7 +94,7 @@ class QueueManager(QObject):
                 self.current_changed.emit(self.current_index)
 
         except Exception as e:
-            print(f"[QUEUE] ❌ Error restaurando estado: {e}")
+            print(f"[QUEUE] Error restaurando estado: {e}")
             self.queue = []
             self.current_index = -1
 
@@ -110,8 +110,6 @@ class QueueManager(QObject):
         return None
 
     def play_now(self, song_data):
-        # --- CORRECCIÓN DE SEGURIDAD ---
-        # Si el índice actual apunta fuera de la lista (ej. después de borrar), lo corregimos
         if self.current_index >= len(self.queue):
             self.current_index = len(self.queue) - 1
 
@@ -125,7 +123,6 @@ class QueueManager(QObject):
         self.queue_updated.emit()
         self.current_changed.emit(self.current_index)
 
-        # Validación final para evitar IndexError
         if 0 <= self.current_index < len(self.queue):
             return self.queue[self.current_index]
         return None
