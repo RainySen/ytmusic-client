@@ -211,3 +211,4 @@ __marimo__/
 /local_playlists.json
 /queue_and_cache.json
 /auth_timestamp.json
+oauth.json

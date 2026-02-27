@@ -309,9 +309,7 @@ class ImprovedQueueItem(QWidget):
             self.artist_label.setText(elided_artist)
 
 
-# ============================================================================
-# CUSTOM WIDGETS - DROPPABLE QUEUE CONTAINER
-# ============================================================================
+# Droppable queue container
 
 class DroppableQueueContainer(QWidget):
     """Container widget that accepts drops for queue reordering"""
@@ -327,7 +325,7 @@ class DroppableQueueContainer(QWidget):
         # Auto-scroll setup
         self.auto_scroll_timer = QTimer(self)
         self.auto_scroll_timer.timeout.connect(self._perform_auto_scroll)
-        self.auto_scroll_margin = 50  # pixels from edge to trigger scroll
+        self.auto_scroll_margin = 50
         self.auto_scroll_speed = 15  # pixels per scroll step
         self.last_drag_pos = None
 
@@ -652,7 +650,7 @@ class MainWindow(QWidget):
         self.tray_icon.show()
 
     def _load_initial_home(self):
-        """Cargar el home al inicio"""
+        """Load initial home"""
         if self.callbacks['home']:
             self.callbacks['home']()
 
@@ -754,6 +752,15 @@ class MainWindow(QWidget):
 
     def show_home(self, sections):
         self.center_panel.show_home(sections)
+
+    def show_home_loading(self):
+        self.center_panel.show_home_loading()
+
+    def show_home_empty(self):
+        self.center_panel.show_home_empty()
+
+    def show_home_error(self, error_msg=""):
+        self.center_panel.show_home_error(error_msg)
 
     def ask_to_save_playlist(self, title, auth):
         """Ask where to save imported playlist"""
@@ -930,7 +937,7 @@ class CenterPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.home_scroll = None  # INICIALIZAR AQUÍ
+        self.home_scroll = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -984,7 +991,7 @@ class CenterPanel(QWidget):
 
     def update_results(self, results):
         """Update search results"""
-        # Mostrar lista de resultados y ocultar home
+        # Show results list and hide home
         if self.home_scroll:
             self.home_scroll.hide()
         self.results_list.show()
@@ -1011,6 +1018,19 @@ class CenterPanel(QWidget):
         thumb.setScaledContents(True)
         thumb.setStyleSheet("border-radius: 6px; background: #1a1a1a;")
 
+        # Load real cover art if available
+        thumbnails = song.get('thumbnails', [])
+        if thumbnails:
+            sorted_thumbs = sorted(
+                [t for t in thumbnails if isinstance(t, dict) and t.get('url')],
+                key=lambda t: t.get('width', 0)
+            )
+            chosen = next((t for t in sorted_thumbs if t.get('width', 0) >= 56), None)
+            if not chosen and sorted_thumbs:
+                chosen = sorted_thumbs[-1]
+            if chosen:
+                self._load_thumbnail_async(thumb, chosen['url'], size=56)
+
         # Info
         info_layout = QVBoxLayout()
         info_layout.setSpacing(4)
@@ -1033,13 +1053,86 @@ class CenterPanel(QWidget):
 
         return widget
 
-    def show_home(self, sections):
-        """Home"""
+    def show_home_loading(self):
+        """Show loading indicator while loading home."""
         self.results_list.hide()
+        self._clear_home_scroll()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setAlignment(Qt.AlignCenter)
+
+        loading = QLabel(" Cargando contenido...")
+        loading.setStyleSheet("font-size:16px; color:#999; padding:40px;")
+        loading.setAlignment(Qt.AlignCenter)
+        layout.addWidget(loading)
+
+        scroll.setWidget(container)
+        self.home_scroll = scroll
+        self.layout().addWidget(scroll)
+        scroll.show()
+
+    def show_home_empty(self):
+        """Show message when no content is found."""
+        self.results_list.hide()
+        self._clear_home_scroll()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setAlignment(Qt.AlignCenter)
+
+        msg = QLabel("🎵 No se encontró contenido para mostrar.\nIntenta buscar algo.")
+        msg.setStyleSheet("font-size:15px; color:#666; padding:40px;")
+        msg.setAlignment(Qt.AlignCenter)
+        layout.addWidget(msg)
+
+        scroll.setWidget(container)
+        self.home_scroll = scroll
+        self.layout().addWidget(scroll)
+        scroll.show()
+
+    def show_home_error(self, error_msg=""):
+        """Show error when loading home."""
+        self.results_list.hide()
+        self._clear_home_scroll()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setAlignment(Qt.AlignCenter)
+
+        msg = QLabel(f" Error al cargar el contenido.\n{error_msg}")
+        msg.setStyleSheet("font-size:14px; color:#FF6666; padding:40px;")
+        msg.setAlignment(Qt.AlignCenter)
+        layout.addWidget(msg)
+
+        scroll.setWidget(container)
+        self.home_scroll = scroll
+        self.layout().addWidget(scroll)
+        scroll.show()
+
+    def _clear_home_scroll(self):
+        """Clear the home scroll widget if it exists."""
         if self.home_scroll:
             self.layout().removeWidget(self.home_scroll)
             self.home_scroll.deleteLater()
             self.home_scroll = None
+
+    def show_home(self, sections):
+        """Home"""
+        self.results_list.hide()
+        self._clear_home_scroll()
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1093,52 +1186,105 @@ class CenterPanel(QWidget):
         card = QWidget()
         card.setFixedSize(160, 200)
         card.setCursor(Qt.PointingHandCursor)
+        card.setStyleSheet("""
+            QWidget {
+                background: #141414;
+                border-radius: 10px;
+            }
+            QWidget:hover {
+                background: #1e1e1e;
+            }
+        """)
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
 
-        # Cover
+        # Cover placeholder
         img = QLabel()
         img.setFixedSize(148, 148)
         img.setScaledContents(True)
-        img.setStyleSheet("""
-            background:#1e1e1e;
-            border-radius:10px;
-        """)
 
-        img.setPixmap(qta.icon('fa5s.music', color='#555').pixmap(148, 148))
+        item_type = item.get("type", "unknown")
+        icon_map = {
+            "song":    ('fa5s.music',    '#888'),
+            "playlist":('fa5s.list',     '#888'),
+            "album":   ('fa5s.compact-disc', '#888'),
+            "artist":  ('fa5s.user',     '#888'),
+            "unknown": ('fa5s.music',    '#555'),
+        }
+        icon_name, icon_color = icon_map.get(item_type, ('fa5s.music', '#555'))
+        img.setPixmap(qta.icon(icon_name, color=icon_color).pixmap(148, 148))
+        img.setStyleSheet("border-radius:8px; background:#1a1a1a;")
+
+        # Try to load thumbnail from network
+        thumbnails = item.get("thumbnails", [])
+        if thumbnails:
+            thumb_url = thumbnails[-1].get("url", "") if isinstance(thumbnails[-1], dict) else ""
+            if thumb_url:
+                self._load_thumbnail_async(img, thumb_url, size=148)
 
         # Title
         title = QLabel(item.get("title", ""))
-        title.setStyleSheet("font-size:13px; font-weight:600;")
+        title.setStyleSheet("font-size:13px; font-weight:600; background:transparent;")
         title.setWordWrap(False)
         title.setFixedHeight(18)
 
         # Subtitle
         subtitle_text = ""
-        if item.get("type") == "song":
+        if item_type == "song":
             artists = item.get("artists", [])
-            if artists:
-                subtitle_text = ", ".join([a.get("name", "") for a in artists[:2]])
-        else:
-            subtitle_text = item.get("type", "").capitalize()
+            if isinstance(artists, list) and artists:
+                names = [a.get("name", "") if isinstance(a, dict) else str(a) for a in artists[:2]]
+                subtitle_text = ", ".join(filter(None, names))
+        elif item_type == "playlist":
+            subtitle_text = "Playlist"
+        elif item_type == "album":
+            subtitle_text = "Álbum"
+        elif item_type == "artist":
+            subtitle_text = "Artista"
 
         subtitle = QLabel(subtitle_text)
-        subtitle.setStyleSheet("font-size:11px; color:#999;")
+        subtitle.setStyleSheet("font-size:11px; color:#999; background:transparent;")
         subtitle.setFixedHeight(16)
 
         layout.addWidget(img)
         layout.addWidget(title)
         layout.addWidget(subtitle)
 
-        # Click
-        def on_click(event):
-            self._handle_home_click(item)
-
-        card.mousePressEvent = on_click
+        # Only handle click for types that do something
+        if item_type in ("song", "playlist", "album"):
+            def on_click(event, _item=item):
+                self._handle_home_click(_item)
+            card.mousePressEvent = on_click
 
         return card
+
+    def _load_thumbnail_async(self, label, url, size=148):
+        """Load thumbnail image from URL in a background thread."""
+        from PySide6.QtGui import QPixmap
+        from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+        from PySide6.QtCore import QUrl
+
+        try:
+            nam = QNetworkAccessManager(label)
+            request = QNetworkRequest(QUrl(url))
+            reply = nam.get(request)
+
+            def on_finished(_size=size):
+                try:
+                    data = reply.readAll()
+                    pixmap = QPixmap()
+                    if pixmap.loadFromData(data):
+                        label.setPixmap(pixmap.scaled(_size, _size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+                except Exception:
+                    pass
+                finally:
+                    reply.deleteLater()
+
+            reply.finished.connect(on_finished)
+        except Exception as e:
+            print(f"[THUMB] Error cargando miniatura: {e}")
 
     def _handle_home_click(self, item):
         item_type = item.get("type")

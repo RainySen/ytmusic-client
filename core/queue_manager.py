@@ -177,8 +177,8 @@ class QueueManager(QObject):
 
             self.queue_updated.emit()
 
-    def clear(self):
-        current_song = self.get_current()
+    def clear(self, keep_current=True):
+        current_song = self.get_current() if keep_current else None
 
         if current_song:
             self.queue = [current_song]

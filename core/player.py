@@ -234,6 +234,11 @@ class Player(QObject):
         self.player.pause()
         self.is_playing = not self.is_playing
 
+    def stop(self):
+        self.player.stop()
+        self.is_playing = False
+        self.pending_video_id = None
+
     def set_volume(self, volume):
         self.player.audio_set_volume(volume)
 

@@ -70,9 +70,22 @@ class YTMusicService:
 
                 self.ytmusic = YTMusic(auth=auth_headers)
 
-                # Test authentication
+                # Test authentication — two-step validation.
+                # Step 1: library playlists (fast, but can return [] for expired cookies)
                 print("[AUTH] Probando conexion...")
                 playlists = self.ytmusic.get_library_playlists(limit=1)
+
+                # Step 2: if library is empty, verify with get_home().
+                # An authenticated user ALWAYS gets a non-empty home feed.
+                # An expired/invalid session returns [] from home too.
+                if not playlists:
+                    print("[AUTH] Biblioteca vacia, verificando con home feed...")
+                    home_check = self.ytmusic.get_home(limit=3)
+                    if not home_check:
+                        raise Exception(
+                            "Sesion expirada: biblioteca y home vacios. "
+                            "Las cookies del navegador han expirado."
+                        )
 
                 self.is_authenticated = True
                 print(f"[AUTH] OK - Sesion restaurada ({len(playlists)} playlists detectadas)")
@@ -247,28 +260,111 @@ class YTMusicService:
 
     def get_home(self):
         if not self.is_authenticated:
-            print("[HOME] No autenticado - retornando lista vacia")
-            return []
+            print("[HOME] Modo invitado - Obteniendo éxitos globales...")
+            try:
+                charts = self.ytmusic.get_charts(country='ZZ')
+                print(f"[HOME] Charts keys: {list(charts.keys())}")
+
+                sections = []
+
+                def _extract_items(raw):
+                    """Normaliza items de charts al formato de sección estándar."""
+                    if isinstance(raw, dict):
+                        return raw.get('items', [])
+                    if isinstance(raw, list):
+                        return raw
+                    return []
+
+                for key, label in [
+                    ('videos',   'Vídeos en Tendencia'),
+                    ('trending', 'Tendencias'),
+                    ('songs',    'Canciones Populares'),
+                ]:
+                    if key in charts:
+                        extracted = _extract_items(charts[key])
+                        if extracted:
+                            sections.append({'title': label, 'contents': extracted})
+                            print(f"[HOME] Sección '{label}': {len(extracted)} items")
+
+                return sections
+
+            except Exception as e:
+                print(f"[HOME] Error en modo invitado: {e}")
+                traceback.print_exc()
+                return []
+
         try:
             print("[HOME] Obteniendo feed de YTMusic...")
             home = self.ytmusic.get_home(limit=20)
+
+            # If authenticated but home returned empty, session likely expired silently
+            if not home:
+                print("[HOME] ADVERTENCIA: home vacio con sesion activa - sesion posiblemente expirada")
+                self.is_authenticated = False
+                return []
+
             print(f"[HOME] OK - {len(home)} secciones obtenidas")
             return home
         except Exception as e:
             print(f"[HOME] Error: {e}")
             traceback.print_exc()
+            # Mark as unauthenticated if the request fails
+            self.is_authenticated = False
             return []
 
     def parse_home_section(self, section):
         items = []
-        for item in section.get("contents", []):
-            if "videoId" in item:
-                items.append({"type": "song", "videoId": item.get("videoId"),
-                              "title": item.get("title", ""), "artists": item.get("artists", [])})
-            elif "playlistId" in item:
-                items.append({"type": "playlist", "playlistId": item.get("playlistId"),
-                              "title": item.get("title", "")})
-            elif "browseId" in item:
-                items.append({"type": "album", "browseId": item.get("browseId"),
-                              "title": item.get("title", "")})
+        contents = section.get("contents", [])
+        print(f"[HOME] Parseando sección '{section.get('title', '?')}' con {len(contents)} items")
+
+        for item in contents:
+            if not item or not isinstance(item, dict):
+                continue
+
+            title = item.get("title", "") or ""
+
+            # Songs / videos
+            if "videoId" in item and item["videoId"]:
+                artists = item.get("artists") or item.get("author") or []
+                if isinstance(artists, str):
+                    artists = [{"name": artists}]
+                items.append({
+                    "type": "song",
+                    "videoId": item["videoId"],
+                    "title": title,
+                    "artists": artists,
+                    "thumbnails": item.get("thumbnails", []),
+                })
+
+            # Playlists / mixes / radios
+            elif "playlistId" in item and item["playlistId"]:
+                items.append({
+                    "type": "playlist",
+                    "playlistId": item["playlistId"],
+                    "title": title,
+                    "thumbnails": item.get("thumbnails", []),
+                })
+
+            # Albums / artists via browseId
+            elif "browseId" in item and item["browseId"]:
+                # Distinguish artist vs album by browseId prefix
+                browse_id = item["browseId"]
+                item_type = "artist" if browse_id.startswith("UC") else "album"
+                items.append({
+                    "type": item_type,
+                    "browseId": browse_id,
+                    "title": title,
+                    "thumbnails": item.get("thumbnails", []),
+                })
+
+            # Fallback: keep items that at least have a title so sections aren't empty
+            elif title:
+                print(f"[HOME]   Item sin ID conocido: '{title}' keys={list(item.keys())}")
+                items.append({
+                    "type": "unknown",
+                    "title": title,
+                    "thumbnails": item.get("thumbnails", []),
+                })
+
+        print(f"[HOME]   → {len(items)} items parseados")
         return items
