@@ -375,9 +375,10 @@ class PlaylistHandler:
             return
 
         # Clear current state and load playlist
+        self.state.player.stop()
         self.state.results_cache = []
         self.state.window.update_results([])
-        self.state.queue_manager.clear()
+        self.state.queue_manager.clear(keep_current=False)
 
         for song in data['tracks']:
             self.state.queue_manager.add_song(song)
@@ -416,9 +417,10 @@ class PlaylistHandler:
                 return
 
             # Clear and load playlist
+            self.state.player.stop()
             self.state.results_cache = []
             self.state.window.update_results([])
-            self.state.queue_manager.clear()
+            self.state.queue_manager.clear(keep_current=False)
 
             for song in data['tracks']:
                 self.state.queue_manager.add_song(song)
@@ -429,7 +431,7 @@ class PlaylistHandler:
                 PlaybackController(self.state).play_song(first_song)
                 SearchHandler(self.state)._preload_upcoming_songs()
 
-            self.state.window.search_box.clear()
+            self.state.window.top_bar.search_box.clear()
             self.state.last_imported_playlist_data = data
 
             # Ask user to save
@@ -445,7 +447,7 @@ class PlaylistHandler:
     def save_imported_playlist(self, save_to_ytmusic=False):
         """Save the last imported playlist"""
         if not self.state.last_imported_playlist_data:
-            print("[SAVE] ⚠️ No hay datos para guardar")
+            print("[SAVE] No hay datos para guardar")
             return
 
         title = self.state.last_imported_playlist_data['title']
@@ -529,6 +531,12 @@ class AuthenticationHandler:
         self.state.playlists_cache = playlist_handler.get_combined_playlists()
         self.state.window.update_playlists(self.state.playlists_cache)
         self.state.window.update_auth_status(is_authenticated)
+
+        # Refresh home feed so personalized content loads immediately
+        if self.state.window and hasattr(self.state.window, 'callbacks'):
+            home_cb = self.state.window.callbacks.get('home')
+            if home_cb:
+                home_cb()
 
 
 # Recommendations
@@ -701,27 +709,73 @@ class LyricsHandler:
 
 # Home
 
+from PySide6.QtCore import QThread, Signal as QtSignal
+
+
+class _HomeLoaderThread(QThread):
+    """Load the home screen in the background so as not to block the UI."""
+    sections_ready = QtSignal(list)
+    load_error = QtSignal(str)
+
+    def __init__(self, service):
+        super().__init__()
+        self.service = service
+
+    def run(self):
+        try:
+            home_data = self.service.get_home()
+            parsed = []
+            for section in home_data:
+                title = section.get("title", "Sección")
+                content = self.service.parse_home_section(section)
+                if content:
+                    parsed.append({"title": title, "items": content})
+            self.sections_ready.emit(parsed)
+        except Exception as e:
+            import traceback as tb
+            print(f"[HOME] Error en hilo de carga: {e}")
+            tb.print_exc()
+            self.load_error.emit(str(e))
+
+
 class HomeHandler:
     """Home screen"""
 
     def __init__(self, state):
         self.state = state
+        self._loader_thread = None  # Keep reference to prevent GC
 
     def show_home(self):
-        home_data = self.state.service.get_home()
-        parsed_sections = []
+        """Load home screen in background."""
+        self.state.window.show_home_loading()
 
-        for section in home_data:
-            title = section.get("title", "Sección")
-            content = self.state.service.parse_home_section(section)
+        # Clear previous thread if it's still running
+        if self._loader_thread and self._loader_thread.isRunning():
+            self._loader_thread.quit()
+            self._loader_thread.wait(500)
 
-            if content:
-                parsed_sections.append({
-                    "title": title,
-                    "items": content
-                })
+        self._loader_thread = _HomeLoaderThread(self.state.service)
+        self._loader_thread.sections_ready.connect(self._on_sections_ready)
+        self._loader_thread.load_error.connect(self._on_load_error)
+        self._loader_thread.start()
 
-        self.state.window.show_home(parsed_sections)
+    def _on_sections_ready(self, parsed_sections):
+        # Check if session expired silently during home load
+        if not parsed_sections and not self.state.service.is_authenticated:
+            self.state.window.show_home_error(
+                "Tu sesión ha expirado.\n"
+                "Por favor, inicia sesión de nuevo desde el botón de usuario."
+            )
+            self.state.window.update_auth_status(False)
+            return
+
+        if not parsed_sections:
+            self.state.window.show_home_empty()
+        else:
+            self.state.window.show_home(parsed_sections)
+
+    def _on_load_error(self, error_msg):
+        self.state.window.show_home_error(error_msg)
 
 
 # Application controllers
