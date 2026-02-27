@@ -7,7 +7,7 @@ import platform
 
 
 def get_platform():
-    """Detecta el sistema operativo actual."""
+    """Find the OS"""
     system = platform.system()
     if system == "Windows":
         return "windows"
@@ -20,11 +20,7 @@ def get_platform():
 
 def get_config_dir(app_name="ytmusic_client"):
     """
-    Obtiene el directorio de configuración apropiado según el sistema operativo.
-    
-    - Windows: %APPDATA%/ytmusic_client
-    - Linux: ~/.config/ytmusic_client
-    - macOS: ~/Library/Application Support/ytmusic_client
+    Obtains the appropriate configuration directory according to the OS.
     """
     current_platform = get_platform()
     
@@ -47,10 +43,10 @@ def get_config_dir(app_name="ytmusic_client"):
         config_dir = os.path.expanduser(f'~/Library/Application Support/{app_name}')
     
     else:
-        # Fallback: usar el directorio home
+        # Fallback: home directory
         config_dir = os.path.expanduser(f'~/.{app_name}')
     
-    # Crear el directorio si no existe
+    # Create the directory if it does not exist
     os.makedirs(config_dir, exist_ok=True)
     
     return config_dir
@@ -58,11 +54,7 @@ def get_config_dir(app_name="ytmusic_client"):
 
 def get_cache_dir(app_name="ytmusic_client"):
     """
-    Obtiene el directorio de caché apropiado según el sistema operativo.
-    
-    - Windows: %LOCALAPPDATA%/ytmusic_client/Cache
-    - Linux: ~/.cache/ytmusic_client
-    - macOS: ~/Library/Caches/ytmusic_client
+    obtains the appropriate cache directory according to the OS.
     """
     current_platform = get_platform()
     
@@ -92,42 +84,35 @@ def get_cache_dir(app_name="ytmusic_client"):
 
 def get_base_dir():
     """
-    Obtiene el directorio base de la aplicación.
-    Útil para ejecutables empaquetados con PyInstaller.
+    Obtains the base directory
     """
     if getattr(sys, 'frozen', False):
-        # Si está empaquetado con PyInstaller
+        # Pyinstaler
         return os.path.dirname(sys.executable)
     else:
-        # Si se ejecuta desde el código fuente
+        # executed from the source code
         return os.path.dirname(os.path.abspath(__file__))
 
 
 def get_vlc_instance_args():
-    """
-    Obtiene los argumentos de VLC específicos para cada plataforma.
-    """
     current_platform = get_platform()
     
     base_args = ['--no-video', '--network-caching=3000']
     
     if current_platform == "linux":
-        # En Linux, a veces es necesario especificar el output de audio
-        # Puedes descomentar si tienes problemas con el audio
-        # base_args.append('--aout=pulse')  # Para PulseAudio
-        # base_args.append('--aout=alsa')   # Para ALSA
+        # specify audio output
+        # base_args.append('--aout=pulse')  # PulseAudio
+        # base_args.append('--aout=alsa')   # ALSA
         pass
     
     return base_args
 
 
 def is_executable_frozen():
-    """Detecta si la aplicación está ejecutándose como ejecutable empaquetado."""
     return getattr(sys, 'frozen', False)
 
 
 def print_platform_info():
-    """Imprime información sobre la plataforma actual (útil para debug)."""
     print("=" * 60)
     print("INFORMACIÓN DE LA PLATAFORMA")
     print("=" * 60)

@@ -324,15 +324,24 @@ class DroppableQueueContainer(QWidget):
         self.drag_source_index = -1
         self.drop_indicator_pos = -1
 
+        # Auto-scroll setup
+        self.auto_scroll_timer = QTimer(self)
+        self.auto_scroll_timer.timeout.connect(self._perform_auto_scroll)
+        self.auto_scroll_margin = 50  # pixels from edge to trigger scroll
+        self.auto_scroll_speed = 15  # pixels per scroll step
+        self.last_drag_pos = None
+
     def dragEnterEvent(self, event):
         """Handle drag enter"""
         if event.mimeData().hasText():
             event.acceptProposedAction()
+            self.auto_scroll_timer.start(50)  # Check every 50ms
 
     def dragMoveEvent(self, event):
         """Handle drag move to show drop indicator"""
         if event.mimeData().hasText():
             pos = event.position().toPoint()
+            self.last_drag_pos = pos
             self.drop_indicator_pos = self._get_drop_position(pos)
             self.update()
             event.acceptProposedAction()
@@ -340,10 +349,15 @@ class DroppableQueueContainer(QWidget):
     def dragLeaveEvent(self, event):
         """Handle drag leave"""
         self.drop_indicator_pos = -1
+        self.auto_scroll_timer.stop()
+        self.last_drag_pos = None
         self.update()
 
     def dropEvent(self, event):
         """Handle drop to reorder queue"""
+        self.auto_scroll_timer.stop()
+        self.last_drag_pos = None
+
         if event.mimeData().hasText():
             try:
                 source_index = int(event.mimeData().text())
@@ -358,6 +372,45 @@ class DroppableQueueContainer(QWidget):
 
         self.drop_indicator_pos = -1
         self.update()
+
+    def _perform_auto_scroll(self):
+        """Perform auto-scroll when dragging near edges"""
+        if not self.last_drag_pos:
+            return
+
+        # Find parent QScrollArea
+        scroll_area = self._find_scroll_area()
+        if not scroll_area:
+            return
+
+        # Get viewport position
+        viewport_pos = self.mapTo(scroll_area.viewport(), self.last_drag_pos)
+        viewport_height = scroll_area.viewport().height()
+
+        scroll_bar = scroll_area.verticalScrollBar()
+
+        # Scroll up if near top edge
+        if viewport_pos.y() < self.auto_scroll_margin:
+            distance_from_edge = self.auto_scroll_margin - viewport_pos.y()
+            scroll_amount = int(self.auto_scroll_speed * (distance_from_edge / self.auto_scroll_margin))
+            new_value = max(scroll_bar.value() - scroll_amount, scroll_bar.minimum())
+            scroll_bar.setValue(new_value)
+
+        # Scroll down if near bottom edge
+        elif viewport_pos.y() > viewport_height - self.auto_scroll_margin:
+            distance_from_edge = viewport_pos.y() - (viewport_height - self.auto_scroll_margin)
+            scroll_amount = int(self.auto_scroll_speed * (distance_from_edge / self.auto_scroll_margin))
+            new_value = min(scroll_bar.value() + scroll_amount, scroll_bar.maximum())
+            scroll_bar.setValue(new_value)
+
+    def _find_scroll_area(self):
+        """Find parent QScrollArea"""
+        parent = self.parent()
+        while parent:
+            if isinstance(parent, QScrollArea):
+                return parent
+            parent = parent.parent()
+        return None
 
     def _get_drop_position(self, pos):
         """Calculate drop position based on mouse position"""
@@ -1056,13 +1109,13 @@ class CenterPanel(QWidget):
 
         img.setPixmap(qta.icon('fa5s.music', color='#555').pixmap(148, 148))
 
-        # Título
+        # Title
         title = QLabel(item.get("title", ""))
         title.setStyleSheet("font-size:13px; font-weight:600;")
         title.setWordWrap(False)
         title.setFixedHeight(18)
 
-        # Subtítulo
+        # Subtitle
         subtitle_text = ""
         if item.get("type") == "song":
             artists = item.get("artists", [])
@@ -1088,10 +1141,8 @@ class CenterPanel(QWidget):
         return card
 
     def _handle_home_click(self, item):
-        """Manejar click en items del home"""
         item_type = item.get("type")
 
-        # Buscar el MainWindow parent
         parent_widget = self.parent()
         while parent_widget and not isinstance(parent_widget, MainWindow):
             parent_widget = parent_widget.parent()
@@ -1102,17 +1153,32 @@ class CenterPanel(QWidget):
 
         if item_type == "song":
             video_id = item.get("videoId")
+
+            if not video_id:
+                return
+
+            song_data = {
+                "videoId": video_id,
+                "title": item.get("title"),
+                "artists": item.get("artists", []),
+                "source": "home"
+            }
+
+            callbacks = parent_widget.callbacks
+
+            if callbacks.get("add_next"):
+                callbacks["add_next"](song_data)
+
+            elif callbacks.get("select_song"):
+                callbacks["select_song"](song_data)
+
             if video_id and parent_widget.callbacks.get("select_song"):
-                # Aquí deberíamos buscar el índice en results_cache, pero como
-                # estamos en home, podemos agregar directamente a la cola
                 print(f"[HOME] Reproduciendo canción: {item.get('title')}")
-                # Por ahora solo imprimimos, necesitarías adaptar esto
 
         elif item_type == "playlist":
             playlist_id = item.get("playlistId")
             if playlist_id and parent_widget.callbacks.get("playlist_selected"):
                 print(f"[HOME] Abriendo playlist: {item.get('title')}")
-                # Necesitarías encontrar el índice de la playlist
 
         elif item_type == "album":
             album_id = item.get("browseId")

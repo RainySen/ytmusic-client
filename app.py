@@ -98,7 +98,7 @@ class ApplicationState:
             # Update UI
             idx = self.queue_manager.get_current_index()
             if idx >= 0:
-                self.window.queue_list.setCurrentRow(idx)
+                # Queue UI will update via queue_updated signal
                 song = self.queue_manager.get_current()
                 if song:
                     artist = song.get('artists', [{}])[0].get('name', 'Desconocido')
@@ -146,16 +146,26 @@ class SearchHandler:
             else:
                 self.state.player.preload_stream(song.get("videoId"))
 
-    def handle_add_next(self, index):
+    def handle_add_next(self, data):
         """Add song to play next"""
-        if 0 <= index < len(self.state.results_cache):
-            song = self.state.results_cache[index]
+        if isinstance(data, dict):
+            song = data
 
-            if self.state.queue_manager.add_next(song):
-                PlaybackController(self.state).play_song(song)
-                self._preload_upcoming_songs()
+        elif isinstance(data, int):
+            if 0 <= data < len(self.state.results_cache):
+                song = self.state.results_cache[data]
             else:
-                self.state.player.preload_stream(song.get("videoId"))
+                return
+        else:
+            return
+
+        added = self.state.queue_manager.add_song(song)
+
+        if added:
+            PlaybackController(self.state).play_song(song)
+            self._preload_upcoming_songs()
+        else:
+            self.state.player.preload_stream(song.get("videoId"))
 
     def _preload_upcoming_songs(self, count=DEFAULT_PRELOAD_COUNT):
         """Preload next songs"""
@@ -181,7 +191,16 @@ class PlaybackController:
             self.state.window.update_song_info("Error canción")
             return
 
-        # Reset lyrics state
+        queue = self.state.queue_manager
+        if song_data not in queue.get_queue():
+            queue.add_song(song_data)
+
+        #current index
+        current_index = queue.get_queue().index(song_data)
+        queue.current_index = current_index
+        queue.current_changed.emit(current_index)
+
+        # lyrics state
         self.state.current_lyrics_lines = []
         self.state.lyrics_active = False
         self.state.last_highlighted_index = -1
@@ -189,13 +208,12 @@ class PlaybackController:
 
         # song info
         video_id = song_data["videoId"]
-        artist = song_data.get('artists', [{}])[0].get('name', 'Desconocido')
+        artist = song_data.get("artists", [{}])[0].get("name", "Desconocido")
 
-        # Update UI
         self.state.window.update_play_button_icon(True)
         self.state.window.update_song_info(f"Cargando: {song_data['title']} - {artist}")
 
-        # Start playback
+
         if self.state.player.play(video_id):
             self.state.window.update_song_info(f"{song_data['title']} - {artist}")
 

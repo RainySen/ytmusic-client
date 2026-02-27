@@ -40,6 +40,7 @@ class YTMusicService:
             for match in re.finditer(r'-H\s+"([^:]+?):\s*(.*?)"', raw_headers, re.DOTALL):
                 auth_headers[match.group(1).strip()] = match.group(2).strip()
 
+        # Remove Accept-Encoding to avoid decompression issues
         auth_headers.pop('Accept-Encoding', None)
         auth_headers.pop('accept-encoding', None)
 
@@ -53,7 +54,7 @@ class YTMusicService:
     def _initialize_auth(self):
         if os.path.exists(self.AUTH_FILE):
             try:
-                print("[AUTH] Cargando sesión guardada...")
+                print("[AUTH] Cargando sesion guardada...")
                 with open(self.AUTH_FILE, "r") as f:
                     auth_headers = json.load(f)
 
@@ -62,48 +63,56 @@ class YTMusicService:
                 if not sapisidhash:
                     raise Exception("SAPISID no encontrada")
 
-                # Asegurarse de que no haya Accept-Encoding
+                # Remove Accept-Encoding if present
                 auth_headers.pop('Accept-Encoding', None)
                 auth_headers.pop('accept-encoding', None)
                 auth_headers["Authorization"] = sapisidhash
 
                 self.ytmusic = YTMusic(auth=auth_headers)
-                self.ytmusic.get_library_playlists(limit=1)
+
+                # Test authentication
+                print("[AUTH] Probando conexion...")
+                playlists = self.ytmusic.get_library_playlists(limit=1)
+
                 self.is_authenticated = True
-                print("[AUTH] ✅ Sesión restaurada")
+                print(f"[AUTH] OK - Sesion restaurada ({len(playlists)} playlists detectadas)")
                 return
+
             except Exception as e:
-                print(f"[AUTH] ⚠️ Falló restaurar sesión: {e}")
+                print(f"[AUTH] Fallo al restaurar sesion: {e}")
+                traceback.print_exc()
                 try:
                     os.remove(self.AUTH_FILE)
                 except:
                     pass
 
-        print("[AUTH] Sin autenticación")
+        print("[AUTH] Sin autenticacion - modo invitado")
         self.ytmusic = YTMusic()
         self.is_authenticated = False
 
     def setup_authentication(self, headers_raw):
         try:
             if not headers_raw or not headers_raw.strip():
+                print("[AUTH] Error: cURL vacio")
                 return False
 
             auth_headers = self._build_auth_headers(headers_raw)
 
             cookie = auth_headers.get('Cookie') or auth_headers.get('cookie', '')
             if not cookie:
-                print("[AUTH] ❌ No se encontró Cookie")
+                print("[AUTH] Error: Cookie no encontrada")
                 return False
 
-            print(f"[AUTH] Headers: {list(auth_headers.keys())}")
-            print("[AUTH] 🔐 Autenticando...")
+            print(f"[AUTH] Headers extraidas: {list(auth_headers.keys())}")
+            print("[AUTH] Autenticando con YouTube...")
 
             self.ytmusic = YTMusic(auth=auth_headers)
             result = self.ytmusic.get_library_playlists(limit=1)
 
             if not isinstance(result, list):
-                raise Exception(f"Respuesta inválida: {type(result)}")
+                raise Exception(f"Respuesta invalida: {type(result)}")
 
+            # Save headers without Authorization (regenerated on startup)
             to_save = {k: v for k, v in auth_headers.items()
                        if k.lower() not in ("authorization", "accept-encoding")}
             with open(self.AUTH_FILE, 'w') as f:
@@ -111,11 +120,11 @@ class YTMusicService:
 
             self.is_authenticated = True
             self._save_auth_timestamp()
-            print(f"[AUTH] ✅ Autenticado ({len(result)} playlists)")
+            print(f"[AUTH] OK - Autenticado exitosamente ({len(result)} playlists)")
             return True
 
-        except Exception:
-            print("[AUTH] ❌ Error:")
+        except Exception as e:
+            print(f"[AUTH] Error durante autenticacion: {e}")
             traceback.print_exc()
             if os.path.exists(self.AUTH_FILE):
                 os.remove(self.AUTH_FILE)
@@ -136,27 +145,41 @@ class YTMusicService:
             with open(os.path.join(self.base_dir, "auth_timestamp.json")) as f:
                 data = json.load(f)
                 days = (datetime.now() - datetime.fromisoformat(data['authenticated_at'])).days
-                return {'authenticated': True, 'days_since_auth': days, 'message': f'Activo ({days} días)'}
+                return {'authenticated': True, 'days_since_auth': days, 'message': f'Activo ({days} dias)'}
         except:
             return {'authenticated': True, 'message': 'Autenticado'}
 
     def logout(self):
         try:
-            for f in [self.AUTH_FILE, os.path.join(self.base_dir, "auth_timestamp.json")]:
+            files_to_remove = [
+                self.AUTH_FILE,
+                os.path.join(self.base_dir, "auth_timestamp.json")
+            ]
+            for f in files_to_remove:
                 if os.path.exists(f):
                     os.remove(f)
+                    print(f"[AUTH] Eliminado: {f}")
+
             self.is_authenticated = False
             self.ytmusic = YTMusic()
+            print("[AUTH] Sesion cerrada")
             return True
-        except:
+        except Exception as e:
+            print(f"[AUTH] Error al cerrar sesion: {e}")
             return False
 
     def get_library_playlists(self):
         if not self.is_authenticated:
+            print("[PLAYLISTS] No autenticado - retornando lista vacia")
             return []
         try:
-            return self.ytmusic.get_library_playlists(limit=50)
-        except:
+            print("[PLAYLISTS] Obteniendo playlists de YTMusic...")
+            playlists = self.ytmusic.get_library_playlists(limit=50)
+            print(f"[PLAYLISTS] OK - {len(playlists)} playlists obtenidas")
+            return playlists
+        except Exception as e:
+            print(f"[PLAYLISTS] Error: {e}")
+            traceback.print_exc()
             return []
 
     def get_playlist_songs(self, playlist_id):
@@ -187,8 +210,8 @@ class YTMusicService:
         import yt_dlp
         try:
             with yt_dlp.YoutubeDL({'format': 'bestaudio/best', 'quiet': True,
-                                    'no_warnings': True, 'skip_download': True,
-                                    'cachedir': self.CACHE_DIR}) as ydl:
+                                   'no_warnings': True, 'skip_download': True,
+                                   'cachedir': self.CACHE_DIR}) as ydl:
                 info = ydl.extract_info(f"https://music.youtube.com/watch?v={video_id}", download=False)
                 return info.get('url'), info.get('title', '')
         except:
@@ -223,9 +246,17 @@ class YTMusicService:
             return None
 
     def get_home(self):
+        if not self.is_authenticated:
+            print("[HOME] No autenticado - retornando lista vacia")
+            return []
         try:
-            return self.ytmusic.get_home(limit=20)
-        except:
+            print("[HOME] Obteniendo feed de YTMusic...")
+            home = self.ytmusic.get_home(limit=20)
+            print(f"[HOME] OK - {len(home)} secciones obtenidas")
+            return home
+        except Exception as e:
+            print(f"[HOME] Error: {e}")
+            traceback.print_exc()
             return []
 
     def parse_home_section(self, section):
