@@ -2,9 +2,9 @@ import threading
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
-    QMessageBox, QInputDialog, QHBoxLayout, QFrame,
+    QMessageBox, QInputDialog, QFrame,
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
 
 from utils import parse_curl_headers
@@ -25,6 +25,10 @@ class LoginWindow(QWidget):
     login_success = Signal()
     login_skipped = Signal()
 
+    # internal signals — emitted from worker threads, delivered in the main thread
+    _browsers_found = Signal(list)
+    _browser_login_done = Signal(bool, str, str)  # ok, error, browser
+
     def __init__(self, service, app_icon, is_authenticated):
         super().__init__()
         self.service = service
@@ -32,6 +36,8 @@ class LoginWindow(QWidget):
         self.is_authenticated = is_authenticated
         self._init_ui()
         if not is_authenticated:
+            self._browsers_found.connect(self._on_browsers_detected)
+            self._browser_login_done.connect(self._on_browser_login_result)
             self._probe_browsers()
 
     def _init_ui(self):
@@ -105,7 +111,7 @@ class LoginWindow(QWidget):
     def _probe_browsers(self):
         def _worker():
             browsers = self.service.detect_available_browsers()
-            QTimer.singleShot(0, lambda: self._on_browsers_detected(browsers))
+            self._browsers_found.emit(browsers)
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -145,7 +151,6 @@ class LoginWindow(QWidget):
         self.setFixedSize(400, max(500, self.sizeHint().height() + 20))
 
     def _login_from_browser(self, browser: str):
-        # Show a spinner while we authenticate
         for i in range(self._browser_area.count()):
             w = self._browser_area.itemAt(i).widget()
             if w:
@@ -159,15 +164,14 @@ class LoginWindow(QWidget):
 
         def _worker():
             ok, err = self.service.login_from_browser(browser)
-            QTimer.singleShot(0, lambda: self._on_browser_login_done(ok, err, browser))
+            self._browser_login_done.emit(ok, err, browser)
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _on_browser_login_done(self, ok: bool, err: str, browser: str):
+    def _on_browser_login_result(self, ok: bool, err: str, browser: str):
         if ok:
             self.login_success.emit()
             return
-        # Re-enable buttons and show error
         if hasattr(self, "_pending_status"):
             self._pending_status.deleteLater()
         for i in range(self._browser_area.count()):
