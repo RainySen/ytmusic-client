@@ -30,12 +30,12 @@ class ImprovedQueueItem(QWidget):
         self.play_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.play_indicator.setCursor(Qt.OpenHandCursor)
 
-        thumb = QLabel()
-        thumb.setFixedSize(40, 40)
-        thumb.setPixmap(qta.icon('fa5s.music', color='#666').pixmap(40, 40))
-        thumb.setScaledContents(True)
-        thumb.setStyleSheet("border-radius: 4px; background: #1a1a1a;")
-        thumb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.thumb = QLabel()
+        self.thumb.setFixedSize(40, 40)
+        self.thumb.setAlignment(Qt.AlignCenter)
+        self.thumb.setPixmap(qta.icon('fa5s.music', color='#555').pixmap(24, 24))
+        self.thumb.setStyleSheet("border-radius: 4px; background: #1e1e1e;")
+        self.thumb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         info_layout = QVBoxLayout()
         info_layout.setSpacing(2)
@@ -61,6 +61,16 @@ class ImprovedQueueItem(QWidget):
 
         info_layout.addWidget(self.title_label)
         info_layout.addWidget(self.artist_label)
+
+        # Duration label
+        dur_secs = song.get('duration_seconds', 0)
+        dur_str = song.get('duration', '')
+        if not dur_str and dur_secs:
+            dur_str = f"{dur_secs // 60}:{dur_secs % 60:02d}"
+        self.duration_label = QLabel(dur_str or '')
+        self.duration_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.duration_label.setFixedWidth(36)
+        self.duration_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         buttons_container = QWidget()
         buttons_container.setFixedWidth(64)
@@ -103,8 +113,9 @@ class ImprovedQueueItem(QWidget):
         buttons_layout.addWidget(btn_remove)
 
         layout.addWidget(self.play_indicator)
-        layout.addWidget(thumb)
+        layout.addWidget(self.thumb)
         layout.addLayout(info_layout, stretch=1)
+        layout.addWidget(self.duration_label)
         layout.addWidget(buttons_container)
 
         self.setFixedHeight(56)
@@ -150,6 +161,10 @@ class ImprovedQueueItem(QWidget):
         self.play_indicator.setCursor(Qt.OpenHandCursor)
         self.drag_start_position = None
 
+    def set_thumbnail(self, pixmap):
+        from utils import scale_cover
+        self.thumb.setPixmap(scale_cover(pixmap, 40))
+
     def mouseReleaseEvent(self, event):
         self.play_indicator.setCursor(Qt.OpenHandCursor)
         self.drag_start_position = None
@@ -157,7 +172,7 @@ class ImprovedQueueItem(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        available_width = self.width() - 156
+        available_width = self.width() - 196  # grip+thumb+duration+buttons
 
         if available_width > 50:
             font_metrics = self.title_label.fontMetrics()

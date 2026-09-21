@@ -86,12 +86,13 @@ class YTMusicService:
             normalized_songs.append({
                 'videoId': track['videoId'],
                 'title': track.get('title', 'Título Desconocido'),
-                'artists': track.get('artists', [{'name': 'Desconocido'}])
+                'artists': track.get('artists', [{'name': 'Desconocido'}]),
+                'thumbnails': track.get('thumbnails', []),
             })
         return normalized_songs
 
-    def search(self, query):
-        return self.ytmusic.search(query, filter="songs", limit=30)
+    def search(self, query, filter="songs"):
+        return self.ytmusic.search(query, filter=filter, limit=30)
 
     def get_stream_url(self, video_id):
         return f"https://music.youtube.com/watch?v={video_id}"
@@ -154,7 +155,8 @@ class YTMusicService:
                         recommendations.append({
                             'videoId': track['videoId'],
                             'title': track.get('title', 'Título Desconocido'),
-                            'artists': track.get('artists', [{'name': 'Desconocido'}])
+                            'artists': track.get('artists', [{'name': 'Desconocido'}]),
+                            'thumbnails': track.get('thumbnails', []),
                         })
                 return recommendations
             return []
@@ -181,6 +183,23 @@ class YTMusicService:
             traceback.print_exc()
             return None
 
+    def get_library_songs(self, limit=50):
+        if not self.is_authenticated:
+            return []
+        try:
+            tracks = self.ytmusic.get_library_songs(limit=limit)
+            return self.normalize_playlist_tracks(tracks)
+        except Exception:
+            return []
+
+    def get_library_artists(self, limit=50):
+        if not self.is_authenticated:
+            return []
+        try:
+            return self.ytmusic.get_library_artists(limit=limit)
+        except Exception:
+            return []
+
     def get_home(self):
         try:
             return self.ytmusic.get_home(limit=20)
@@ -189,31 +208,28 @@ class YTMusicService:
 
     def parse_home_section(self, section):
         items = []
-
         for item in section.get("contents", []):
-            # Canción
+            thumbs = item.get("thumbnails", [])
             if "videoId" in item:
                 items.append({
                     "type": "song",
                     "videoId": item.get("videoId"),
                     "title": item.get("title", "Sin título"),
                     "artists": item.get("artists", []),
+                    "thumbnails": thumbs,
                 })
-
-            # Playlist o Mix
             elif "playlistId" in item:
                 items.append({
                     "type": "playlist",
                     "playlistId": item.get("playlistId"),
                     "title": item.get("title", "Playlist"),
+                    "thumbnails": thumbs,
                 })
-
-            # Álbum
-            elif "browseId" in item and item.get("subtitle") == "Álbum":
+            elif "browseId" in item:
                 items.append({
                     "type": "album",
                     "browseId": item.get("browseId"),
                     "title": item.get("title", "Álbum"),
+                    "thumbnails": thumbs,
                 })
-
         return items

@@ -114,10 +114,18 @@ class PlaylistController:
         local = self.app.playlist_manager.get_all_playlists()
         if self.app.service.is_authenticated:
             return self.app.playlist_manager.merge_with_ytmusic_playlists(self.app.service.get_library_playlists())
-        return [
-            {'playlistId': p['playlistId'], 'title': p['title'], 'source': p.get('source', 'local')}
-            for p in local
-        ]
+        result = []
+        for p in local:
+            tracks = p.get('tracks', [])
+            thumbs = tracks[0].get('thumbnails', []) if tracks else []
+            result.append({
+                'playlistId': p['playlistId'],
+                'title': p['title'],
+                'source': p.get('source', 'local'),
+                'track_count': p.get('track_count', len(tracks)),
+                'thumbnails': thumbs,
+            })
+        return result
 
     def handle_playlist_selected(self, index):
         if 0 <= index < len(self.app.playlists_cache):
@@ -139,6 +147,15 @@ class PlaylistController:
                 self.app.music_controller.preload_next_songs(5)
             else:
                 print("Error playlist")
+
+    def handle_playlist_selected_by_id(self, playlist_id):
+        data = self.app.service.get_playlist_songs(playlist_id)
+        if data and data.get('tracks'):
+            self.app.queue_manager.clear()
+            for s in data['tracks']:
+                self.app.queue_manager.add_song(s)
+            self.app.music_controller.play_song(self.app.queue_manager.jump_to(0))
+            self.app.music_controller.preload_next_songs(5)
 
     def handle_fetch_and_play_recommendation(self):
         s = self.app.queue_manager.get_current()

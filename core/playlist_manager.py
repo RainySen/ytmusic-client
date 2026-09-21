@@ -114,24 +114,27 @@ class PlaylistManager:
         Returns:
             Lista combinada de playlists
         """
-        # Primero, las playlists locales
         combined = []
 
         for playlist in self.playlists:
+            tracks = playlist.get('tracks', [])
+            # Use first track's thumbnail as playlist cover for local playlists
+            thumbs = tracks[0].get('thumbnails', []) if tracks else []
             combined.append({
                 'playlistId': playlist['playlistId'],
                 'title': playlist['title'],
                 'source': playlist.get('source', 'local'),
-                'track_count': playlist.get('track_count', len(playlist.get('tracks', [])))
+                'track_count': playlist.get('track_count', len(tracks)),
+                'thumbnails': thumbs,
             })
 
-        # Luego, las de YouTube Music
         for playlist in ytmusic_playlists:
             combined.append({
                 'playlistId': playlist.get('playlistId'),
                 'title': playlist.get('title'),
                 'source': 'ytmusic',
-                'track_count': playlist.get('count', 0)
+                'track_count': playlist.get('count', 0),
+                'thumbnails': playlist.get('thumbnails', []),
             })
 
         return combined

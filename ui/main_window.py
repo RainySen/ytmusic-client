@@ -1,21 +1,25 @@
-import re
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLineEdit, QPushButton, QListWidget, QLabel, QSlider, QSplitter, QMenu,
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QSplitter, QMenu,
     QInputDialog, QMessageBox, QSystemTrayIcon, QApplication,
-    QTabWidget, QListWidgetItem, QFrame, QSizePolicy, QScrollArea, QToolButton
+    QListWidget, QListWidgetItem
 )
 from PySide6.QtCore import Qt, QSize, Signal, QPropertyAnimation, QEasingCurve, QRect
-from PySide6.QtGui import QIcon, QAction, QKeySequence, QPixmap
+from PySide6.QtGui import QAction, QKeySequence, QPixmap
 import qtawesome as qta
 
-from ui.components.collapsible_section import CollapsibleSection
 from ui.components.queue_widgets import ImprovedQueueItem
-from ui.components.drop_queue_container import DroppableQueueContainer
 from ui.components.top_bar import TopBar
 from ui.components.sidebar import Sidebar
 from ui.components.results_panel import ResultsPanel
 from ui.components.player_panel import PlayerPanel
+from ui.components.library_panel import LibraryPanel
+from ui.components.library_browser import LibraryBrowserPanel
+from ui.components.track_result_item import TrackResultItem
+from ui.components.home_panel import HomePanel
+from ui.components.now_playing_panel import NowPlayingPanel
+from core.thumbnail_cache import ThumbnailCache
+from utils import parse_curl_headers, get_thumbnail_url, scale_cover
 
 
 class MainWindow(QWidget):
@@ -100,11 +104,13 @@ class MainWindow(QWidget):
         central_split.addWidget(right_panel)
 
         central_split.setSizes([180, 600, 320])
+        self.library_panel.hide()
         outer_layout.addWidget(central_split, stretch=1)
 
         player_widget = self._create_player_widget()
         outer_layout.addWidget(player_widget)
 
+        self.thumbnail_cache = ThumbnailCache(self)
         self.setup_quit_shortcut()
         self.init_tray_icon()
         self._apply_styles()
@@ -131,139 +137,58 @@ class MainWindow(QWidget):
         self.nav_buttons = self.sidebar.nav_buttons
         self.nav_buttons["Inicio"].clicked.connect(self.on_home_clicked)
         self.nav_buttons["Explorar"].clicked.connect(self.on_explore_clicked)
-        self.nav_buttons["Biblioteca"].clicked.connect(self.on_library_clicked)
         self.sidebar.import_button.clicked.connect(self.import_playlist_clicked)
         self.sidebar.home_requested.connect(self.on_home_clicked)
         self.sidebar.explore_requested.connect(self.on_explore_clicked)
-        self.sidebar.library_requested.connect(self.on_library_clicked)
         self.sidebar.import_requested.connect(self.import_playlist_clicked)
         return self.sidebar
 
     def _create_center_widget(self):
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self.home_panel = HomePanel()
+        layout.addWidget(self.home_panel)
+
         self.results_panel = ResultsPanel()
         self.results_list = self.results_panel.results_list
         self.results_list.itemDoubleClicked.connect(self.play_selected_song_now)
         self.results_list.currentItemChanged.connect(self.result_highlighted)
         self.results_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.results_list.customContextMenuRequested.connect(self.show_results_context_menu)
-        return self.results_panel
+        self.results_panel.hide()
+        layout.addWidget(self.results_panel)
+
+        # Library browser panel
+        self.library_browser = LibraryBrowserPanel()
+        self.library_browser.hide()
+        layout.addWidget(self.library_browser)
+
+        # Now playing panel (large cover)
+        self.now_playing_panel = NowPlayingPanel()
+        self.now_playing_panel.hide()
+        layout.addWidget(self.now_playing_panel)
+
+        # Hidden list kept for backward compat with update_playlists / playlist_selected
+        self.playlists_list = QListWidget()
+        self.playlists_list.hide()
+
+        return container
 
     def _create_improved_right_panel(self):
-        right_panel = QWidget()
-        right_panel.setObjectName("right_panel")
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(0, 16, 8, 8)
-        right_layout.setSpacing(8)
-
-        # Pestañas principales
-        self.right_tabs = QTabWidget()
-        self.right_tabs.setObjectName("right_tabs")
-
-        # ===== TAB 1: Playlists + Cola =====
-        library_tab = QWidget()
-        library_layout = QVBoxLayout(library_tab)
-        library_layout.setContentsMargins(8, 8, 8, 8)
-        library_layout.setSpacing(12)
-
-        playlists_section = CollapsibleSection("Mis Playlists")
-        playlists_section.is_collapsed = True
-        playlists_section.content.setVisible(False)
-        playlists_section.toggle_button.setIcon(qta.icon('fa5s.chevron-right', color='white'))
-
-        self.playlists_list = QListWidget()
-        self.playlists_list.setObjectName("compact_list")
-        self.playlists_list.setMaximumHeight(150)
-        self.playlists_list.itemDoubleClicked.connect(self.playlist_selected)
-        playlists_section.add_content(self.playlists_list)
-        library_layout.addWidget(playlists_section)
-
-        # Separador visual
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet("background: #333; max-height: 1px;")
-        library_layout.addWidget(separator)
-
-        # Sección de Cola
-        queue_header = QWidget()
-        queue_header_layout = QHBoxLayout(queue_header)
-        queue_header_layout.setContentsMargins(0, 0, 0, 0)
-
-        queue_title = QLabel("Cola de Reproducción")
-        queue_title.setStyleSheet("font-weight: bold; font-size: 14px;")
-
-        self.queue_count_label = QLabel("(0)")
-        self.queue_count_label.setStyleSheet("color: #999; font-size: 12px;")
-
-        clear_queue_btn = QPushButton()
-        clear_queue_btn.setIcon(self.icon_clear)
-        clear_queue_btn.setToolTip("Limpiar cola")
-        clear_queue_btn.setFixedSize(28, 28)
-        clear_queue_btn.clicked.connect(self._clear_queue_except_current)
-        clear_queue_btn.setStyleSheet("""
-            QPushButton { 
-                border: none; 
-                border-radius: 14px; 
-                background: transparent; 
-            }
-            QPushButton:hover { background: rgba(255,0,0,0.2); }
-        """)
-
-        save_queue_btn = QPushButton()
-        save_queue_btn.setIcon(qta.icon('fa5s.save', color='white'))
-        save_queue_btn.setToolTip("Guardar cola como playlist")
-        save_queue_btn.setFixedSize(28, 28)
-        save_queue_btn.clicked.connect(self._save_queue_as_playlist)
-        save_queue_btn.setStyleSheet("""
-            QPushButton { 
-                border: none; 
-                border-radius: 14px; 
-                background: transparent; 
-            }
-            QPushButton:hover { background: rgba(0,255,0,0.15); }
-        """)
-
-        queue_header_layout.addWidget(queue_title)
-        queue_header_layout.addWidget(self.queue_count_label)
-        queue_header_layout.addStretch()
-        queue_header_layout.addWidget(save_queue_btn)
-        queue_header_layout.addWidget(clear_queue_btn)
-
-        library_layout.addWidget(queue_header)
-
-        self.queue_scroll = QScrollArea()
-        self.queue_scroll.setWidgetResizable(True)
-        self.queue_scroll.setFrameShape(QFrame.NoFrame)
-        self.queue_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.queue_container = DroppableQueueContainer()
-        self.queue_container.item_dropped.connect(self._on_queue_item_dropped)
-
-        self.queue_layout = QVBoxLayout(self.queue_container)
-        self.queue_layout.setContentsMargins(0, 0, 0, 0)
-        self.queue_layout.setSpacing(4)
-        self.queue_layout.addStretch()
-
-        self.queue_scroll.setWidget(self.queue_container)
-        library_layout.addWidget(self.queue_scroll, stretch=10)
-
-        self.queue_list = QListWidget()
-        self.queue_list.hide()
-
-        self.right_tabs.addTab(library_tab, qta.icon('fa5s.music', color='white'), "Biblioteca")
-
-        # ===== TAB 2: LETRA =====
-        self.lyrics_tab = QWidget()
-        lyrics_layout = QVBoxLayout(self.lyrics_tab)
-        lyrics_layout.setContentsMargins(8, 8, 8, 8)
-
-        self.lyrics_list_widget = QListWidget()
-        self.lyrics_list_widget.setObjectName("lyrics_list")
-        lyrics_layout.addWidget(self.lyrics_list_widget)
-
-        self.right_tabs.addTab(self.lyrics_tab, qta.icon('fa5s.microphone-alt', color='white'), "Letra")
-
-        right_layout.addWidget(self.right_tabs)
-
-        return right_panel
+        self.library_panel = LibraryPanel()
+        self.right_tabs = self.library_panel.right_tabs
+        self.queue_count_label = self.library_panel.queue_count_label
+        self.queue_layout = self.library_panel.queue_layout
+        self.queue_scroll = self.library_panel.queue_scroll
+        self.lyrics_list_widget = self.library_panel.lyrics_list_widget
+        self.lyrics_tab = self.library_panel.lyrics_tab
+        self.library_panel.item_dropped.connect(self._on_queue_item_dropped)
+        self.library_panel.clear_requested.connect(self._clear_queue_except_current)
+        self.library_panel.save_requested.connect(self._save_queue_as_playlist)
+        return self.library_panel
 
     def _clear_queue_except_current(self):
         reply = QMessageBox.question(
@@ -310,6 +235,9 @@ class MainWindow(QWidget):
 
         self.cover_label = self.player_panel.cover_label
         self.cover_label.setPixmap(self._placeholder_cover_pixmap(56))
+        self.artist_label = self.player_panel.artist_label
+        self.player_panel.expand_clicked.connect(self.toggle_now_playing)
+        self.player_panel.hide()
 
         self.song_label = self.player_panel.song_label
         self.time_label = self.player_panel.time_label
@@ -326,14 +254,8 @@ class MainWindow(QWidget):
         self.next_button = self.player_panel.next_button
         self.next_button.clicked.connect(self.next_clicked)
 
-        self.lyrics_button = self.player_panel.lyrics_button
-        self.lyrics_button.clicked.connect(self.on_show_lyrics_requested)
-
         self.loop_button = self.player_panel.loop_button
         self.loop_button.clicked.connect(self.on_toggle_loop)
-
-        self.autoplay_button = self.player_panel.autoplay_button
-        self.autoplay_button.clicked.connect(self.on_toggle_autoplay)
 
         self.volume_slider = self.player_panel.volume_slider
         self.volume_slider.valueChanged.connect(self.volume_changed)
@@ -348,15 +270,15 @@ class MainWindow(QWidget):
     def _apply_styles(self):
         self.setStyleSheet("""
         QWidget {
-            background-color: #0b0b0b;
+            background-color: #030303;
             color: #e6e6e6;
-            font-family: "Segoe UI", system-ui, -apple-system;
+            font-family: "Segoe UI", "Inter", system-ui, -apple-system;
             font-size: 13px;
         }
 
         #top_bar {
             background: #0f0f0f;
-            border-bottom: 1px solid #1f1f1f;
+            border-bottom: 1px solid #1a1a1a;
         }
 
         #logo_label {
@@ -366,30 +288,20 @@ class MainWindow(QWidget):
         }
 
         QLineEdit {
-            background: #1a1a1a;
+            background: #121212;
             border: 1px solid #2a2a2a;
-            border-radius: 19px;
-            padding: 8px 16px;
+            border-radius: 22px;
+            padding: 8px 20px;
             color: #e6e6e6;
         }
         QLineEdit:focus {
-            border: 1px solid #FF0000;
+            border: 1px solid rgba(255,255,255,0.4);
+            background: #1a1a1a;
         }
 
         #sidebar {
             background: #0f0f0f;
-            border-right: 1px solid #1f1f1f;
-        }
-
-        #sidebar QPushButton {
-            text-align: left;
-            padding-left: 16px;
-            border: none;
-            border-radius: 6px;
-            font-weight: 500;
-        }
-        #sidebar QPushButton:hover {
-            background: rgba(255,255,255,0.05);
+            border-right: 1px solid #1a1a1a;
         }
 
         #right_panel {
@@ -569,17 +481,15 @@ class MainWindow(QWidget):
             border: none;
         }
         #results_list::item {
-            background: #0f0f0f;
-            border: 1px solid #1a1a1a;
-            border-radius: 8px;
-            margin: 4px 0;
+            background: transparent;
+            border-radius: 6px;
+            margin: 1px 0;
         }
         #results_list::item:selected {
-            border-color: #FF0000;
-            background: rgba(255,0,0,0.05);
+            background: rgba(255,255,255,0.08);
         }
         #results_list::item:hover {
-            background: #151515;
+            background: rgba(255,255,255,0.05);
         }
 
         #lyrics_list {
@@ -613,44 +523,20 @@ class MainWindow(QWidget):
         }
         """)
 
-    def _placeholder_cover_pixmap(self, size):
+    def _placeholder_cover_pixmap(self, size=56):
         return self.icon_library.pixmap(size, size)
 
-    def _make_track_item_widget(self, song, is_current=False):
-        w = QWidget()
-        layout = QHBoxLayout(w)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(12)
+    def update_cover_art(self, song):
+        url = get_thumbnail_url(song)
+        if url:
+            def _on_thumb(px):
+                self.cover_label.setPixmap(scale_cover(px, 56))
+                self.now_playing_panel.set_cover(px)
+            self.thumbnail_cache.request(url, _on_thumb)
+        else:
+            self.cover_label.setPixmap(self._placeholder_cover_pixmap(56))
+            self.now_playing_panel.set_cover(QPixmap())
 
-        thumb = QLabel()
-        thumb.setFixedSize(56, 56)
-        thumb.setPixmap(self._placeholder_cover_pixmap(56))
-        thumb.setScaledContents(True)
-        thumb.setStyleSheet("border-radius: 6px; background: #1a1a1a;")
-
-        meta_layout = QVBoxLayout()
-        meta_layout.setSpacing(4)
-
-        title = QLabel(song.get('title', 'Desconocido'))
-        title.setStyleSheet("font-weight: 600; font-size: 13px;")
-        title.setWordWrap(False)
-
-        artists = song.get('artists', [])
-        artist_text = ", ".join([a.get('name', '') for a in artists]) if artists else "Desconocido"
-        artist = QLabel(artist_text)
-        artist.setStyleSheet("color: #999; font-size: 12px;")
-        artist.setWordWrap(False)
-
-        meta_layout.addWidget(title)
-        meta_layout.addWidget(artist)
-
-        layout.addWidget(thumb)
-        layout.addLayout(meta_layout, stretch=1)
-
-        if is_current:
-            w.setStyleSheet("background: rgba(255,0,0,0.08); border-radius: 8px;")
-
-        return w
 
     # ===== MÉTODOS DE ACTUALIZACIÓN DE COLA MEJORADOS =====
 
@@ -669,12 +555,12 @@ class MainWindow(QWidget):
         for i, song in enumerate(queue):
             is_current = (i == current_index)
             item_widget = ImprovedQueueItem(song, i, is_current)
-
-            # Conectar señales
             item_widget.play_clicked.connect(self._on_queue_item_play_clicked)
             item_widget.remove_clicked.connect(self._on_queue_item_remove_clicked)
-
             self.queue_layout.insertWidget(i, item_widget)
+            url = get_thumbnail_url(song)
+            if url:
+                self.thumbnail_cache.request(url, item_widget.set_thumbnail)
 
         # Scroll a la canción actual
         if 0 <= current_index < len(queue):
@@ -705,31 +591,23 @@ class MainWindow(QWidget):
 
 
     def show_home(self, sections):
-        self.results_list.clear()
+        self.home_panel.show_sections(sections, self.thumbnail_cache)
+        self.results_panel.hide()
+        self.library_browser.hide()
+        self.now_playing_panel.hide()
+        self.library_panel.hide()
+        self.player_panel.set_expanded(False)
+        self.home_panel.show()
+        self.sidebar.set_active("Inicio")
 
-        for title, items in sections:
-            # título de sección
-            header = QListWidgetItem(f" {title}")
-            header.setFlags(header.flags() & ~Qt.ItemIsSelectable)
-            self.results_list.addItem(header)
-
-            # contenido
-            for item in items:
-                w = QWidget()
-                layout = QHBoxLayout(w)
-                layout.setContentsMargins(10, 6, 10, 6)
-
-                label = QLabel(item["title"])
-                label.setStyleSheet("font-size:14px; font-weight:600;")
-
-                layout.addWidget(label)
-                layout.addStretch()
-
-                name = item["title"]
-                q = QListWidgetItem()
-                q.setSizeHint(QSize(0, 44))
-                self.results_list.addItem(q)
-                self.results_list.setItemWidget(q, w)
+    def show_library_browser(self):
+        self.home_panel.hide()
+        self.results_panel.hide()
+        self.now_playing_panel.hide()
+        self.library_panel.hide()
+        self.player_panel.set_expanded(False)
+        self.library_browser.show()
+        self.sidebar.set_active("Biblioteca")
 
     def on_explore_clicked(self):
         print("Explorar clickeado")
@@ -738,9 +616,7 @@ class MainWindow(QWidget):
             self.on_search("top hits")
 
     def on_library_clicked(self):
-        print("Biblioteca clickeado")
-        # Mover al tab de biblioteca del panel derecho
-        self.right_tabs.setCurrentIndex(0)
+        pass  # handled via sidebar.library_requested → app_controller
 
     def setup_quit_shortcut(self):
         quit_action = QAction("Salir", self)
@@ -787,20 +663,55 @@ class MainWindow(QWidget):
             self.on_result_highlighted(self.results_list.currentRow())
 
     def update_results(self, results):
+        self.home_panel.hide()
+        self.library_browser.hide()
+        self.now_playing_panel.hide()
+        self.library_panel.hide()
+        self.player_panel.set_expanded(False)
+        self.results_panel.show()
+        self.sidebar.set_active("Explorar")
         self.results_list.clear()
         for r in results:
             item = QListWidgetItem()
             item.setSizeHint(QSize(0, 76))
-            widget = self._make_track_item_widget(r)
+            widget = TrackResultItem(r)
             self.results_list.addItem(item)
             self.results_list.setItemWidget(item, widget)
+            url = get_thumbnail_url(r)
+            if url:
+                self.thumbnail_cache.request(url, widget.set_thumbnail)
 
     def play_selected_song_now(self):
         if self.results_list.currentRow() >= 0 and self.on_select_song:
             self.on_select_song(self.results_list.currentRow())
 
+    def toggle_now_playing(self):
+        if self.now_playing_panel.isVisible():
+            self.now_playing_panel.hide()
+            self.library_panel.hide()
+            self.home_panel.show()
+            self.player_panel.set_expanded(False)
+        else:
+            self.home_panel.hide()
+            self.results_panel.hide()
+            self.library_browser.hide()
+            self.now_playing_panel.show()
+            self.library_panel.show()
+            self.player_panel.set_expanded(True)
+
+    def show_similar_songs(self, songs):
+        self.library_panel.show_similar_songs(songs, self.thumbnail_cache)
+
+    def update_now_playing(self, title: str, artist: str):
+        self.song_label.setText(title)
+        self.artist_label.setText(artist)
+        if not self.player_panel.isVisible():
+            self.player_panel.show()
+
     def update_song_info(self, text):
         self.song_label.setText(f" {text}")
+        if not self.player_panel.isVisible():
+            self.player_panel.show()
 
     def toggle_play_clicked(self):
         if self.on_toggle_play:
@@ -818,7 +729,7 @@ class MainWindow(QWidget):
         self.loop_button.setToolTip(tooltips.get(mode, "Repetir"))
 
     def update_autoplay_button_icon(self, enabled):
-        self.autoplay_button.setIcon(self.icon_autoplay_on if enabled else self.icon_autoplay_off)
+        pass  # autoplay button removed — queue auto-extends
 
     def volume_changed(self, val):
         if self.on_volume_change:
@@ -890,7 +801,6 @@ class MainWindow(QWidget):
             item = QListWidgetItem(line)
             item.setTextAlignment(Qt.AlignCenter)
             self.lyrics_list_widget.addItem(item)
-        self.lyrics_button.setIcon(qta.icon('fa5s.microphone-alt', color='#FF0000'))
 
     def set_lyrics_message(self, message, switch_focus=False):
         self.lyrics_list_widget.clear()
@@ -899,7 +809,6 @@ class MainWindow(QWidget):
         self.lyrics_list_widget.addItem(item)
         if switch_focus:
             self.right_tabs.setCurrentWidget(self.lyrics_tab)
-        self.lyrics_button.setIcon(qta.icon('fa5s.microphone-alt', color='gray'))
 
     def highlight_lyric_index(self, index):
         if 0 <= index < self.lyrics_list_widget.count():
@@ -932,16 +841,8 @@ class MainWindow(QWidget):
                 self, 'Iniciar Sesión', instructions
             )
             if ok and text:
-                headers_list = []
-                unwrapped = re.sub(r'[\^\\]\s*\n', ' ', text).replace('\n', ' ')
-                h_matches = re.findall(r"-H\s+(['\"])(.*?)\1", unwrapped)
-                if h_matches:
-                    headers_list.extend([m[1] for m in h_matches])
-                c_match = re.search(r"(--cookie|-b)\s+(['\"])(.*?)\2", unwrapped)
-                if c_match:
-                    headers_list.append(f"Cookie: {c_match.group(3)}")
                 if self.on_login_requested:
-                    self.on_login_requested("\n".join(headers_list))
+                    self.on_login_requested(parse_curl_headers(text))
 
     def update_auth_status(self, is_authenticated):
         self.is_logged_in = is_authenticated
