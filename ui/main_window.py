@@ -828,21 +828,8 @@ class MainWindow(QWidget):
             if reply == QMessageBox.Yes and self.on_logout_requested:
                 self.on_logout_requested()
         else:
-            instructions = """Para iniciar sesión:
-                1. Abre YouTube Music en tu navegador
-                2. Inicia sesión con tu cuenta
-                3. Abre herramientas de desarrollador (F12)
-                4. Ve a "Red" y recarga (Ctrl+Shift+R)
-                5. Filtra por "browse"
-                6. Clic derecho → Copiar como cURL
-                7. Pega el contenido abajo"""
-
-            text, ok = QInputDialog.getMultiLineText(
-                self, 'Iniciar Sesión', instructions
-            )
-            if ok and text:
-                if self.on_login_requested:
-                    self.on_login_requested(parse_curl_headers(text))
+            if self.on_login_requested:
+                self.on_login_requested()
 
     def update_auth_status(self, is_authenticated):
         self.is_logged_in = is_authenticated

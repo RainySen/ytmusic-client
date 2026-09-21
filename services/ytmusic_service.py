@@ -2,8 +2,13 @@ from ytmusicapi import YTMusic
 import os
 import traceback
 import json
+import time
+from hashlib import sha1
 
 AUTH_FILE = "oauth.json"
+
+_YTM_DOMAIN = "https://music.youtube.com"
+_BROWSERS = ["firefox", "chrome", "edge", "brave", "chromium", "opera", "vivaldi", "whale"]
 
 
 class YTMusicService:
@@ -24,6 +29,81 @@ class YTMusicService:
         else:
             self.ytmusic = YTMusic()
             self.is_authenticated = False
+
+    # ── Browser-cookie login ───────────────────────────────────────
+
+    @staticmethod
+    def detect_available_browsers() -> list[str]:
+        """Return browsers that have a valid YouTube session (no crash, SAPISID present)."""
+        import yt_dlp as _ydlp
+        import io, sys
+        available = []
+        for browser in _BROWSERS:
+            try:
+                # Suppress yt-dlp's stderr noise for browsers that fail
+                devnull = open(os.devnull, "w")
+                ydl = _ydlp.YoutubeDL({
+                    "quiet": True, "no_warnings": True,
+                    "cookiesfrombrowser": (browser,),
+                    "logger": type("_L", (), {
+                        "debug": lambda s, m: None,
+                        "warning": lambda s, m: None,
+                        "error": lambda s, m: None,
+                    })(),
+                })
+                jar = ydl.cookiejar
+                cookies = {c.name: c.value for c in jar
+                           if "youtube" in (c.domain or "") or "google" in (c.domain or "")}
+                if cookies.get("SAPISID") or cookies.get("__Secure-3PAPISID"):
+                    available.append(browser)
+            except Exception:
+                pass
+        return available
+
+    def login_from_browser(self, browser: str) -> tuple[bool, str]:
+        """Authenticate using cookies extracted from the given browser. Returns (ok, error_msg)."""
+        try:
+            import yt_dlp as _ydlp
+            ydl = _ydlp.YoutubeDL({"quiet": True, "no_warnings": True, "cookiesfrombrowser": (browser,)})
+            jar = ydl.cookiejar
+
+            cookies = {c.name: c.value for c in jar
+                       if "youtube" in (c.domain or "") or "google" in (c.domain or "")}
+
+            sapisid = cookies.get("__Secure-3PAPISID") or cookies.get("SAPISID", "")
+            if not sapisid:
+                return False, f"No se encontró sesión de YouTube en {browser}."
+
+            cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+            ts = str(int(time.time()))
+            h = sha1()
+            h.update(f"{ts} {sapisid} {_YTM_DOMAIN}".encode())
+            auth_header = f"SAPISIDHASH {ts}_{h.hexdigest()}"
+
+            headers = {
+                "cookie": cookie_str,
+                "x-goog-authuser": "0",
+                "authorization": auth_header,
+                "user-agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+                ),
+                "accept": "*/*",
+                "accept-encoding": "gzip, deflate",
+                "content-type": "application/json",
+                "content-encoding": "gzip",
+                "origin": _YTM_DOMAIN,
+            }
+
+            self.ytmusic = YTMusic(auth=headers)
+            self.ytmusic.get_library_playlists(limit=1)
+            with open(self.AUTH_FILE, "w", encoding="utf-8") as f:
+                json.dump(headers, f, indent=4)
+            self.is_authenticated = True
+            return True, ""
+        except Exception as e:
+            self.is_authenticated = False
+            return False, str(e)
 
     def setup_authentication(self, headers_raw):
         try:
