@@ -16,7 +16,10 @@ class QueueManager(QObject):
         self.queue = []
         self.current_index = -1
         self.loop_mode = self.LOOP_OFF
-        self.autoplay_enabled = False  # Nueva propiedad
+        self.autoplay_enabled = False
+        self.radio_mode = False
+        self.radio_seed = None
+        self.radio_queue_limit = 6
 
     def toggle_autoplay(self):
         """Activa o desactiva el modo de reproducción automática"""
@@ -180,8 +183,53 @@ class QueueManager(QObject):
 
             self.queue_updated.emit()
 
+    def set_radio_queue(self, seed_song, recommendations=None):
+        if not seed_song:
+            return
+
+        self.radio_mode = True
+        self.radio_seed = seed_song.get("videoId")
+        suggestions = recommendations or []
+        unique_items = []
+        seen = set()
+
+        for item in [seed_song, *suggestions]:
+            video_id = item.get("videoId") if isinstance(item, dict) else None
+            if not video_id or video_id in seen:
+                continue
+            unique_items.append(item)
+            seen.add(video_id)
+
+        self.queue = unique_items[:self.radio_queue_limit]
+        self.current_index = 0 if self.queue else -1
+        self.queue_updated.emit()
+        if self.current_index >= 0:
+            self.current_changed.emit(self.current_index)
+
+    def append_radio_recommendations(self, current_song, recommendations=None):
+        if not self.radio_mode or not current_song:
+            return
+
+        suggestions = recommendations or []
+        seen = {song.get("videoId") for song in self.queue if isinstance(song, dict) and song.get("videoId")}
+        for item in suggestions:
+            video_id = item.get("videoId") if isinstance(item, dict) else None
+            if video_id and video_id not in seen:
+                self.queue.append(item)
+                seen.add(video_id)
+                if len(self.queue) >= self.radio_queue_limit:
+                    break
+
+        if self.queue:
+            self.queue_updated.emit()
+
+    def clear_radio_mode(self):
+        self.radio_mode = False
+        self.radio_seed = None
+
     def clear(self):
         current_song = self.get_current()
+        self.clear_radio_mode()
 
         if current_song:
             self.queue = [current_song]

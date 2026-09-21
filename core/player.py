@@ -46,7 +46,7 @@ class Player(QObject):
         self.cache_duration = timedelta(hours=2)
 
         self.fetcher_threads = []
-        self.max_concurrent_fetchers = 5
+        self.max_concurrent_fetchers = 8
         self.pending_video_id = None
 
         self.timer = QTimer()
@@ -120,7 +120,7 @@ class Player(QObject):
         cached_time = self.stream_cache[video_id]['timestamp']
         age = datetime.now() - cached_time
 
-        # CORRECCIÓN: Log cuando el caché expira
+        # Log cuando el caché expira
         if age >= self.cache_duration:
             print(f"[CACHE] Caché expirado para {self.stream_cache[video_id].get('title', video_id)} (edad: {age})")
             return False
@@ -182,14 +182,10 @@ class Player(QObject):
             self.player.play()
             self.is_playing = True
 
-            import time
-            time.sleep(0.3)
             state = self.player.get_state()
-
             if state == vlc.State.Error:
                 print(f"[ERROR] VLC reportó error, el stream probablemente expiró")
                 print(f"[CACHE] Descartando caché y obteniendo nuevo stream...")
-                # Eliminar de caché y reintentar
                 del self.stream_cache[video_id]
                 return self.play(video_id)
 
