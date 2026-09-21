@@ -244,15 +244,23 @@ class AppController:
     def on_queue_updated(self):
         self.window.update_queue(self.queue_manager.get_queue(), self.queue_manager.get_current_index())
 
-    def handle_login(self, headers):
-        if self.service.setup_authentication(headers):
-            self.window.show_auth_success()
-            self.playlists_cache = self.playlist_controller.get_combined_playlists()
-            self.window.update_playlists(self.playlists_cache)
-            self.window.update_auth_status(True)
-        else:
-            self.window.show_auth_error()
-            self.window.update_auth_status(False)
+    def handle_login(self):
+        from ui.login_window import LoginWindow
+        dlg = LoginWindow(self.service, self.window.app_icon, False)
+        dlg.login_success.connect(lambda: self._on_login_success(dlg))
+        dlg.login_skipped.connect(dlg.close)
+        dlg.show()
+
+    def _on_login_success(self, dlg=None):
+        if dlg:
+            try:
+                dlg.close()
+            except Exception:
+                pass
+        self.playlists_cache = self.playlist_controller.get_combined_playlists()
+        self.window.update_playlists(self.playlists_cache)
+        self.window.update_auth_status(True)
+        self.window.show_auth_success()
 
     def handle_logout(self):
         if self.service.logout():
