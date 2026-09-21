@@ -9,306 +9,13 @@ from PySide6.QtCore import Qt, QSize, Signal, QPropertyAnimation, QEasingCurve, 
 from PySide6.QtGui import QIcon, QAction, QKeySequence, QPixmap
 import qtawesome as qta
 
-
-class CollapsibleSection(QWidget):
-
-    def __init__(self, title, parent=None):
-        super().__init__(parent)
-        self.is_collapsed = False
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        header = QWidget()
-        header.setObjectName("section_header")
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(8, 6, 8, 6)
-
-        self.toggle_button = QToolButton()
-        self.toggle_button.setIcon(qta.icon('fa5s.chevron-down', color='white'))
-        self.toggle_button.setFixedSize(20, 20)
-        self.toggle_button.clicked.connect(self.toggle)
-        self.toggle_button.setStyleSheet("border: none; background: transparent;")
-
-        title_label = QLabel(title)
-        title_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-
-        header_layout.addWidget(self.toggle_button)
-        header_layout.addWidget(title_label)
-        header_layout.addStretch()
-
-        self.content = QWidget()
-        self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
-
-        layout.addWidget(header)
-        layout.addWidget(self.content)
-
-    def toggle(self):
-        self.is_collapsed = not self.is_collapsed
-        self.content.setVisible(not self.is_collapsed)
-        icon = 'fa5s.chevron-right' if self.is_collapsed else 'fa5s.chevron-down'
-        self.toggle_button.setIcon(qta.icon(icon, color='white'))
-
-    def add_content(self, widget):
-        self.content_layout.addWidget(widget)
-
-
-class ImprovedQueueItem(QWidget):
-    play_clicked = Signal(int)
-    remove_clicked = Signal(int)
-    drag_started = Signal(int)
-
-    def __init__(self, song, index, is_current=False):
-        super().__init__()
-        self.index = index
-        self.song = song
-        self.is_current = is_current
-        self.drag_start_position = None
-
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(8)
-
-        self.play_indicator = QLabel()
-        if is_current:
-            self.play_indicator.setPixmap(qta.icon('fa5s.volume-up', color='#FF0000').pixmap(14, 14))
-        else:
-            self.play_indicator.setPixmap(qta.icon('fa5s.grip-vertical', color='#666').pixmap(14, 14))
-        self.play_indicator.setFixedWidth(20)
-        self.play_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.play_indicator.setCursor(Qt.OpenHandCursor)
-
-        thumb = QLabel()
-        thumb.setFixedSize(40, 40)
-        thumb.setPixmap(qta.icon('fa5s.music', color='#666').pixmap(40, 40))
-        thumb.setScaledContents(True)
-        thumb.setStyleSheet("border-radius: 4px; background: #1a1a1a;")
-        thumb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(2)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.title_label = QLabel(song.get('title', 'Desconocido'))
-        self.title_label.setStyleSheet("font-weight: 600; font-size: 13px;")
-        self.title_label.setWordWrap(False)
-        self.title_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.title_label.setTextFormat(Qt.PlainText)
-        self.title_label.setTextInteractionFlags(Qt.NoTextInteraction)
-
-        self.full_title = song.get('title', 'Desconocido')
-
-        artist_text = ", ".join([a.get('name', '') for a in song.get('artists', [])]) if song.get(
-            'artists') else "Desconocido"
-        self.artist_label = QLabel(artist_text)
-        self.artist_label.setStyleSheet("color: #999; font-size: 11px;")
-        self.artist_label.setWordWrap(False)
-        self.artist_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.artist_label.setTextInteractionFlags(Qt.NoTextInteraction)
-
-        self.full_artist = artist_text
-
-        info_layout.addWidget(self.title_label)
-        info_layout.addWidget(self.artist_label)
-
-        buttons_container = QWidget()
-        buttons_container.setFixedWidth(64)
-        buttons_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        buttons_layout = QHBoxLayout(buttons_container)
-        buttons_layout.setContentsMargins(0, 0, 0, 0)
-        buttons_layout.setSpacing(4)
-
-        btn_play = QPushButton()
-        btn_play.setIcon(qta.icon('fa5s.play', color='white'))
-        btn_play.setFixedSize(28, 28)
-        btn_play.clicked.connect(lambda: self.play_clicked.emit(self.index))
-        btn_play.setCursor(Qt.PointingHandCursor)
-        btn_play.setStyleSheet("""
-            QPushButton { 
-                border: none; 
-                border-radius: 14px; 
-                background: transparent; 
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.1); }
-        """)
-
-        btn_remove = QPushButton()
-        btn_remove.setIcon(qta.icon('fa5s.times', color='#999'))
-        btn_remove.setFixedSize(28, 28)
-        btn_remove.clicked.connect(lambda: self.remove_clicked.emit(self.index))
-        btn_remove.setCursor(Qt.PointingHandCursor)
-        btn_remove.setStyleSheet("""
-            QPushButton { 
-                border: none; 
-                border-radius: 14px; 
-                background: transparent; 
-            }
-            QPushButton:hover { 
-                background: rgba(255,0,0,0.2);
-            }
-        """)
-
-        buttons_layout.addWidget(btn_play)
-        buttons_layout.addWidget(btn_remove)
-
-        layout.addWidget(self.play_indicator)
-        layout.addWidget(thumb)
-        layout.addLayout(info_layout, stretch=1)
-        layout.addWidget(buttons_container)
-
-        self.setFixedHeight(56)
-
-        bg_color = "rgba(255,0,0,0.08)" if is_current else "transparent"
-        border_color = "rgba(255,0,0,0.3)" if is_current else "transparent"
-        self.setStyleSheet(f"""
-            ImprovedQueueItem {{
-                background: {bg_color};
-                border: 1px solid {border_color};
-                border-radius: 6px;
-            }}
-            ImprovedQueueItem:hover {{
-                background: rgba(255,255,255,0.03);
-            }}
-        """)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            if self.play_indicator.geometry().contains(event.pos()):
-                self.drag_start_position = event.pos()
-                self.play_indicator.setCursor(Qt.ClosedHandCursor)
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if not (event.buttons() & Qt.LeftButton):
-            return
-        if self.drag_start_position is None:
-            return
-        if (event.pos() - self.drag_start_position).manhattanLength() < 10:
-            return
-
-        from PySide6.QtCore import QMimeData
-        from PySide6.QtGui import QDrag
-
-        drag = QDrag(self)
-        mime_data = QMimeData()
-        mime_data.setText(str(self.index))
-        drag.setMimeData(mime_data)
-
-        pixmap = self.grab()
-        drag.setPixmap(pixmap)
-        drag.setHotSpot(event.pos())
-        drag.exec(Qt.MoveAction)
-
-        self.play_indicator.setCursor(Qt.OpenHandCursor)
-        self.drag_start_position = None
-
-    def mouseReleaseEvent(self, event):
-        self.play_indicator.setCursor(Qt.OpenHandCursor)
-        self.drag_start_position = None
-        super().mouseReleaseEvent(event)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        available_width = self.width() - 156
-
-        if available_width > 50:
-            font_metrics = self.title_label.fontMetrics()
-            elided_title = font_metrics.elidedText(self.full_title, Qt.ElideRight, available_width)
-            self.title_label.setText(elided_title)
-
-            elided_artist = font_metrics.elidedText(self.full_artist, Qt.ElideRight, available_width)
-            self.artist_label.setText(elided_artist)
-
-
-class DroppableQueueContainer(QWidget):
-    item_dropped = Signal(int, int)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAcceptDrops(True)
-        self.drag_source_index = -1
-        self.drop_indicator_pos = -1
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasText():
-            event.acceptProposedAction()
-
-    def dragMoveEvent(self, event):
-        if event.mimeData().hasText():
-            pos = event.position().toPoint()
-            self.drop_indicator_pos = self._get_drop_position(pos)
-            self.update()
-            event.acceptProposedAction()
-
-    def dragLeaveEvent(self, event):
-        self.drop_indicator_pos = -1
-        self.update()
-
-    def dropEvent(self, event):
-        if event.mimeData().hasText():
-            try:
-                source_index = int(event.mimeData().text())
-                target_index = self._get_drop_position(event.position().toPoint())
-
-                if source_index != target_index and target_index >= 0:
-                    self.item_dropped.emit(source_index, target_index)
-
-                event.acceptProposedAction()
-            except ValueError:
-                pass
-
-        self.drop_indicator_pos = -1
-        self.update()
-
-    def _get_drop_position(self, pos):
-        layout = self.layout()
-        if not layout:
-            return -1
-
-        count = layout.count() - 1
-
-        for i in range(count):
-            item = layout.itemAt(i)
-            if item and item.widget():
-                widget = item.widget()
-                widget_rect = widget.geometry()
-
-                if widget_rect.contains(pos):
-                    mid_point = widget_rect.top() + widget_rect.height() // 2
-                    if pos.y() < mid_point:
-                        return i
-                    else:
-                        return i + 1
-
-        return count
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-
-        if self.drop_indicator_pos >= 0:
-            from PySide6.QtGui import QPainter, QPen
-            painter = QPainter(self)
-            pen = QPen(Qt.red, 2)
-            painter.setPen(pen)
-
-            layout = self.layout()
-            if layout:
-                count = layout.count() - 1
-
-                if self.drop_indicator_pos < count:
-                    item = layout.itemAt(self.drop_indicator_pos)
-                    if item and item.widget():
-                        y = item.widget().geometry().top()
-                        painter.drawLine(0, y, self.width(), y)
-                elif count > 0:
-                    item = layout.itemAt(count - 1)
-                    if item and item.widget():
-                        y = item.widget().geometry().bottom()
-                        painter.drawLine(0, y, self.width(), y)
+from ui.components.collapsible_section import CollapsibleSection
+from ui.components.queue_widgets import ImprovedQueueItem
+from ui.components.drop_queue_container import DroppableQueueContainer
+from ui.components.top_bar import TopBar
+from ui.components.sidebar import Sidebar
+from ui.components.results_panel import ResultsPanel
+from ui.components.player_panel import PlayerPanel
 
 
 class MainWindow(QWidget):
@@ -317,7 +24,7 @@ class MainWindow(QWidget):
                  on_queue_item_selected, on_login_requested, on_playlist_selected, on_import_playlist, app_icon,
                  on_save_imported_playlist, on_result_highlighted, on_queue_item_moved, on_toggle_loop,
                  on_logout_requested, on_toggle_autoplay, on_show_lyrics_requested, on_home_requested,
-                 on_clear_queue
+                 on_clear_queue, on_save_queue_playlist
                  ):
         super().__init__()
 
@@ -344,6 +51,7 @@ class MainWindow(QWidget):
         self.on_show_lyrics_requested = on_show_lyrics_requested
         self.on_home_requested = on_home_requested
         self.on_clear_queue = on_clear_queue
+        self.on_save_queue_playlist = on_save_queue_playlist
 
         self.is_logged_in = False
         self.app_icon = app_icon
@@ -402,107 +110,43 @@ class MainWindow(QWidget):
         self._apply_styles()
 
     def _create_top_bar(self):
-        top_bar = QWidget()
-        top_bar.setObjectName("top_bar")
-        top_bar.setFixedHeight(60)
-        top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(16, 8, 16, 8)
-
-        logo_label = QLabel("YouTube Music")
-        logo_label.setObjectName("logo_label")
-        logo_label.setFixedWidth(150)
-
-        self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Buscar canción, artista, álbum...")
+        self.top_bar = TopBar(self.icon_search, self.icon_login, self.icon_login_active)
+        self.search_box = self.top_bar.search_box
         self.search_box.returnPressed.connect(self.search_clicked)
-        self.search_box.setFixedHeight(38)
-        self.search_box.setMaximumWidth(500)
-
-        self.search_button = QPushButton()
-        self.search_button.setIcon(self.icon_search)
+        self.search_button = self.top_bar.search_button
         self.search_button.clicked.connect(self.search_clicked)
-        self.search_button.setFixedSize(38, 38)
-        self.search_button.setCursor(Qt.PointingHandCursor)
-
-        self.login_button = QPushButton()
-        self.login_button.setIcon(self.icon_login)
-        self.login_button.setToolTip("Iniciar Sesión")
-        self.login_button.setFixedSize(38, 38)
+        self.login_button = self.top_bar.login_button
         self.login_button.clicked.connect(self.login_clicked)
-        self.login_button.setCursor(Qt.PointingHandCursor)
-
-        top_layout.addWidget(logo_label)
-        top_layout.addStretch()
-        top_layout.addWidget(self.search_box)
-        top_layout.addWidget(self.search_button)
-        top_layout.addSpacing(16)
-        top_layout.addWidget(self.login_button)
-
-        return top_bar
+        self.top_bar.search_requested.connect(self.search_clicked)
+        self.top_bar.login_requested.connect(self.login_clicked)
+        return self.top_bar
 
     def _create_sidebar(self):
-        sidebar = QWidget()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(200)
-        side_layout = QVBoxLayout(sidebar)
-        side_layout.setContentsMargins(8, 16, 8, 8)
-        side_layout.setSpacing(4)
-
-        nav_buttons = [
-            ("Inicio", self.icon_home),
-            ("Explorar", self.icon_explore),
-            ("Biblioteca", self.icon_library),
-        ]
-
-        self.nav_buttons = {}
-
-        for text, icon in nav_buttons:
-            btn = QPushButton(text)
-            btn.setIcon(icon)
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedHeight(40)
-            side_layout.addWidget(btn)
-            self.nav_buttons[text] = btn
-
+        self.sidebar = Sidebar({
+            "home": self.icon_home,
+            "explore": self.icon_explore,
+            "library": self.icon_library,
+            "import": self.icon_import,
+        })
+        self.nav_buttons = self.sidebar.nav_buttons
         self.nav_buttons["Inicio"].clicked.connect(self.on_home_clicked)
         self.nav_buttons["Explorar"].clicked.connect(self.on_explore_clicked)
         self.nav_buttons["Biblioteca"].clicked.connect(self.on_library_clicked)
-
-        side_layout.addSpacing(16)
-
-        import_btn = QPushButton("Importar Playlist")
-        import_btn.setIcon(self.icon_import)
-        import_btn.clicked.connect(self.import_playlist_clicked)
-        import_btn.setCursor(Qt.PointingHandCursor)
-        import_btn.setFixedHeight(40)
-        side_layout.addWidget(import_btn)
-
-        side_layout.addStretch()
-
-        return sidebar
+        self.sidebar.import_button.clicked.connect(self.import_playlist_clicked)
+        self.sidebar.home_requested.connect(self.on_home_clicked)
+        self.sidebar.explore_requested.connect(self.on_explore_clicked)
+        self.sidebar.library_requested.connect(self.on_library_clicked)
+        self.sidebar.import_requested.connect(self.import_playlist_clicked)
+        return self.sidebar
 
     def _create_center_widget(self):
-        center_widget = QWidget()
-        center_layout = QVBoxLayout(center_widget)
-        center_layout.setContentsMargins(16, 16, 16, 16)
-        center_layout.setSpacing(12)
-
-        search_info = QLabel("Resultados de Búsqueda")
-        search_info.setObjectName("search_info")
-        search_info.setStyleSheet("font-weight: bold; font-size: 14px;")
-
-        self.results_list = QListWidget()
-        self.results_list.setObjectName("results_list")
-        self.results_list.setSpacing(8)
+        self.results_panel = ResultsPanel()
+        self.results_list = self.results_panel.results_list
         self.results_list.itemDoubleClicked.connect(self.play_selected_song_now)
         self.results_list.currentItemChanged.connect(self.result_highlighted)
         self.results_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.results_list.customContextMenuRequested.connect(self.show_results_context_menu)
-
-        center_layout.addWidget(search_info)
-        center_layout.addWidget(self.results_list)
-
-        return center_widget
+        return self.results_panel
 
     def _create_improved_right_panel(self):
         right_panel = QWidget()
@@ -564,9 +208,24 @@ class MainWindow(QWidget):
             QPushButton:hover { background: rgba(255,0,0,0.2); }
         """)
 
+        save_queue_btn = QPushButton()
+        save_queue_btn.setIcon(qta.icon('fa5s.save', color='white'))
+        save_queue_btn.setToolTip("Guardar cola como playlist")
+        save_queue_btn.setFixedSize(28, 28)
+        save_queue_btn.clicked.connect(self._save_queue_as_playlist)
+        save_queue_btn.setStyleSheet("""
+            QPushButton { 
+                border: none; 
+                border-radius: 14px; 
+                background: transparent; 
+            }
+            QPushButton:hover { background: rgba(0,255,0,0.15); }
+        """)
+
         queue_header_layout.addWidget(queue_title)
         queue_header_layout.addWidget(self.queue_count_label)
         queue_header_layout.addStretch()
+        queue_header_layout.addWidget(save_queue_btn)
         queue_header_layout.addWidget(clear_queue_btn)
 
         library_layout.addWidget(queue_header)
@@ -618,127 +277,68 @@ class MainWindow(QWidget):
             if self.on_clear_queue:
                 self.on_clear_queue()
 
+    def _save_queue_as_playlist(self):
+        if not self.on_save_queue_playlist:
+            return
+
+        base_title = "Mi Cola"
+        title, ok = QInputDialog.getText(
+            self,
+            "Guardar cola como playlist",
+            "Nombre de la playlist:",
+            text=base_title
+        )
+
+        if ok and title.strip():
+            self.on_save_queue_playlist(title.strip())
+
     def _create_player_widget(self):
-        player_widget = QWidget()
-        player_widget.setObjectName("player_widget")
-        player_widget.setFixedHeight(170)
-        player_layout = QVBoxLayout(player_widget)
-        player_layout.setContentsMargins(16, 12, 16, 12)
-        player_layout.setSpacing(8)
+        self.player_panel = PlayerPanel({
+            "play": self.icon_play,
+            "pause": self.icon_pause,
+            "next": self.icon_next,
+            "prev": self.icon_prev,
+            "volume": self.icon_volume,
+            "lyrics": self.icon_lyrics,
+            "loop_off": self.icon_loop_off,
+            "loop_queue": self.icon_loop_queue,
+            "loop_song": self.icon_loop_song,
+            "autoplay_off": self.icon_autoplay_off,
+            "autoplay_on": self.icon_autoplay_on,
+            "library": self.icon_library,
+        })
 
-        # Fila de info
-        info_row = QHBoxLayout()
-        self.cover_label = QLabel()
-        self.cover_label.setFixedSize(56, 56)
+        self.cover_label = self.player_panel.cover_label
         self.cover_label.setPixmap(self._placeholder_cover_pixmap(56))
-        self.cover_label.setScaledContents(True)
-        self.cover_label.setStyleSheet("border-radius: 6px; background: #1a1a1a;")
 
-        self.song_label = QLabel("Sin reproducción")
-        self.song_label.setObjectName("song_label")
-        self.song_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-        info_row.addWidget(self.cover_label)
-        info_row.addSpacing(12)
-        info_row.addWidget(self.song_label)
-        info_row.addStretch()
-
-        # Progreso
-        progress_layout = QHBoxLayout()
-        self.time_label = QLabel("0:00")
-        self.time_label.setFixedWidth(45)
-        self.time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-        self.progress_slider = QSlider(Qt.Horizontal)
-        self.progress_slider.setRange(0, 1000)
+        self.song_label = self.player_panel.song_label
+        self.time_label = self.player_panel.time_label
+        self.progress_slider = self.player_panel.progress_slider
         self.progress_slider.sliderMoved.connect(self.seek_position)
+        self.total_time_label = self.player_panel.total_time_label
 
-        self.total_time_label = QLabel("0:00")
-        self.total_time_label.setFixedWidth(45)
-
-        progress_layout.addWidget(self.time_label)
-        progress_layout.addWidget(self.progress_slider, stretch=1)
-        progress_layout.addWidget(self.total_time_label)
-
-        # Controles
-        ctrl_layout = QHBoxLayout()
-
-        # Controles izquierdos
-        left_controls = QHBoxLayout()
-        left_controls.addStretch()
-
-        self.prev_button = QPushButton()
-        self.prev_button.setIcon(self.icon_prev)
+        self.prev_button = self.player_panel.prev_button
         self.prev_button.clicked.connect(self.previous_clicked)
-        self.prev_button.setFixedSize(42, 42)
-        self.prev_button.setCursor(Qt.PointingHandCursor)
 
-        self.play_button = QPushButton()
-        self.play_button.setIcon(self.icon_play)
+        self.play_button = self.player_panel.play_button
         self.play_button.clicked.connect(self.toggle_play_clicked)
-        self.play_button.setFixedSize(52, 52)
-        self.play_button.setCursor(Qt.PointingHandCursor)
-        self.play_button.setObjectName("play_button")
 
-        self.next_button = QPushButton()
-        self.next_button.setIcon(self.icon_next)
+        self.next_button = self.player_panel.next_button
         self.next_button.clicked.connect(self.next_clicked)
-        self.next_button.setFixedSize(42, 42)
-        self.next_button.setCursor(Qt.PointingHandCursor)
 
-        left_controls.addWidget(self.prev_button)
-        left_controls.addWidget(self.play_button)
-        left_controls.addWidget(self.next_button)
-        left_controls.addStretch()
-
-        # Controles derechos
-        right_controls = QHBoxLayout()
-
-        self.lyrics_button = QPushButton()
-        self.lyrics_button.setIcon(self.icon_lyrics)
-        self.lyrics_button.setToolTip("Ver letra")
+        self.lyrics_button = self.player_panel.lyrics_button
         self.lyrics_button.clicked.connect(self.on_show_lyrics_requested)
-        self.lyrics_button.setFixedSize(36, 36)
-        self.lyrics_button.setCursor(Qt.PointingHandCursor)
 
-        self.loop_button = QPushButton()
-        self.loop_button.setIcon(self.icon_loop_off)
-        self.loop_button.setToolTip("Repetir")
+        self.loop_button = self.player_panel.loop_button
         self.loop_button.clicked.connect(self.on_toggle_loop)
-        self.loop_button.setFixedSize(36, 36)
-        self.loop_button.setCursor(Qt.PointingHandCursor)
 
-        self.autoplay_button = QPushButton()
-        self.autoplay_button.setIcon(self.icon_autoplay_off)
-        self.autoplay_button.setToolTip("Autoplay")
+        self.autoplay_button = self.player_panel.autoplay_button
         self.autoplay_button.clicked.connect(self.on_toggle_autoplay)
-        self.autoplay_button.setFixedSize(36, 36)
-        self.autoplay_button.setCursor(Qt.PointingHandCursor)
 
-        vol_icon = QLabel()
-        vol_icon.setPixmap(self.icon_volume.pixmap(20, 20))
-
-        self.volume_slider = QSlider(Qt.Horizontal)
-        self.volume_slider.setRange(0, 100)
-        self.volume_slider.setValue(50)
-        self.volume_slider.setFixedWidth(120)
+        self.volume_slider = self.player_panel.volume_slider
         self.volume_slider.valueChanged.connect(self.volume_changed)
 
-        right_controls.addWidget(self.lyrics_button)
-        right_controls.addWidget(self.loop_button)
-        right_controls.addWidget(self.autoplay_button)
-        right_controls.addSpacing(12)
-        right_controls.addWidget(vol_icon)
-        right_controls.addWidget(self.volume_slider)
-
-        ctrl_layout.addLayout(left_controls, stretch=3)
-        ctrl_layout.addLayout(right_controls, stretch=2)
-
-        player_layout.addLayout(info_row)
-        player_layout.addLayout(progress_layout)
-        player_layout.addLayout(ctrl_layout)
-
-        return player_widget
+        return self.player_panel
 
     def _on_queue_item_dropped(self, source_index, target_index):
         print(f"[DRAG] Moviendo item de {source_index} a {target_index}")
