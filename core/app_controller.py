@@ -2,6 +2,8 @@ import json
 import os
 import re
 
+from PySide6.QtCore import QTimer
+
 from core.music_controller import MusicController
 from core.playlist_controller import PlaylistController
 
@@ -37,21 +39,27 @@ class AppController:
         self.login_window = login_window
 
     def save_state_on_exit(self):
-        print("[STATE] Guardando estado...")
+        if not (self.queue_manager and self.player):
+            return
         try:
-            if self.queue_manager and self.player:
-                queue = self.queue_manager.get_queue()
-                current_index = self.queue_manager.get_current_index()
-                stream_cache = self.player.get_stream_cache_for_saving()
-                state_data = {
-                    "queue": queue,
-                    "current_index": current_index,
-                    "stream_cache": stream_cache,
-                }
-                with open(self.STATE_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(state_data, f, indent=2, ensure_ascii=False)
+            queue = self.queue_manager.get_queue()
+            current_index = self.queue_manager.get_current_index()
+            stream_cache = self.player.get_stream_cache_for_saving()
+            state_data = {
+                "queue": queue,
+                "current_index": current_index,
+                "stream_cache": stream_cache,
+            }
+            with open(self.STATE_FILE, 'w', encoding='utf-8') as f:
+                json.dump(state_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"[STATE] Error: {e}")
+            log_path = os.path.join(self.base_dir, "state_error.log")
+            try:
+                with open(log_path, 'a', encoding='utf-8') as lf:
+                    import traceback
+                    lf.write(f"\n--- save_state_on_exit error ---\n{traceback.format_exc()}\n")
+            except Exception:
+                pass
 
     def handle_result_highlighted(self, index):
         if 0 <= index < len(self.results_cache):
@@ -82,6 +90,9 @@ class AppController:
                 self.queue_manager.clear_radio_mode()
                 self.start_radio_from_song(song)
                 return
+            if song.get("playlistId"):
+                self.playlist_controller.handle_playlist_selected_by_id(song['playlistId'])
+                return
             self.music_controller.play_song(self.queue_manager.play_now(song))
             self.music_controller.preload_next_songs(5)
 
@@ -105,6 +116,9 @@ class AppController:
 
         self.queue_manager.autoplay_enabled = True
         self.queue_manager.autoplay_mode_changed.emit(True)
+
+        if recommendations:
+            self.window.show_similar_songs(recommendations)
 
     def handle_add_to_queue(self, index):
         if 0 <= index < len(self.results_cache):
@@ -172,30 +186,60 @@ class AppController:
             s = self.queue_manager.get_current()
             if s:
                 self.music_controller.play_song(s)
+            return
+
+        queue = self.queue_manager.get_queue()
+        current_index = self.queue_manager.get_current_index()
+        songs_remaining = len(queue) - current_index - 1
+
+        # Auto-extend queue when ≤ 1 song remains after current
+        if songs_remaining <= 1:
+            self._extend_queue_async()
+
+        next_song = self.queue_manager.next()
+        if next_song:
+            self.music_controller.play_song(next_song)
+            self.music_controller.preload_next_songs(3)
         else:
-            if self.queue_manager.should_autoplay():
-                current_song = self.queue_manager.get_current()
-                if self.queue_manager.radio_mode and current_song:
-                    next_song = self.queue_manager.next()
-                    if next_song:
-                        self.music_controller.play_song(next_song)
-                        self.music_controller.preload_next_songs(3)
-                        if self.queue_manager.get_current_index() >= len(self.queue_manager.get_queue()) - 2:
-                            recommendations = self.service.get_song_recommendations(current_song["videoId"], 3)
-                            self.queue_manager.append_radio_recommendations(current_song, recommendations)
-                            for item in self.queue_manager.get_queue()[self.queue_manager.get_current_index() + 1:]:
-                                if item.get("videoId"):
-                                    self.player.preload_stream(item["videoId"])
-                        return
-                self.playlist_controller.handle_fetch_and_play_recommendation()
-            else:
-                s = self.queue_manager.next()
-                if s:
-                    self.music_controller.play_song(s)
-                    self.music_controller.preload_next_songs(5)
-                else:
-                    self.window.update_song_info("Cola terminada")
-                    self.window.update_play_button_icon(False)
+            # Queue was empty — wait for _extend_queue_async to finish
+            self.window.update_play_button_icon(False)
+
+    def _extend_queue_async(self):
+        """Fetch a recommendation based on the last song and append to queue."""
+        import threading
+        from PySide6.QtCore import QTimer
+
+        queue = self.queue_manager.get_queue()
+        seed = queue[-1] if queue else self.queue_manager.get_current()
+        if not seed or not seed.get("videoId"):
+            return
+
+        def _worker():
+            try:
+                recs = self.service.get_song_recommendations(seed["videoId"], 2)
+                if not recs:
+                    return
+                existing_ids = {s.get("videoId") for s in self.queue_manager.get_queue()}
+                for rec in recs:
+                    if rec.get("videoId") and rec["videoId"] not in existing_ids:
+                        def _append(r=rec):
+                            try:
+                                self.queue_manager.add_song(r)
+                                if not self.player.is_playing:
+                                    s = self.queue_manager.next()
+                                    if s:
+                                        self.music_controller.play_song(s)
+                            except RuntimeError:
+                                pass
+                        try:
+                            QTimer.singleShot(0, _append)
+                        except RuntimeError:
+                            pass
+                        break
+            except Exception:
+                pass
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def on_queue_updated(self):
         self.window.update_queue(self.queue_manager.get_queue(), self.queue_manager.get_current_index())
@@ -244,12 +288,12 @@ class AppController:
                 self.on_queue_updated()
                 idx = self.queue_manager.get_current_index()
                 if idx >= 0:
-                    self.window.queue_list.setCurrentRow(idx)
                     s = self.queue_manager.get_current()
                     if s:
                         self.window.update_song_info(f"{s['title']} - {s['artists'][0]['name']}")
             except Exception:
                 pass
+        QTimer.singleShot(200, self.handle_home)
 
     def handle_home(self):
         home_raw = self.service.get_home()
@@ -262,6 +306,154 @@ class AppController:
                 parsed_sections.append((title, content))
 
         self.window.show_home(parsed_sections)
+
+    def handle_home_item_selected(self, item):
+        if item.get('videoId'):
+            self.start_radio_from_song(item)
+        elif item.get('playlistId'):
+            self.playlist_controller.handle_playlist_selected_by_id(item['playlistId'])
+
+    def handle_show_library(self):
+        self.window.show_library_browser()
+        self._load_library_playlists()
+
+    def handle_library_chip_selected(self, chip):
+        if chip == "Playlists":
+            self._load_library_playlists()
+        elif chip == "Canciones":
+            self._load_library_songs()
+        elif chip == "Artistas":
+            self._load_library_artists()
+
+    def handle_library_playlist_selected(self, playlist):
+        pid = playlist.get('playlistId')
+        src = playlist.get('source', 'ytmusic')
+        if src in ('local', 'imported', 'user_created'):
+            data = self.playlist_manager.get_playlist(pid)
+        else:
+            data = self.service.get_playlist_songs(pid)
+        if data and 'tracks' in data:
+            self.queue_manager.clear()
+            for s in data['tracks']:
+                self.queue_manager.add_song(s)
+            self.music_controller.play_song(self.queue_manager.jump_to(0))
+            self.music_controller.preload_next_songs(5)
+
+    def handle_library_song_selected(self, song):
+        if song.get('videoId'):
+            self.start_radio_from_song(song)
+
+    def handle_similar_filter(self, chip):
+        current = self.queue_manager.get_current()
+        if not current:
+            return
+        title = current.get('title', '')
+        artists = current.get('artists', [{}])
+        artist = artists[0].get('name', '') if artists else ''
+        query_base = f"{title} {artist}".strip()
+
+        if chip == "Canciones":
+            songs = self.service.get_song_recommendations(current.get('videoId', ''), 12) or []
+            self.window.show_similar_songs(songs)
+        elif chip == "Mixes":
+            raw = self.service.search(f"{query_base} mix", filter="playlists") or []
+            items = [self._normalize_pl(r) for r in raw if self._pl_id(r)]
+            self.window.show_similar_songs(items[:12])
+        elif chip == "Playlists":
+            raw = self.service.search(f"playlist {query_base}", filter="playlists") or []
+            items = [self._normalize_pl(r) for r in raw if self._pl_id(r)]
+            self.window.show_similar_songs(items[:12])
+
+    def _load_library_playlists(self):
+        playlists = self.playlist_controller.get_combined_playlists()
+        self.window.library_browser.show_playlists(playlists, self.window.thumbnail_cache)
+
+    def _load_library_songs(self):
+        songs = self.service.get_library_songs()
+        if not songs:
+            songs = self._get_local_songs()
+        self.window.library_browser.show_songs(songs, self.window.thumbnail_cache)
+
+    def _load_library_artists(self):
+        artists = self._get_local_artists()
+        self.window.library_browser.show_artists(artists, self.window.thumbnail_cache)
+
+    def _get_local_songs(self):
+        seen = set()
+        songs = []
+        for p in self.playlist_manager.get_all_playlists():
+            for t in p.get('tracks', []):
+                vid = t.get('videoId')
+                if vid and vid not in seen:
+                    seen.add(vid)
+                    songs.append(t)
+        return songs
+
+    def _get_local_artists(self):
+        artist_map = {}
+        for p in self.playlist_manager.get_all_playlists():
+            for t in p.get('tracks', []):
+                for a in t.get('artists', []):
+                    name = a.get('name', '')
+                    if name:
+                        if name not in artist_map:
+                            artist_map[name] = {
+                                'name': name, 'count': 0,
+                                'thumbnails': t.get('thumbnails', [])
+                            }
+                        artist_map[name]['count'] += 1
+        return sorted(artist_map.values(), key=lambda x: -x['count'])
+
+    def handle_mood_selected(self, mood):
+        if mood == "Todos":
+            self.handle_home()
+            return
+
+        sections = []
+
+        # Songs section — compact grid
+        songs_raw = self.service.search(f"{mood} canciones", filter="songs")
+        songs = [
+            {
+                'type': 'song',
+                'videoId': s.get('videoId', ''),
+                'title': s.get('title', ''),
+                'artists': s.get('artists', []),
+                'thumbnails': s.get('thumbnails', []),
+            }
+            for s in (songs_raw or []) if s.get('videoId')
+        ]
+        if songs:
+            sections.append((f"Canciones — {mood}", songs[:12]))
+
+        # Mixes section — cards
+        mixes_raw = self.service.search(f"{mood} mix", filter="playlists")
+        mixes = [self._normalize_pl(r) for r in (mixes_raw or []) if self._pl_id(r)]
+        if mixes:
+            sections.append(("Mixes para ti", mixes[:10]))
+
+        # Playlists section — cards
+        playlists_raw = self.service.search(f"playlist {mood}", filter="playlists")
+        playlists = [self._normalize_pl(r) for r in (playlists_raw or []) if self._pl_id(r)]
+        if playlists:
+            sections.append((f"Playlists • {mood}", playlists[:10]))
+
+        self.window.show_home(sections)
+
+    def _pl_id(self, r):
+        pid = r.get('playlistId', '')
+        if not pid:
+            bid = r.get('browseId', '')
+            pid = bid[2:] if bid.startswith('VL') else bid
+        return pid
+
+    def _normalize_pl(self, r):
+        return {
+            'type': 'playlist',
+            'playlistId': self._pl_id(r),
+            'title': r.get('title', ''),
+            'thumbnails': r.get('thumbnails', []),
+        }
 
     def on_stream_ready(self, video_id, title):
         self.music_controller.on_stream_ready(video_id, title)

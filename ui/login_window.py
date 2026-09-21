@@ -1,6 +1,5 @@
 # ui/login_window.py
 
-import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QMessageBox, QInputDialog
@@ -8,6 +7,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
+
+from utils import parse_curl_headers
 
 
 class LoginWindow(QWidget):
@@ -20,17 +21,17 @@ class LoginWindow(QWidget):
     login_success = Signal()
     login_skipped = Signal()
 
-    def __init__(self, service, app_icon, is_authenticated):  # <--- CAMBIO AQUÍ
+    def __init__(self, service, app_icon, is_authenticated):
         super().__init__()
         self.service = service
         self.app_icon = app_icon
-        self.is_authenticated = is_authenticated  # <--- CAMBIO AQUÍ
+        self.is_authenticated = is_authenticated
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle("Bienvenido a YTMusic Client")
         self.setWindowIcon(self.app_icon)
-        self.setFixedSize(400, 450)  # Tamaño fijo para la ventana de login
+        self.setFixedSize(400, 450)
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignCenter)
@@ -56,7 +57,7 @@ class LoginWindow(QWidget):
         credits_label.setStyleSheet("font-size: 14px; color: #b3b3b3;")
         layout.addWidget(credits_label)
 
-        layout.addStretch(1)  # Espaciador
+        layout.addStretch(1)
 
         # 4. Botón de Iniciar Sesión
         self.login_button = QPushButton()
@@ -84,40 +85,27 @@ class LoginWindow(QWidget):
         """)
         layout.addWidget(self.skip_button)
 
-        # --- INICIO DE LA NUEVA LÓGICA ---
-        # Revisa si el usuario ya está autenticado
         if self.is_authenticated:
-            self.login_button.hide()  # Oculta el botón de "Iniciar Sesión"
-            self.skip_button.setText("Continuar")  # Cambia el texto del botón
-            self.skip_button.setDefault(True)  # Hace que 'Enter' presione este botón
+            self.login_button.hide()
+            self.skip_button.setText("Continuar")
+            self.skip_button.setDefault(True)
         else:
             self.login_button.setDefault(True)
-        # --- FIN DE LA NUEVA LÓGICA ---
 
-        # Estilo de la ventana
         self.setStyleSheet("background-color: #060d0e;")
 
     def start_login(self):
-        """
-        Muestra el diálogo para obtener las cabeceras e intenta autenticarse.
-        """
         headers_raw = self.get_login_headers()
         if headers_raw:
-            # Llama al servicio para intentar el login
             success = self.service.setup_authentication(headers_raw)
-
             if success:
                 QMessageBox.information(self, "Éxito", "¡Inicio de sesión completado!")
-                self.login_success.emit()  # Avisa a app.py que el login fue exitoso
+                self.login_success.emit()
             else:
                 QMessageBox.warning(self, "Error",
                                     "No se pudo completar el inicio de sesión. Por favor, verifica las cabeceras e inténtalo de nuevo.")
-        # Si el usuario cancela, simplemente no hace nada y se queda en esta ventana.
 
     def get_login_headers(self):
-        """
-        Muestra el QInputDialog con las instrucciones.
-        """
         instructions = """
             Para iniciar sesión, sigue estos pasos con atención:
 
@@ -134,19 +122,5 @@ class LoginWindow(QWidget):
         text, ok = QInputDialog.getMultiLineText(self, 'Iniciar Sesión - Obtener Credenciales', instructions, text="")
 
         if ok and text:
-            # Esta es la misma lógica de parseo que ya tenías
-            unwrapped_text = re.sub(r'[\^\\]\s*\n', ' ', text)
-            unwrapped_text = unwrapped_text.replace('\n', ' ')
-            headers_list = []
-
-            h_matches = re.findall(r"-H\s+(['\"])(.*?)\1", unwrapped_text)
-            if h_matches:
-                headers_list.extend([match[1] for match in h_matches])
-
-            cookie_match = re.search(r"(--cookie|-b)\s+(['\"])(.*?)\2", unwrapped_text)
-            if cookie_match:
-                cookie_data = cookie_match.group(3)
-                headers_list.append(f"Cookie: {cookie_data}")
-
-            return "\n".join(headers_list)
+            return parse_curl_headers(text) or None
         return None
