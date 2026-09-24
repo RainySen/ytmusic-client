@@ -1,228 +1,185 @@
-import threading
-
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton,
-    QMessageBox, QInputDialog, QFrame,
-)
-from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from utils import parse_curl_headers
+from ui import theme
+from ui.components import dialogs
 
 _BROWSER_ICONS = {
-    "firefox":  "fa5b.firefox-browser",
-    "chrome":   "fa5b.chrome",
-    "edge":     "fa5b.edge",
-    "brave":    "fa5b.brave",
-    "opera":    "fa5b.opera",
-    "vivaldi":  "fa5s.globe",
+    "firefox": "fa5b.firefox-browser",
+    "chrome": "fa5b.chrome",
+    "edge": "fa5b.edge",
+    "brave": "fa5b.brave",
+    "opera": "fa5b.opera",
+    "vivaldi": "fa5s.globe",
     "chromium": "fa5b.chrome",
-    "whale":    "fa5s.globe",
+    "whale": "fa5s.globe",
 }
 
+_MANUAL_INSTRUCTIONS = (
+    "Pega lo que copies de tu navegador con la sesión de music.youtube.com iniciada. Sirve cualquiera de estas opciones:\n\n"
+    "• Chrome, Edge, Opera GX, Brave: F12 → Red (Network) → recarga con Ctrl+R → filtra por «browse» → clic "
+    "derecho en la petición → Copiar → Copiar como cURL (bash o cmd).\n\n"
+    "• Firefox: usa el botón «Firefox» de la pantalla anterior. Si no aparece: F12 → Red → clic derecho en una "
+    "petición a music.youtube.com → Copiar → Copiar como cURL.\n\n"
+    "• Cualquier navegador: exporta las cookies de music.youtube.com con la extensión Cookie-Editor (formato "
+    "JSON) o como cookies.txt, y pégalas aquí."
+)
 
+
+# login ventana
 class LoginWindow(QWidget):
     login_success = Signal()
     login_skipped = Signal()
+    closed = Signal()
 
-    # internal signals — emitted from worker threads, delivered in the main thread
-    _browsers_found = Signal(list)
-    _browser_login_done = Signal(bool, str, str)  # ok, error, browser
-
-    def __init__(self, service, app_icon, is_authenticated):
+    def __init__(self, auth, app_icon):
         super().__init__()
-        self.service = service
-        self.app_icon = app_icon
-        self.is_authenticated = is_authenticated
-        self._init_ui()
-        if not is_authenticated:
-            self._browsers_found.connect(self._on_browsers_detected)
-            self._browser_login_done.connect(self._on_browser_login_result)
-            self._probe_browsers()
+        self._auth = auth
+        self._app_icon = app_icon
+        self._status = None
+        self._build()
+        if not auth.is_authenticated:
+            self._auth.detect_browsers(self._on_browsers_detected)
 
-    def _init_ui(self):
+    def _build(self):
         self.setWindowTitle("Bienvenido a YTMusic Client")
-        self.setWindowIcon(self.app_icon)
+        self.setWindowIcon(self._app_icon)
         self.setFixedSize(400, 500)
-        self.setStyleSheet("background-color: #060d0e;")
+        self.setStyleSheet(f"QWidget {{ background-color: {theme.BG}; }} QLabel {{ background: transparent; }}")
 
         self._layout = QVBoxLayout(self)
         self._layout.setAlignment(Qt.AlignCenter)
         self._layout.setSpacing(14)
         self._layout.setContentsMargins(32, 32, 32, 32)
 
-        icon_label = QLabel()
-        icon_label.setPixmap(self.app_icon.pixmap(96, 96))
-        icon_label.setAlignment(Qt.AlignCenter)
-        self._layout.addWidget(icon_label)
+        icon = QLabel()
+        icon.setPixmap(self._app_icon.pixmap(96, 96))
+        icon.setAlignment(Qt.AlignCenter)
+        self._layout.addWidget(icon)
 
         title = QLabel("YTMusic Minimal Client")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 22px; font-weight: bold; color: white;")
+        title.setWordWrap(True)
+        title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {theme.TEXT};")
         self._layout.addWidget(title)
 
-        credits = QLabel("by RainySen & Moonshine")
-        credits.setAlignment(Qt.AlignCenter)
-        credits.setStyleSheet("font-size: 13px; color: #555;")
-        self._layout.addWidget(credits)
-
+        credits_label = QLabel("by RainySen & Moonshine")
+        credits_label.setAlignment(Qt.AlignCenter)
+        credits_label.setStyleSheet(f"font-size: 13px; color: {theme.TEXT_MUTED};")
+        self._layout.addWidget(credits_label)
         self._layout.addStretch(1)
 
-        if self.is_authenticated:
-            btn = self._make_btn("Continuar", "#03adb7", "#00dfe5")
-            btn.setDefault(True)
-            btn.clicked.connect(self.login_skipped.emit)
-            self._layout.addWidget(btn)
+        if self._auth.is_authenticated:
+            button = self._make_button("Continuar", "primary")
+            button.setDefault(True)
+            button.clicked.connect(self.login_skipped)
+            self._layout.addWidget(button)
             return
 
-        # ── Browser buttons placeholder ─────────────────────────
         self._browser_area = QVBoxLayout()
         self._browser_area.setSpacing(8)
-
         self._detect_label = QLabel("🔍  Buscando sesiones en navegadores…")
         self._detect_label.setAlignment(Qt.AlignCenter)
-        self._detect_label.setStyleSheet("color: #555; font-size: 12px;")
+        self._detect_label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 12px;")
         self._browser_area.addWidget(self._detect_label)
-
         self._layout.addLayout(self._browser_area)
 
-        # ── Divider + manual option ──────────────────────────────
         self._layout.addSpacing(4)
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("color: #1e1e1e;")
-        self._layout.addWidget(sep)
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet(f"color: {theme.BORDER};")
+        self._layout.addWidget(separator)
 
-        manual_btn = QPushButton("Iniciar sesión manualmente (cURL)")
-        manual_btn.clicked.connect(self._manual_login)
-        manual_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent; color: #555; border: none;
-                padding: 8px; font-size: 12px;
-            }
-            QPushButton:hover { color: #aaa; }
-        """)
-        self._layout.addWidget(manual_btn)
+        manual = QPushButton("Pegar cURL o cookies")
+        manual.clicked.connect(self._manual_login)
+        manual.setCursor(Qt.PointingHandCursor)
+        manual.setStyleSheet(theme.button_qss("text", height=32))
+        self._layout.addWidget(manual)
 
-        skip_btn = self._make_btn("Continuar sin sesión", "#1a2728", "#243536", text_color="#888")
-        skip_btn.clicked.connect(self.login_skipped.emit)
-        self._layout.addWidget(skip_btn)
+        skip = self._make_button("Continuar sin sesión", "tonal")
+        skip.clicked.connect(self.login_skipped)
+        self._layout.addWidget(skip)
 
-    def _probe_browsers(self):
-        def _worker():
-            browsers = self.service.detect_available_browsers()
-            self._browsers_found.emit(browsers)
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)
 
-        threading.Thread(target=_worker, daemon=True).start()
-
-    def _on_browsers_detected(self, browsers: list):
-        # Remove the "searching" label
+    def _clear_browser_area(self):
         while self._browser_area.count():
-            item = self._browser_area.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = self._browser_area.takeAt(0).widget()
+            if widget is not None:
+                widget.deleteLater()
 
+    def _on_browsers_detected(self, browsers):
+        self._clear_browser_area()
         if browsers:
-            lbl = QLabel("Iniciar sesión con:")
-            lbl.setStyleSheet("color: #888; font-size: 12px;")
-            lbl.setAlignment(Qt.AlignCenter)
-            self._browser_area.addWidget(lbl)
-
+            label = QLabel("Iniciar sesión con:")
+            label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
+            label.setAlignment(Qt.AlignCenter)
+            self._browser_area.addWidget(label)
             for browser in browsers:
-                icon_name = _BROWSER_ICONS.get(browser, "fa5s.globe")
-                try:
-                    icon = qta.icon(icon_name, color="white")
-                except Exception:
-                    icon = qta.icon("fa5s.globe", color="white")
-                btn = QPushButton(f"  {browser.capitalize()}")
-                btn.setIcon(icon)
-                btn.setDefault(len(browsers) == 1)
-                btn.setStyleSheet(self._btn_qss("#03adb7", "#00dfe5"))
-                btn.clicked.connect(lambda checked=False, b=browser: self._login_from_browser(b))
-                self._browser_area.addWidget(btn)
+                button = QPushButton(f"  {browser.capitalize()}")
+                button.setIcon(qta.icon(_BROWSER_ICONS.get(browser, "fa5s.globe"), color=theme.BG))
+                button.setDefault(len(browsers) == 1)
+                button.setCursor(Qt.PointingHandCursor)
+                button.setStyleSheet(theme.button_qss("primary"))
+                button.clicked.connect(lambda _=False, b=browser: self._login_with_browser(b))
+                self._browser_area.addWidget(button)
         else:
-            lbl = QLabel("No se encontraron sesiones de YouTube en\nningún navegador compatible.")
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setWordWrap(True)
-            lbl.setStyleSheet("color: #666; font-size: 12px;")
-            self._browser_area.addWidget(lbl)
-
+            label = QLabel("No se encontraron sesiones de YouTube en\nningún navegador compatible.")
+            label.setAlignment(Qt.AlignCenter)
+            label.setWordWrap(True)
+            label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
+            self._browser_area.addWidget(label)
         self.adjustSize()
         self.setFixedSize(400, max(500, self.sizeHint().height() + 20))
 
-    def _login_from_browser(self, browser: str):
-        for i in range(self._browser_area.count()):
-            w = self._browser_area.itemAt(i).widget()
-            if w:
-                w.setEnabled(False)
+    def _set_browser_buttons_enabled(self, enabled):
+        for index in range(self._browser_area.count()):
+            widget = self._browser_area.itemAt(index).widget()
+            if widget is not None:
+                widget.setEnabled(enabled)
 
-        status = QLabel(f"⏳  Autenticando con {browser.capitalize()}…")
-        status.setAlignment(Qt.AlignCenter)
-        status.setStyleSheet("color: #888; font-size: 12px;")
-        self._browser_area.addWidget(status)
-        self._pending_status = status
+    def _login_with_browser(self, browser):
+        self._set_browser_buttons_enabled(False)
+        self._status = QLabel(f"⏳  Autenticando con {browser.capitalize()}…")
+        self._status.setAlignment(Qt.AlignCenter)
+        self._status.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
+        self._browser_area.addWidget(self._status)
+        self._auth.login_with_browser(browser, lambda ok, err: self._on_browser_result(ok, err, browser))
 
-        def _worker():
-            ok, err = self.service.login_from_browser(browser)
-            self._browser_login_done.emit(ok, err, browser)
-
-        threading.Thread(target=_worker, daemon=True).start()
-
-    def _on_browser_login_result(self, ok: bool, err: str, browser: str):
+    def _on_browser_result(self, ok, error, browser):
         if ok:
             self.login_success.emit()
             return
-        if hasattr(self, "_pending_status"):
-            self._pending_status.deleteLater()
-        for i in range(self._browser_area.count()):
-            w = self._browser_area.itemAt(i).widget()
-            if w:
-                w.setEnabled(True)
-        QMessageBox.warning(
+        if self._status is not None:
+            self._status.deleteLater()
+            self._status = None
+        self._set_browser_buttons_enabled(True)
+        dialogs.notify(
             self, "Error de autenticación",
-            f"No se pudo autenticar con {browser.capitalize()}:\n{err}\n\n"
-            "Asegúrate de estar iniciado sesión en YouTube Music en ese navegador."
+            f"No se pudo autenticar con {browser.capitalize()}:\n{error}\n\n"
+            "Asegúrate de estar iniciado sesión en YouTube Music en ese navegador.",
         )
 
+    # login pegar curl cookies
     def _manual_login(self):
-        instructions = (
-            "Para iniciar sesión, sigue estos pasos:\n\n"
-            "1. Abre YouTube Music en tu navegador.\n"
-            "2. Asegúrate de haber iniciado sesión con tu cuenta.\n"
-            "3. Abre las herramientas de desarrollador (F12).\n"
-            "4. Ve a la pestaña 'Red' (Network).\n"
-            "5. Haz una recarga forzada (Ctrl+Shift+R).\n"
-            "6. Filtra por 'browse'.\n"
-            "7. Clic derecho en la petición → 'Copiar como cURL (bash)'.\n"
-            "8. Pega el texto abajo."
-        )
-        text, ok = QInputDialog.getMultiLineText(
-            self, "Iniciar Sesión — cURL", instructions, text=""
-        )
-        if ok and text:
-            parsed = parse_curl_headers(text)
-            if parsed:
-                ok2 = self.service.setup_authentication(parsed)
-                if ok2:
-                    QMessageBox.information(self, "Éxito", "¡Inicio de sesión completado!")
-                    self.login_success.emit()
-                else:
-                    QMessageBox.warning(self, "Error",
-                                        "No se pudo completar el inicio de sesión. Verifica las cabeceras.")
+        text = dialogs.prompt_text(self, "Iniciar sesión manualmente", _MANUAL_INSTRUCTIONS, ok="Iniciar sesión",
+                                   placeholder="curl 'https://music.youtube.com/youtubei/v1/browse…'  ·  cookies  ·  JSON",
+                                   multiline=True)
+        if text:
+            self._auth.login_with_text(text, self._on_manual_result)
+
+    def _on_manual_result(self, ok, error):
+        if ok:
+            self.login_success.emit()
+        else:
+            dialogs.notify(self, "Error al iniciar sesión", f"No se pudo completar el inicio de sesión.\n\n{error}")
 
     @staticmethod
-    def _make_btn(text, bg, hover, text_color="white"):
-        btn = QPushButton(text)
-        btn.setStyleSheet(LoginWindow._btn_qss(bg, hover, text_color))
-        return btn
-
-    @staticmethod
-    def _btn_qss(bg, hover, text_color="white"):
-        return f"""
-            QPushButton {{
-                background: {bg}; color: {text_color}; border: none;
-                padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600;
-            }}
-            QPushButton:hover {{ background: {hover}; }}
-            QPushButton:disabled {{ background: #1a2728; color: #444; }}
-        """
+    def _make_button(text, kind):
+        button = QPushButton(text)
+        button.setCursor(Qt.PointingHandCursor)
+        button.setStyleSheet(theme.button_qss(kind))
+        return button

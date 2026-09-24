@@ -1,235 +1,131 @@
-import qtawesome as qta
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-    QFrame, QPushButton, QGridLayout
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from utils import get_thumbnail_url, scale_cover
+from config import HOVER_PREFETCH_MS
+from domain.models import LOCAL_SOURCES, artist_names, thumbnail_url
+from ui.components.chip import Chip
+from ui.components.clickable import ClickableWidget
+from ui.components.lazy_thumbnail import LazyThumbnail
+from ui.components.track_actions import TrackActionsButton
 
 CHIP_LABELS = ["Playlists", "Canciones", "Artistas"]
+GRID_COLUMNS = 4
+
+_SEPARATOR = "background: #1a1a1a; max-height: 1px;"
 
 
-class LibraryChip(QPushButton):
-    def __init__(self, text, parent=None):
-        super().__init__(text, parent)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setCheckable(True)
-        self._apply_style()
-
-    def setChecked(self, checked):
-        super().setChecked(checked)
-        self._apply_style()
-
-    def _apply_style(self):
-        if self.isChecked():
-            self.setStyleSheet("""
-                QPushButton {
-                    background: #212121;
-                    color: white;
-                    border: 1.5px solid white;
-                    border-radius: 16px;
-                    padding: 6px 18px;
-                    font-size: 13px;
-                    font-weight: 600;
-                }
-            """)
-        else:
-            self.setStyleSheet("""
-                QPushButton {
-                    background: transparent;
-                    color: #ccc;
-                    border: 1px solid #3a3a3a;
-                    border-radius: 16px;
-                    padding: 6px 18px;
-                    font-size: 13px;
-                }
-                QPushButton:hover {
-                    border-color: #777;
-                    background: rgba(255,255,255,0.05);
-                }
-            """)
+LibraryChip = Chip
 
 
-class PlaylistCard(QWidget):
-    clicked = Signal(dict)
+class PlaylistCard(ClickableWidget):
+    chosen = Signal(dict)
 
-    def __init__(self, playlist, parent=None):
-        super().__init__(parent)
+    def __init__(self, playlist, thumbnails, parent=None):
+        super().__init__(parent, radius=8)
         self.playlist = playlist
-        self._hovered = False
-        self.setCursor(Qt.PointingHandCursor)
         self.setFixedWidth(168)
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 10)
         layout.setSpacing(6)
 
-        self.thumb = QLabel()
-        self.thumb.setFixedSize(152, 152)
-        self.thumb.setAlignment(Qt.AlignCenter)
-        self.thumb.setStyleSheet("border-radius: 6px; background: #1e1e1e;")
-        self.thumb.setPixmap(qta.icon('fa5s.list', color='#555').pixmap(48, 48))
-        layout.addWidget(self.thumb)
+        thumb = LazyThumbnail(152, radius=6, icon="fa5s.list", background="#1e1e1e")
+        thumb.set_source(thumbnail_url(playlist, 304), thumbnails)
+        layout.addWidget(thumb)
 
-        title = QLabel(playlist.get('title', ''))
+        title = QLabel(playlist.get("title", ""))
         title.setStyleSheet("font-size: 13px; font-weight: 600; color: #e0e0e0;")
         title.setWordWrap(True)
         title.setMaximumWidth(152)
         layout.addWidget(title)
 
-        source = playlist.get('source', 'ytmusic')
-        source_text = 'Local' if source in ('local', 'imported', 'user_created') else 'YouTube Music'
-        count = playlist.get('track_count', 0)
-        meta = f"{source_text}{'  •  ' + str(count) + ' pistas' if count else ''}"
-        meta_lbl = QLabel(meta)
-        meta_lbl.setStyleSheet("font-size: 11px; color: #888;")
-        meta_lbl.setWordWrap(True)
-        meta_lbl.setMaximumWidth(152)
-        layout.addWidget(meta_lbl)
+        local = playlist.get("source", "ytmusic") in LOCAL_SOURCES
+        count = playlist.get("track_count", 0)
+        meta = QLabel(f"{'Local' if local else 'YouTube Music'}{f'  •  {count} pistas' if count else ''}")
+        meta.setStyleSheet("font-size: 11px; color: #888;")
+        meta.setWordWrap(True)
+        meta.setMaximumWidth(152)
+        layout.addWidget(meta)
 
-        self._update_bg()
-
-    def set_thumbnail(self, pixmap):
-        self.thumb.setPixmap(scale_cover(pixmap, 152))
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit(self.playlist)
-        super().mousePressEvent(event)
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self._update_bg()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self._update_bg()
-        super().leaveEvent(event)
-
-    def _update_bg(self):
-        bg = "rgba(255,255,255,0.06)" if self._hovered else "transparent"
-        self.setStyleSheet(f"PlaylistCard {{ background: {bg}; border-radius: 8px; }}")
+        self.activated.connect(lambda: self.chosen.emit(self.playlist))
 
 
-class SongRow(QWidget):
-    clicked = Signal(dict)
+class SongRow(ClickableWidget):
+    chosen = Signal(dict)
+    add_next = Signal(dict)
+    add_queue = Signal(dict)
+    add_playlist = Signal(dict)
+    hovered = Signal(dict)
 
-    def __init__(self, song, parent=None):
-        super().__init__(parent)
+    def __init__(self, song, thumbnails, parent=None):
+        super().__init__(parent, dwell_ms=HOVER_PREFETCH_MS)
         self.song = song
-        self._hovered = False
-        self.setCursor(Qt.PointingHandCursor)
         self.setFixedHeight(56)
-
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 16, 4)
         layout.setSpacing(12)
 
-        self.thumb = QLabel()
-        self.thumb.setFixedSize(40, 40)
-        self.thumb.setAlignment(Qt.AlignCenter)
-        self.thumb.setStyleSheet("border-radius: 4px; background: #1e1e1e;")
-        self.thumb.setPixmap(qta.icon('fa5s.music', color='#444').pixmap(20, 20))
-        layout.addWidget(self.thumb)
+        thumb = LazyThumbnail(40, radius=4, background="#1e1e1e")
+        thumb.set_source(thumbnail_url(song, 80), thumbnails)
+        layout.addWidget(thumb)
 
-        info = QWidget()
-        info_layout = QVBoxLayout(info)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(2)
-        title_lbl = QLabel(song.get('title', ''))
-        title_lbl.setStyleSheet("font-size: 13px; color: #e0e0e0;")
-        artist_names = ' • '.join(a.get('name', '') for a in song.get('artists', []))
-        artist_lbl = QLabel(artist_names)
-        artist_lbl.setStyleSheet("font-size: 11px; color: #888;")
-        info_layout.addWidget(title_lbl)
-        info_layout.addWidget(artist_lbl)
-        layout.addWidget(info, stretch=1)
+        info = QVBoxLayout()
+        info.setContentsMargins(0, 0, 0, 0)
+        info.setSpacing(2)
+        title = QLabel(song.get("title", ""))
+        title.setStyleSheet("font-size: 13px; color: #e0e0e0;")
+        artists = QLabel(artist_names(song))
+        artists.setStyleSheet("font-size: 11px; color: #888;")
+        info.addWidget(title)
+        info.addWidget(artists)
+        layout.addLayout(info, stretch=1)
 
-        self._update_bg()
+        actions = TrackActionsButton()
+        actions.add_next.connect(lambda: self.add_next.emit(self.song))
+        actions.add_queue.connect(lambda: self.add_queue.emit(self.song))
+        actions.add_playlist.connect(lambda: self.add_playlist.emit(self.song))
+        layout.addWidget(actions)
 
-    def set_thumbnail(self, pixmap):
-        self.thumb.setPixmap(scale_cover(pixmap, 40))
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit(self.song)
-        super().mousePressEvent(event)
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self._update_bg()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self._update_bg()
-        super().leaveEvent(event)
-
-    def _update_bg(self):
-        bg = "rgba(255,255,255,0.06)" if self._hovered else "transparent"
-        self.setStyleSheet(f"SongRow {{ background: {bg}; border-radius: 6px; }}")
+        self.activated.connect(lambda: self.chosen.emit(self.song))
+        self.hover_changed.connect(actions.set_revealed)
+        self.context_requested.connect(actions.show_menu)
+        self.dwelled.connect(lambda: self.hovered.emit(self.song))
 
 
 class ArtistRow(QWidget):
-    def __init__(self, artist, parent=None):
+    def __init__(self, artist, thumbnails, parent=None):
         super().__init__(parent)
-        self._hovered = False
         self.setFixedHeight(68)
-
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 8, 16, 8)
         layout.setSpacing(16)
 
-        self.thumb = QLabel()
-        self.thumb.setFixedSize(48, 48)
-        self.thumb.setAlignment(Qt.AlignCenter)
-        self.thumb.setStyleSheet("border-radius: 24px; background: #2a2a2a;")
-        self.thumb.setPixmap(qta.icon('fa5s.user', color='#555').pixmap(24, 24))
-        layout.addWidget(self.thumb)
+        thumb = LazyThumbnail(48, circle=True, icon="fa5s.user")
+        thumb.set_source(thumbnail_url(artist, 96), thumbnails)
+        layout.addWidget(thumb)
 
-        info = QWidget()
-        info_layout = QVBoxLayout(info)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(3)
-
-        name = artist.get('name', artist.get('artist', ''))
-        name_lbl = QLabel(name)
-        name_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #e0e0e0;")
-        info_layout.addWidget(name_lbl)
-
-        count = artist.get('count', 0)
-        if count:
-            count_lbl = QLabel(f"{count} canciones")
-            count_lbl.setStyleSheet("font-size: 12px; color: #888;")
-            info_layout.addWidget(count_lbl)
-
-        layout.addWidget(info, stretch=1)
-        self._update_bg()
-
-    def set_thumbnail(self, pixmap):
-        self.thumb.setPixmap(scale_cover(pixmap, 48))
-        self.thumb.setStyleSheet("border-radius: 24px;")
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self._update_bg()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self._update_bg()
-        super().leaveEvent(event)
-
-    def _update_bg(self):
-        bg = "rgba(255,255,255,0.04)" if self._hovered else "transparent"
-        self.setStyleSheet(f"ArtistRow {{ background: {bg}; border-radius: 8px; }}")
+        info = QVBoxLayout()
+        info.setContentsMargins(0, 0, 0, 0)
+        info.setSpacing(3)
+        name = QLabel(artist.get("name", artist.get("artist", "")))
+        name.setStyleSheet("font-size: 14px; font-weight: 500; color: #e0e0e0;")
+        info.addWidget(name)
+        if artist.get("count"):
+            count = QLabel(f"{artist['count']} canciones")
+            count.setStyleSheet("font-size: 12px; color: #888;")
+            info.addWidget(count)
+        layout.addLayout(info, stretch=1)
 
 
+# biblioteca vista
 class LibraryBrowserPanel(QWidget):
     playlist_activated = Signal(dict)
     song_activated = Signal(dict)
+    song_add_next = Signal(dict)
+    song_add_queue = Signal(dict)
+    song_add_playlist = Signal(dict)
+    song_hovered = Signal(dict)
     chip_selected = Signal(str)
 
     def __init__(self, parent=None):
@@ -247,126 +143,108 @@ class LibraryBrowserPanel(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 10, 16, 10)
         header_layout.setSpacing(8)
-
         for label in CHIP_LABELS:
             chip = LibraryChip(label)
             chip.setChecked(label == "Playlists")
-            chip.clicked.connect(lambda checked, l=label: self._on_chip_clicked(l))
+            chip.clicked.connect(lambda _=False, l=label: self._on_chip_clicked(l))
             header_layout.addWidget(chip)
             self._chips[label] = chip
-
         header_layout.addStretch()
         outer.addWidget(header)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("background: #1a1a1a; max-height: 1px;")
-        outer.addWidget(sep)
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet(_SEPARATOR)
+        outer.addWidget(separator)
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        self._content = QWidget()
-        self._clayout = QVBoxLayout(self._content)
-        self._clayout.setContentsMargins(16, 16, 16, 32)
-        self._clayout.setSpacing(0)
-        self._clayout.addStretch()
-        self._scroll.setWidget(self._content)
+        content = QWidget()
+        self._layout = QVBoxLayout(content)
+        self._layout.setContentsMargins(16, 16, 16, 32)
+        self._layout.setSpacing(0)
+        self._layout.addStretch()
+        self._scroll.setWidget(content)
         outer.addWidget(self._scroll, stretch=1)
 
     def _clear(self):
-        while self._clayout.count() > 1:
-            item = self._clayout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        while self._layout.count() > 1:
+            widget = self._layout.takeAt(0).widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
 
-    def _set_chip(self, label):
-        """Update chip UI without emitting chip_selected (used by show_* methods)."""
-        for l, chip in self._chips.items():
-            chip.setChecked(l == label)
+    def set_active_chip(self, label):
+        for name, chip in self._chips.items():
+            chip.setChecked(name == label)
 
     def _on_chip_clicked(self, label):
-        """Called when user clicks a chip — updates UI and emits signal."""
-        self._set_chip(label)
+        self.set_active_chip(label)
         self.chip_selected.emit(label)
 
-    def show_playlists(self, playlists, thumbnail_cache):
-        self._set_chip("Playlists")
+    def show_message(self, text):
         self._clear()
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("color: #888; font-size: 14px; padding: 60px;")
+        self._layout.insertWidget(0, label)
 
+    def show_playlists(self, playlists, thumbnails):
+        self.set_active_chip("Playlists")
+        self._clear()
+        if not playlists:
+            self.show_message("Aún no tienes playlists. Importa una desde la barra lateral.")
+            return
         grid_widget = QWidget()
         grid = QGridLayout(grid_widget)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(4)
         grid.setVerticalSpacing(8)
+        for position, playlist in enumerate(playlists):
+            card = PlaylistCard(playlist, thumbnails)
+            card.chosen.connect(self.playlist_activated)
+            grid.addWidget(card, position // GRID_COLUMNS, position % GRID_COLUMNS)
+        self._layout.insertWidget(0, grid_widget)
 
-        cols = 4
-        for i, pl in enumerate(playlists):
-            card = PlaylistCard(pl)
-            card.clicked.connect(self.playlist_activated)
-            grid.addWidget(card, i // cols, i % cols)
-            url = get_thumbnail_url(pl)
-            if url:
-                try:
-                    thumbnail_cache.request(url, card.set_thumbnail)
-                except RuntimeError:
-                    pass
-
-        self._clayout.insertWidget(0, grid_widget)
-
-    def show_songs(self, songs, thumbnail_cache):
-        self._set_chip("Canciones")
+    def show_songs(self, songs, thumbnails):
+        self.set_active_chip("Canciones")
         self._clear()
+        if not songs:
+            self.show_message("No hay canciones guardadas todavía.")
+            return
+        rows = [self._song_row(song, thumbnails) for song in songs]
+        self._layout.insertWidget(0, self._list_of(rows))
 
-        list_w = QWidget()
-        list_l = QVBoxLayout(list_w)
-        list_l.setContentsMargins(0, 0, 0, 0)
-        list_l.setSpacing(0)
-
-        sep_style = "background: #1a1a1a; max-height: 1px;"
-        for i, song in enumerate(songs):
-            row = SongRow(song)
-            row.clicked.connect(self.song_activated)
-            list_l.addWidget(row)
-            if i < len(songs) - 1:
-                sep = QFrame()
-                sep.setFrameShape(QFrame.HLine)
-                sep.setStyleSheet(sep_style)
-                list_l.addWidget(sep)
-            url = get_thumbnail_url(song)
-            if url:
-                try:
-                    thumbnail_cache.request(url, row.set_thumbnail)
-                except RuntimeError:
-                    pass
-
-        self._clayout.insertWidget(0, list_w)
-
-    def show_artists(self, artists, thumbnail_cache):
-        self._set_chip("Artistas")
+    def show_artists(self, artists, thumbnails):
+        self.set_active_chip("Artistas")
         self._clear()
+        if not artists:
+            self.show_message("No hay artistas todavía.")
+            return
+        self._layout.insertWidget(0, self._list_of([ArtistRow(a, thumbnails) for a in artists]))
 
-        list_w = QWidget()
-        list_l = QVBoxLayout(list_w)
-        list_l.setContentsMargins(0, 0, 0, 0)
-        list_l.setSpacing(0)
+    def _song_row(self, song, thumbnails):
+        row = SongRow(song, thumbnails)
+        row.chosen.connect(self.song_activated)
+        row.add_next.connect(self.song_add_next)
+        row.add_queue.connect(self.song_add_queue)
+        row.add_playlist.connect(self.song_add_playlist)
+        row.hovered.connect(self.song_hovered)
+        return row
 
-        sep_style = "background: #1a1a1a; max-height: 1px;"
-        for i, artist in enumerate(artists):
-            row = ArtistRow(artist)
-            list_l.addWidget(row)
-            if i < len(artists) - 1:
-                sep = QFrame()
-                sep.setFrameShape(QFrame.HLine)
-                sep.setStyleSheet(sep_style)
-                list_l.addWidget(sep)
-            url = get_thumbnail_url(artist)
-            if url:
-                try:
-                    thumbnail_cache.request(url, row.set_thumbnail)
-                except RuntimeError:
-                    pass
-
-        self._clayout.insertWidget(0, list_w)
+    @staticmethod
+    def _list_of(rows):
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        for index, row in enumerate(rows):
+            layout.addWidget(row)
+            if index < len(rows) - 1:
+                separator = QFrame()
+                separator.setFrameShape(QFrame.HLine)
+                separator.setStyleSheet(_SEPARATOR)
+                layout.addWidget(separator)
+        return container

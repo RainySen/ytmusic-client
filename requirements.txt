@@ -1,6 +1,7 @@
 yt-dlp
 PySide6
 ytmusicapi
+requests
 python-vlc
 qtawesome
 pyinstaller
