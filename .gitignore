@@ -213,3 +213,10 @@ client_config.json
 queue_and_cache.json
 state_error.log
 __marimo__/
+/.claude/skills/ytm-inspect/SKILL.md
+
+# Runtime data
+cache/
+.yt-dlp-cache/
+*.log.*
+lyrics_settings.json

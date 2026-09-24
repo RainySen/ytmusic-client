@@ -3,12 +3,15 @@ from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QSizePolicy, QLabel, QPushButton
 import qtawesome as qta
 
+from domain.models import artist_names, thumbnail_url
+from ui.components.lazy_thumbnail import LazyThumbnail
+
 
 class ImprovedQueueItem(QWidget):
     play_clicked = Signal(int)
     remove_clicked = Signal(int)
 
-    def __init__(self, song, index, is_current=False):
+    def __init__(self, song, index, is_current=False, thumbnails=None):
         super().__init__()
         self.index = index
         self.song = song
@@ -30,11 +33,8 @@ class ImprovedQueueItem(QWidget):
         self.play_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.play_indicator.setCursor(Qt.OpenHandCursor)
 
-        self.thumb = QLabel()
-        self.thumb.setFixedSize(40, 40)
-        self.thumb.setAlignment(Qt.AlignCenter)
-        self.thumb.setPixmap(qta.icon('fa5s.music', color='#555').pixmap(24, 24))
-        self.thumb.setStyleSheet("border-radius: 4px; background: #1e1e1e;")
+        self.thumb = LazyThumbnail(40, radius=4, background="#1e1e1e")
+        self.thumb.set_source(thumbnail_url(song, 80), thumbnails)
         self.thumb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         info_layout = QVBoxLayout()
@@ -50,7 +50,7 @@ class ImprovedQueueItem(QWidget):
 
         self.full_title = song.get('title', 'Desconocido')
 
-        artist_text = ", ".join([a.get('name', '') for a in song.get('artists', [])]) if song.get('artists') else "Desconocido"
+        artist_text = artist_names(song, sep=", ") or "Desconocido"
         self.artist_label = QLabel(artist_text)
         self.artist_label.setStyleSheet("color: #999; font-size: 11px;")
         self.artist_label.setWordWrap(False)
@@ -62,7 +62,6 @@ class ImprovedQueueItem(QWidget):
         info_layout.addWidget(self.title_label)
         info_layout.addWidget(self.artist_label)
 
-        # Duration label
         dur_secs = song.get('duration_seconds', 0)
         dur_str = song.get('duration', '')
         if not dur_str and dur_secs:
@@ -161,10 +160,6 @@ class ImprovedQueueItem(QWidget):
         self.play_indicator.setCursor(Qt.OpenHandCursor)
         self.drag_start_position = None
 
-    def set_thumbnail(self, pixmap):
-        from utils import scale_cover
-        self.thumb.setPixmap(scale_cover(pixmap, 40))
-
     def mouseReleaseEvent(self, event):
         self.play_indicator.setCursor(Qt.OpenHandCursor)
         self.drag_start_position = None
@@ -172,7 +167,7 @@ class ImprovedQueueItem(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        available_width = self.width() - 196  # grip+thumb+duration+buttons
+        available_width = self.width() - 196
 
         if available_width > 50:
             font_metrics = self.title_label.fontMetrics()

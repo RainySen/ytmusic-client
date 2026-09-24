@@ -1,98 +1,99 @@
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QToolButton
 
-_ACTIVE_STYLE = """
-    QPushButton {
-        background: rgba(255,255,255,0.10);
+_ACTIVE = """
+    QToolButton {
+        background: rgba(255,255,255,0.12);
         color: white;
-        text-align: left;
-        padding-left: 16px;
         border: none;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 13px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 700;
+        padding-top: 6px;
     }
 """
-_INACTIVE_STYLE = """
-    QPushButton {
+_INACTIVE = """
+    QToolButton {
         background: transparent;
         color: #aaa;
-        text-align: left;
-        padding-left: 16px;
         border: none;
-        border-radius: 20px;
+        border-radius: 10px;
+        font-size: 11px;
         font-weight: 500;
-        font-size: 13px;
+        padding-top: 6px;
     }
-    QPushButton:hover {
-        background: rgba(255,255,255,0.05);
+    QToolButton:hover {
+        background: rgba(255,255,255,0.08);
         color: #e0e0e0;
     }
 """
-_IMPORT_STYLE = """
-    QPushButton {
+_SMALL = """
+    QToolButton {
         background: transparent;
-        color: #888;
-        text-align: left;
-        padding-left: 16px;
+        color: #666;
         border: none;
-        border-radius: 20px;
-        font-size: 12px;
+        border-radius: 8px;
+        font-size: 10px;
+        padding-top: 4px;
     }
-    QPushButton:hover {
-        background: rgba(255,255,255,0.04);
-        color: #bbb;
+    QToolButton:hover {
+        background: rgba(255,255,255,0.06);
+        color: #aaa;
     }
 """
 
 
 class Sidebar(QWidget):
-    home_requested = Signal()
+    home_requested    = Signal()
     explore_requested = Signal()
     library_requested = Signal()
-    import_requested = Signal()
+    import_requested  = Signal()
 
     def __init__(self, icons, parent=None):
         super().__init__(parent)
         self.icons = icons
         self.setObjectName("sidebar")
-        self.setFixedWidth(200)
+        self.setFixedWidth(90)
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 16, 8, 8)
-        layout.setSpacing(2)
+        layout.setContentsMargins(8, 20, 8, 12)
+        layout.setSpacing(4)
+        layout.setAlignment(Qt.AlignTop)
 
         self.nav_buttons = {}
-        for text, icon_key in [
-            ("Inicio", "home"),
-            ("Explorar", "explore"),
-            ("Biblioteca", "library"),
+        for label, icon_key, signal in [
+            ("Inicio",    "home",    self.home_requested),
+            ("Explorar",  "explore", self.explore_requested),
+            ("Biblioteca","library", self.library_requested),
         ]:
-            button = QPushButton(text)
-            button.setIcon(self.icons[icon_key])
-            button.setCursor(Qt.PointingHandCursor)
-            button.setFixedHeight(44)
-            button.setStyleSheet(_INACTIVE_STYLE)
-            layout.addWidget(button)
-            self.nav_buttons[text] = button
-
-        self.nav_buttons["Inicio"].clicked.connect(self.home_requested.emit)
-        self.nav_buttons["Explorar"].clicked.connect(self.explore_requested.emit)
-        self.nav_buttons["Biblioteca"].clicked.connect(self.library_requested.emit)
+            btn = QToolButton()
+            btn.setText(label)
+            btn.setIcon(icons[icon_key])
+            btn.setIconSize(QSize(22, 22))
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            btn.setFixedSize(74, 62)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(_INACTIVE)
+            btn.clicked.connect(signal.emit)
+            layout.addWidget(btn, alignment=Qt.AlignHCenter)
+            self.nav_buttons[label] = btn
 
         layout.addSpacing(12)
 
-        self.import_button = QPushButton("Importar Playlist")
-        self.import_button.setIcon(self.icons["import"])
+        self.import_button = QToolButton()
+        self.import_button.setText("Importar")
+        self.import_button.setIcon(icons["import"])
+        self.import_button.setIconSize(QSize(18, 18))
+        self.import_button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        self.import_button.setFixedSize(74, 54)
         self.import_button.setCursor(Qt.PointingHandCursor)
-        self.import_button.setFixedHeight(40)
-        self.import_button.setStyleSheet(_IMPORT_STYLE)
+        self.import_button.setStyleSheet(_SMALL)
         self.import_button.clicked.connect(self.import_requested.emit)
-        layout.addWidget(self.import_button)
+        layout.addWidget(self.import_button, alignment=Qt.AlignHCenter)
 
         layout.addStretch()
-
         self.set_active("Inicio")
 
     def set_active(self, name: str):
         for btn_name, btn in self.nav_buttons.items():
-            btn.setStyleSheet(_ACTIVE_STYLE if btn_name == name else _INACTIVE_STYLE)
+            btn.setStyleSheet(_ACTIVE if btn_name == name else _INACTIVE)
