@@ -151,7 +151,6 @@ set YTMUSIC_LIVE_TESTS=1 && python -m pytest tests/test_live_flows.py -q -s
 Las contribuciones son bienvenidas. Abre un issue antes de un cambio grande.
 
 - Ejecuta `python -m pytest` antes de enviar cambios.
-- El código va sin docstrings; solo se usan comentarios cortos de palabras clave, en minúsculas y sin tildes, sobre las clases y métodos importantes.
 - Respeta las capas de la [arquitectura](#arquitectura): `ui` no importa servicios y `domain` no importa `infra`, servicios ni `ui`.
 
 ## Licencia
