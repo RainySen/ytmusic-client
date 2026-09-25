@@ -189,7 +189,7 @@ class MainWindow(QWidget):
         self.tray_icon = QSystemTrayIcon(self._app_icon, self)
         self.tray_icon.setToolTip("YTMusic Client")
         menu = QMenu(self)
-        menu.addAction("Mostrar").triggered.connect(self.showNormal)
+        menu.addAction("Mostrar").triggered.connect(self.bring_to_front)
         menu.addSeparator()
         self._tray_play_action = menu.addAction("▶ Reproducir")
         self._tray_play_action.triggered.connect(self.play_pause_clicked)
@@ -203,7 +203,12 @@ class MainWindow(QWidget):
 
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            self.showNormal()
+            self.bring_to_front()
+
+    def bring_to_front(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def closeEvent(self, event):
         event.ignore()

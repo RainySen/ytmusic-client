@@ -109,7 +109,7 @@ class TrackList(QWidget):
         self._pending = list(enumerate(tracks[:MAX_ROWS]))
         self._build_batch(FIRST_BATCH)
         if self._pending:
-            QTimer.singleShot(0, lambda g=self._generation: self._continue(g))
+            QTimer.singleShot(0, self, lambda g=self._generation: self._continue(g))
 
     def _clear(self):
         self._pending = []
@@ -125,7 +125,7 @@ class TrackList(QWidget):
             return
         self._build_batch(NEXT_BATCH)
         if self._pending:
-            QTimer.singleShot(15, lambda: self._continue(generation))
+            QTimer.singleShot(15, self, lambda: self._continue(generation))
 
     def _build_batch(self, count):
         options = dict(self._options)

@@ -59,7 +59,14 @@ class CatalogService:
         data = read_json(self._home_cache_file)
         if not isinstance(data, list):
             return None
-        return [(title, items) for title, items in data if items] or None
+        sections = []
+        for entry in data:
+            if not (isinstance(entry, (list, tuple)) and len(entry) == 2 and isinstance(entry[0], str)):
+                continue
+            items = [i for i in entry[1] if isinstance(i, dict)] if isinstance(entry[1], list) else []
+            if items:
+                sections.append((entry[0], items))
+        return sections or None
 
     # home cache disco
     def load_home(self, on_done: Done, on_error: Fail | None = None, force: bool = False) -> None:
@@ -92,7 +99,7 @@ class CatalogService:
         for raw in self._gateway.get_home(limit):
             items = parse_home_section(raw)
             if items:
-                sections.append((raw.get("title", "Sección"), items))
+                sections.append((raw.get("title") or "Sección", items))
         return sections
 
     def _fetch_extras(self) -> list[Section]:

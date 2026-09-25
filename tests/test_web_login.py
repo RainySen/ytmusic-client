@@ -275,3 +275,112 @@ def test_web_window_is_reused_while_open_and_forgotten_when_closed(qapp, monkeyp
     window._login_with_web()
     assert len(created) == 2
     window.close()
+
+
+def test_google_session_is_tracked_separately_from_the_youtube_one():
+    cookies = WebSessionCookies()
+    cookies.add(".google.com", "NID", "n")
+    assert not cookies.has_google_session()
+    cookies.add(".google.com", "SAPISID", "g")
+    assert cookies.has_google_session() and not cookies.has_session()
+    cookies.add("accounts.google.com", "__Secure-3PAPISID", "g2")
+    cookies.remove(".google.com", "SAPISID")
+    assert cookies.has_google_session()
+    cookies.remove("accounts.google.com", "__Secure-3PAPISID")
+    assert not cookies.has_google_session()
+    assert cookies.snapshot() == {}
+    cookies.add(".notgoogle.com", "SAPISID", "x")
+    assert not cookies.has_google_session()
+
+
+@pytest.fixture
+def probe(web, monkeypatch):
+    from ui import web_login_window as module
+
+    loaded, state = [], {"url": QUrl("https://accounts.google.com/v3/signin/identifier")}
+    monkeypatch.setattr(web._page, "load", lambda url: loaded.append(url.toString()), raising=False)
+    monkeypatch.setattr(web._page, "url", lambda: state["url"], raising=False)
+
+    def visit(address):
+        state["url"] = QUrl(address)
+        web._on_url(state["url"])
+        web._handoff_timer.stop()
+        web._handoff_if_needed()
+
+    return web, loaded, visit, module
+
+
+@needs_webengine
+def test_leaving_google_login_for_an_interstitial_continues_to_youtube_music(probe):
+    web, loaded, visit, module = probe
+    web._on_cookie_added(cookie(".google.com", "SAPISID", "g"))
+    visit("https://myaccount.google.com/security-checkup-promo")
+    assert loaded == [module.LOGIN_URL]
+    visit("https://myaccount.google.com/another")
+    assert len(loaded) == 2
+    visit("https://myaccount.google.com/third")
+    assert len(loaded) == module.MAX_HANDOFFS
+
+
+@needs_webengine
+def test_no_handoff_while_still_signing_in_or_without_a_google_session(probe):
+    web, loaded, visit, _ = probe
+    visit("https://myaccount.google.com/x")
+    assert loaded == []
+    web._on_cookie_added(cookie(".google.com", "SAPISID", "g"))
+    visit("https://accounts.google.com/v3/signin/challenge/totp")
+    visit("https://consent.youtube.com/m?continue=x")
+    assert loaded == []
+
+
+@needs_webengine
+def test_landing_on_the_youtube_home_signed_in_opens_music_directly(probe):
+    web, loaded, visit, module = probe
+    web._on_cookie_added(cookie(".google.com", "SAPISID", "g"))
+    visit("https://www.youtube.com/")
+    assert loaded == []
+    web._on_cookie_added(cookie(".youtube.com", "SAPISID", "k"))
+    visit("https://www.youtube.com/")
+    assert loaded == [module.MUSIC_URL]
+
+
+@needs_webengine
+def test_handoff_is_scheduled_when_the_page_changes_and_cancelled_on_music(web):
+    web._on_url(QUrl("https://myaccount.google.com/x"))
+    assert web._handoff_timer.isActive()
+    web._on_url(QUrl("https://music.youtube.com/"))
+    web._on_cookie_added(cookie(".google.com", "SAPISID", "g"))
+    web._handoff_if_needed()
+    assert web._on_music
+
+
+@needs_webengine
+def test_manual_continue_needs_a_google_session_and_then_resumes_the_handoff(probe):
+    web, loaded, _visit, module = probe
+    web.continue_manually()
+    assert loaded == [] and web._status.text() == module.NO_SESSION_HINT
+    web._on_cookie_added(cookie(".google.com", "SAPISID", "g"))
+    web.continue_manually()
+    assert loaded == [module.LOGIN_URL] and web._status.text() == module.WAITING_HINT
+    web._continue.click()
+    assert len(loaded) == 2
+
+
+@needs_webengine
+def test_links_that_open_a_new_window_load_in_the_same_page(web, monkeypatch):
+    from PySide6.QtWebEngineCore import QWebEnginePage
+
+    loaded = []
+    monkeypatch.setattr(web._page, "load", lambda url: loaded.append(url.toString()), raising=False)
+    child = web._page.createWindow(QWebEnginePage.WebBrowserTab)
+    assert child is not None
+    child.urlChanged.emit(QUrl())
+    child.urlChanged.emit(QUrl("about:blank"))
+    assert loaded == []
+    child.urlChanged.emit(QUrl("https://music.youtube.com/"))
+    assert loaded == ["https://music.youtube.com/"]
+
+
+@needs_webengine
+def test_login_window_offers_the_manual_continue_button(web):
+    assert web._continue.text() == "Ya inicié sesión, continuar"
