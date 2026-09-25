@@ -152,7 +152,16 @@ Las contribuciones son bienvenidas. Abre un issue antes de un cambio grande.
 
 - Ejecuta `python -m pytest` antes de enviar cambios.
 - Respeta las capas de la [arquitectura](#arquitectura): `ui` no importa servicios y `domain` no importa `infra`, servicios ni `ui`.
+## Donar y apoyar el proyecto
 
+Esto no es una obligación, si quieres aportar tu granito al proyecto te seremos eternamente agradecidos, "cada moneda cuenta"
+decía el homeless que pide monedas al lado de una areperia, puedes dirigirte al link de cofee o al paypal:
+
+  
+- **BuyMeaCoffee**:
+  
+<a href="https://www.buymeacoffee.com/seiny" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
+ 
 ## Licencia
 
 [MIT](LICENSE). Usa PySide6 (LGPL), ytmusicapi (MIT), yt-dlp (Unlicense) y VLC (LGPL/GPL, instalado aparte).
