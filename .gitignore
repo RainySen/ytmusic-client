@@ -222,3 +222,7 @@ cache/
 lyrics_settings.json
 data/
 local_playlists.json
+
+coverage.xml
+.coverage
+htmlcov/

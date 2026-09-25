@@ -2,3 +2,4 @@
 pytest>=9
 pyflakes>=4
 pyinstaller>=6.22
+pytest-cov>=6
