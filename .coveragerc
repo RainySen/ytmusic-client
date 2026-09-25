@@ -1,0 +1,11 @@
+[run]
+source = core, domain, infra, services, presenters, ui
+omit =
+    tests/*
+    ui/web_login_window.py
+
+[report]
+skip_empty = true
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
