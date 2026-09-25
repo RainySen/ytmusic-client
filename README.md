@@ -101,7 +101,7 @@ El script hace tres cosas:
 2. Recorta de esa carpeta los componentes de Qt que no se usan (`installer/prune_bundle.py`).
 3. Si tienes [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`), genera `release\YTMusicClient-Setup-<versión>.exe`, de unos 105 MB. Casi todo el peso es QtWebEngine.
 
-La versión sale de `FileVersion` en `version_info.txt`. Para publicar una versión nueva, cambia ahí `filevers`, `prodvers`, `FileVersion` y `ProductVersion`. El workflow `.github/workflows/release.yml` hace el mismo proceso en GitHub Actions al empujar una etiqueta `v*` y adjunta el instalador al Release.
+La versión sale de `version_info.txt`. Para cambiarla, ejecuta `.\bump-version.ps1 -Version 1.2.0`, que actualiza sus cuatro campos a la vez (`filevers`, `prodvers`, `FileVersion` y `ProductVersion`); después compila. El workflow `.github/workflows/release.yml` hace el mismo proceso en GitHub Actions al empujar una etiqueta `v*` y adjunta el instalador al Release.
 
 ## Arquitectura
 
