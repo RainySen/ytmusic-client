@@ -518,8 +518,9 @@ class SectionFeed(QWidget):
                 self.show_message(empty_message)
             return
         self._fill()
+        QTimer.singleShot(0, self, self._fill)
         if not reset_scroll:
-            QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(scroll_value))
+            QTimer.singleShot(0, self, lambda: self._scroll.verticalScrollBar().setValue(scroll_value))
 
     def set_header(self, widget):
         while self._header_slot.count():
@@ -539,7 +540,7 @@ class SectionFeed(QWidget):
             self._build_next()
         if index < len(self._built):
             target = self._built[index]
-            QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(
+            QTimer.singleShot(0, self, lambda: self._scroll.verticalScrollBar().setValue(
                 max(0, target.mapTo(self._content, QPoint(0, 0)).y() - 8)))
 
     def _fill(self, *_):
@@ -554,9 +555,13 @@ class SectionFeed(QWidget):
         section.show()
         self._layout.activate()
 
+    # layout cache viejo tras limpiar
     def _needs_more_content(self):
         bar = self._scroll.verticalScrollBar()
         viewport_height = max(self._scroll.viewport().height(), 400)
+        layout = self._content.layout()
+        layout.invalidate()
+        layout.activate()
         content_height = self._content.sizeHint().height()
         return content_height - (bar.value() + viewport_height) < LOOKAHEAD_PX
 
@@ -579,8 +584,8 @@ class SectionFeed(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        QTimer.singleShot(0, self._fill)
+        QTimer.singleShot(0, self, self._fill)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        QTimer.singleShot(0, self._fill)
+        QTimer.singleShot(0, self, self._fill)

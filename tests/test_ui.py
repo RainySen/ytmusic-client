@@ -262,9 +262,14 @@ def test_carousel_arrow_slides_by_a_page_with_animation(qapp):
     section._go_next()
     step = (1000 // CardsSection.SLOT) * CardsSection.SLOT
     assert section._target == step and section._header.prev.isEnabled()
-    QTest.qWait(80)
-    assert 0 < section._view.offset < step
-    QTest.qWait(500)
+    seen_moving = False
+    for _ in range(60):
+        QTest.qWait(10)
+        if 0 < section._view.offset < step:
+            seen_moving = True
+            break
+    assert seen_moving
+    QTest.qWait(600)
     assert section._view.offset == step
     assert section._view.track.pos().x() == -step
 

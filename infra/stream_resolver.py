@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import logging
 import threading
 
@@ -20,7 +21,7 @@ class YtDlpStreamResolver:
         self._local = threading.local()
 
     def warm_up(self) -> None:
-        import yt_dlp
+        importlib.import_module("yt_dlp")
 
     def _ydl(self):
         ydl = getattr(self._local, "ydl", None)

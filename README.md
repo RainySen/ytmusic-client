@@ -141,6 +141,7 @@ set YTMUSIC_LIVE_TESTS=1 && python -m pytest tests/test_live_flows.py -q -s
 - **Error de `libvlc.dll`:** instala VLC de 64 bits. No sirve la versión de 32 bits.
 - **"Tu sesión caducó":** vuelve a iniciar sesión. Si ocurre muy seguido, prueba el método de pegar cURL desde tu navegador habitual.
 - **Google dice que el navegador no es seguro:** usa la opción de pegar cURL o cookies.
+- **El login con Google se queda en una pantalla de Google** (revisión de seguridad, consentimiento de cookies, etc.): la ventana continúa sola a YouTube Music cuando detecta tu sesión. Si no avanza, pulsa **Ya inicié sesión, continuar** en la parte de abajo. Si aun así falla, el recorrido de páginas queda en `data/ytmusic-client.log` (líneas `login page:`), útil para reportar el problema.
 - **Errores en general:** se registran en `data/ytmusic-client.log`.
 
 ## Contribuir

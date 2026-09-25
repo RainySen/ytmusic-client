@@ -32,7 +32,7 @@ class ItemOpener:
         kind = self._kind_of(item)
         if kind == "playlist":
             self._navigator.playlist_requested.emit(playlist_id_of(item))
-        elif kind == "album":
+        elif kind == "album" and item.get("browseId"):
             self._navigator.album_requested.emit(item["browseId"])
         elif kind == "artist" and self._artist_id(item):
             self._navigator.artist_requested.emit(self._artist_id(item))
@@ -65,12 +65,14 @@ class ItemOpener:
     def _artist_id(item: dict) -> str:
         if item.get("browseId"):
             return item["browseId"]
-        artists = item.get("artists") or []
-        return artists[0].get("id", "") if artists else ""
+        artists = item.get("artists")
+        first = artists[0] if isinstance(artists, list) and artists else None
+        return (first.get("id") or "") if isinstance(first, dict) else ""
 
     @staticmethod
     def _kind_of(item: dict) -> str:
-        browse_id = item.get("browseId", "")
+        browse_id = item.get("browseId")
+        browse_id = browse_id if isinstance(browse_id, str) else ""
         if browse_id.startswith("UC"):
             return "artist"
         if browse_id.startswith("VL"):

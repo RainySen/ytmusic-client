@@ -43,8 +43,13 @@ class YTMusicGateway:
     @property
     def is_authenticated(self) -> bool:
         if self._ytm is None:
-            return os.path.exists(self._auth_file)
+            return self._has_credentials()
         return self._authenticated
+
+    # credenciales archivo valido
+    def _has_credentials(self) -> bool:
+        data = read_json(self._auth_file) if os.path.exists(self._auth_file) else None
+        return isinstance(data, dict) and any(str(k).lower() == "cookie" and v for k, v in data.items())
 
     def _client(self) -> Any:
         ytm = self._ytm
@@ -70,9 +75,11 @@ class YTMusicGateway:
         from ytmusicapi import YTMusic
 
         options = {"language": language} if language else {}
-        if read_json(self._auth_file) is not None:
+        if self._has_credentials():
             try:
                 return YTMusic(self._auth_file, **options), True
+            except OSError:
+                raise
             except Exception:
                 log.warning("Stored credentials are invalid; continuing unauthenticated", exc_info=True)
         return YTMusic(**options), False
