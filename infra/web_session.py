@@ -17,22 +17,35 @@ _PLATFORMS = {
 class WebSessionCookies:
     def __init__(self):
         self._youtube: dict[str, str] = {}
+        self._google: dict[str, str] = {}
 
     @staticmethod
-    def _is_youtube(domain: str) -> bool:
+    def _is_site(domain: str, site: str) -> bool:
         domain = domain.lstrip(".").lower()
-        return domain == "youtube.com" or domain.endswith(".youtube.com")
+        return domain == site or domain.endswith("." + site)
+
+    def _bucket(self, domain: str) -> dict[str, str] | None:
+        if self._is_site(domain, "youtube.com"):
+            return self._youtube
+        if self._is_site(domain, "google.com"):
+            return self._google
+        return None
 
     def add(self, domain: str, name: str, value: str) -> None:
-        if self._is_youtube(domain):
-            self._youtube[name] = value
+        bucket = self._bucket(domain)
+        if bucket is not None:
+            bucket[name] = value
 
     def remove(self, domain: str, name: str) -> None:
-        if self._is_youtube(domain):
-            self._youtube.pop(name, None)
+        bucket = self._bucket(domain)
+        if bucket is not None:
+            bucket.pop(name, None)
 
     def has_session(self) -> bool:
         return bool(session_id(self._youtube))
+
+    def has_google_session(self) -> bool:
+        return bool(session_id(self._google))
 
     def snapshot(self) -> dict[str, str]:
         return dict(self._youtube)

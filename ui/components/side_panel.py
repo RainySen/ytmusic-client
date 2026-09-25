@@ -14,6 +14,8 @@ from ui.components.queue_widgets import ImprovedQueueItem
 from ui.components.section_feed import CardsSection, CompactSection
 
 PANEL_WIDTH = 420
+QUEUE_BATCH = 40
+QUEUE_LOOKAHEAD_PX = 400
 TAB_QUEUE, TAB_LYRICS, TAB_SIMILAR = range(3)
 _TAB_LABELS = ("A continuación", "Letra", "Similares")
 
@@ -30,6 +32,10 @@ _TAB_QSS = """
 LYRICS_TEXT_WIDTH = PANEL_WIDTH - 32 - 24
 _SUNG, _ACTIVE_DIM, _OTHER_LINE = "#ffffff", "#a8a8a8", "#6c6c6c"
 _HINT_QSS = "color: #888; font-size: 13px; padding: 40px 12px;"
+
+
+def _song_key(song):
+    return (song.get("videoId"), song.get("title"))
 
 
 # panel lateral cola letra similares
@@ -128,6 +134,13 @@ class SidePanel(QWidget):
         self._queue_layout.setSpacing(4)
         self._queue_layout.addStretch()
         self._queue_scroll.setWidget(container)
+        self._queue_scroll.verticalScrollBar().valueChanged.connect(self._on_queue_scrolled)
+        self._queue_songs = []
+        self._queue_ids = []
+        self._queue_current = -1
+        self._queue_built = 0
+        self._queue_dirty = False
+        self._queue_thumbnails = None
         layout.addWidget(self._queue_scroll, stretch=10)
         return tab
 
@@ -141,24 +154,70 @@ class SidePanel(QWidget):
         button.clicked.connect(on_click)
         return button
 
+    # cola perezosa solo visible por lotes
     def set_queue(self, songs, current_index, thumbnails):
+        previous_current = self._queue_current
+        self._queue_songs = list(songs)
+        self._queue_current = current_index
+        self._queue_thumbnails = thumbnails
+        self._queue_count.setText(f"({len(songs)})")
+        if not self.isVisible():
+            self._queue_dirty = True
+            return
+        self._render_queue(previous_current)
+
+    def _render_queue(self, previous_current):
+        ids = [_song_key(s) for s in self._queue_songs]
+        rendered = self._queue_ids
+        appended_only = not self._queue_dirty and ids[:len(rendered)] == rendered
+        self._queue_dirty = False
+        self._queue_ids = ids
+        if not appended_only:
+            self._clear_queue_items()
+        self._build_queue_items(max(QUEUE_BATCH, self._queue_current + QUEUE_BATCH // 2 + 1))
+        if appended_only:
+            self._mark_current(previous_current, self._queue_current)
+        if 0 <= self._queue_current < len(self._queue_songs) and (not appended_only or previous_current != self._queue_current):
+            QTimer.singleShot(100, self, lambda: self._scroll_to(self._queue_current))
+
+    def _clear_queue_items(self):
         while self._queue_layout.count() > 1:
             widget = self._queue_layout.takeAt(0).widget()
             if widget is not None:
                 widget.setParent(None)
                 widget.deleteLater()
+        self._queue_built = 0
 
-        self._queue_count.setText(f"({len(songs)})")
-        for index, song in enumerate(songs):
-            item = ImprovedQueueItem(song, index, index == current_index, thumbnails)
+    def _build_queue_items(self, limit):
+        limit = min(limit, len(self._queue_songs))
+        while self._queue_built < limit:
+            index = self._queue_built
+            item = ImprovedQueueItem(self._queue_songs[index], index, index == self._queue_current, self._queue_thumbnails)
             item.play_clicked.connect(self.queue_item_activated)
             item.remove_clicked.connect(self.queue_item_removed)
             self._queue_layout.insertWidget(index, item)
+            self._queue_built += 1
 
-        if 0 <= current_index < len(songs):
-            QTimer.singleShot(100, lambda: self._scroll_to(current_index))
+    def _mark_current(self, old, new):
+        for index, current in ((old, False), (new, True)):
+            if 0 <= index < self._queue_built:
+                widget = self._queue_layout.itemAt(index).widget()
+                if widget is not None:
+                    widget.set_current(current)
+
+    def _on_queue_scrolled(self, value):
+        bar = self._queue_scroll.verticalScrollBar()
+        if self._queue_built < len(self._queue_songs) and value >= bar.maximum() - QUEUE_LOOKAHEAD_PX:
+            self._build_queue_items(self._queue_built + QUEUE_BATCH)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._queue_dirty:
+            self._render_queue(self._queue_current)
 
     def _scroll_to(self, index):
+        if index >= self._queue_built:
+            self._build_queue_items(index + 1)
         if 0 <= index < self._queue_layout.count() - 1:
             widget = self._queue_layout.itemAt(index).widget()
             if widget is not None:

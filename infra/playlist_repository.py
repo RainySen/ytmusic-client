@@ -20,8 +20,14 @@ class LocalPlaylistRepository:
     def _load(self) -> list[dict]:
         if self._playlists is None:
             data = read_json(self._path, [])
-            self._playlists = data if isinstance(data, list) else []
+            self._playlists = [self._clean(p) for p in data if isinstance(p, dict)] if isinstance(data, list) else []
         return self._playlists
+
+    @staticmethod
+    def _clean(playlist: dict) -> dict:
+        tracks = playlist.get("tracks")
+        playlist["tracks"] = [t for t in tracks if isinstance(t, dict)] if isinstance(tracks, list) else []
+        return playlist
 
     def all(self) -> list[dict]:
         with self._lock:

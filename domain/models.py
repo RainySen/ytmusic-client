@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any, Iterable
@@ -10,19 +11,23 @@ UNKNOWN_ARTIST = "Desconocido"
 LOCAL_SOURCES = ("local", "imported", "user_created")
 
 
+def artist_list(item: dict) -> list[str]:
+    artists = item.get("artists")
+    if not isinstance(artists, list):
+        return []
+    return [a["name"] for a in artists if isinstance(a, dict) and isinstance(a.get("name"), str) and a["name"]]
+
+
 def artist_names(item: dict, limit: int | None = None, sep: str = " • ") -> str:
-    artists = item.get("artists") or []
-    names = [a.get("name", "") for a in artists if a.get("name")]
+    names = artist_list(item)
     if limit is not None:
         names = names[:limit]
     return sep.join(names)
 
 
 def primary_artist(item: dict, default: str = UNKNOWN_ARTIST) -> str:
-    artists = item.get("artists") or []
-    if artists and artists[0].get("name"):
-        return artists[0]["name"]
-    return default
+    names = artist_list(item)
+    return names[0] if names else default
 
 
 MAX_THUMBNAIL_PX = 1200
@@ -37,13 +42,19 @@ def _at_size(url: str, pixels: int) -> str:
     return f"{match.group(1)}=w{size}-h{size}{match.group(4)}"
 
 
+def _width(thumb: dict) -> int:
+    width = thumb.get("width")
+    return width if isinstance(width, (int, float)) and not isinstance(width, bool) else 0
+
+
 # miniaturas resolucion
 def thumbnail_url(item: dict, min_width: int = 0) -> str:
-    thumbs = [t for t in (item.get("thumbnails") or []) if t.get("url")]
+    raw = item.get("thumbnails")
+    thumbs = [t for t in (raw if isinstance(raw, list) else []) if isinstance(t, dict) and isinstance(t.get("url"), str) and t["url"]]
     if thumbs:
-        thumbs.sort(key=lambda t: t.get("width", 0))
+        thumbs.sort(key=_width)
         for t in thumbs:
-            if t.get("width", 0) >= min_width:
+            if _width(t) >= min_width:
                 return _at_size(t["url"], min_width)
         return _at_size(thumbs[-1]["url"], min_width)
     video_id = item.get("videoId", "")
@@ -282,8 +293,8 @@ def parse_time_ms(value: Any) -> int:
             seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
         else:
             seconds = float(value)
-        return int(seconds * 1000)
-    except (ValueError, TypeError):
+        return int(seconds * 1000) if math.isfinite(seconds) else 0
+    except (ValueError, TypeError, OverflowError):
         return 0
 
 
