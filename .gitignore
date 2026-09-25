@@ -26,6 +26,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+/.idea/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -205,4 +206,19 @@ cython_debug/
 # Marimo
 marimo/_static/
 marimo/_lsp/
+
+# YTMusic Client — credentials / local state
+oauth.json
+client_config.json
+queue_and_cache.json
+state_error.log
 __marimo__/
+/.claude/
+
+# Runtime data
+cache/
+.yt-dlp-cache/
+*.log.*
+lyrics_settings.json
+data/
+local_playlists.json
