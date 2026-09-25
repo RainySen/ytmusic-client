@@ -2,8 +2,10 @@
 
 Cliente de escritorio para YouTube Music hecho con Python, PySide6 y VLC. Está pensado para PCs modestas: no usa Electron ni mantiene un navegador abierto, la red corre en hilos de fondo y la interfaz se mantiene fluida mientras suena la música.
 
-<img width="800" height="500" alt="Pantalla principal" src="https://github.com/user-attachments/assets/d02358a8-d57d-479e-8c6a-f98d6e4d5904" />
-<img width="800" height="500" alt="Reproductor" src="https://github.com/user-attachments/assets/b6234f13-81ca-40b2-a340-5c4968b31b6c" />
+<img width="1552" height="977" alt="image" src="https://github.com/user-attachments/assets/fcc6cbe7-dce3-4903-b435-e72a9dc03bf8" />
+<img width="1552" height="977" alt="image" src="https://github.com/user-attachments/assets/0a8effac-850f-4d8c-9ee9-9472125c0ad6" />
+
+
 
 Inspirado en [ytmdesktop](https://github.com/ytmdesktop/ytmdesktop). No está afiliado a YouTube ni a Google.
 
