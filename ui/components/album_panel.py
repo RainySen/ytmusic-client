@@ -2,7 +2,7 @@ import qtawesome as qta
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from domain.models import thumbnail_url
+from domain.models import artist_list, thumbnail_url
 from ui import theme
 from ui.components.lazy_thumbnail import LazyThumbnail
 from ui.components.page_parts import MessagePage, back_button
@@ -73,8 +73,8 @@ class AlbumPanel(QWidget):
 
     def show_album(self, album, thumbnails):
         item = {"type": "album", "browseId": album["id"], "title": album["title"]}
-        album_artists = {a.get("name") for a in album.get("artists") or []}
-        others = any(a.get("name") not in album_artists for t in album["tracks"] for a in t.get("artists") or [])
+        album_artists = set(artist_list(album))
+        others = any(name not in album_artists for t in album["tracks"] for name in artist_list(t))
         self._show(album, thumbnails, item, self._artist_links(album.get("artists") or []),
                    dict(numbered=True, show_cover=False, show_artist=others, show_album=False))
 

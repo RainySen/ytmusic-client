@@ -1,3 +1,4 @@
+import getpass
 import logging
 import os
 import sys
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 from core.bootstrap import build_services, build_ui
 from infra.web_session import configure_web_engine_environment
 from core.config import AppPaths
+from core.single_instance import SingleInstance
 from core.logging_setup import setup_logging
 from ui.login_window import LoginWindow
 
@@ -28,8 +30,21 @@ def main() -> int:
     icon = qta.icon("fa5s.music", color="#03adb7")
     app.setWindowIcon(icon)
 
+    guard = SingleInstance(f"ytmusic-client-{getpass.getuser()}")
+    if not guard.claim():
+        return 0
+
     services = build_services(paths)
     state = {"ui": None, "login": None}
+
+    def bring_to_front():
+        target = state["ui"].window if state["ui"] is not None else state["login"]
+        if target is not None:
+            target.showNormal()
+            target.raise_()
+            target.activateWindow()
+
+    guard.activated.connect(bring_to_front)
 
     def start_main_application():
         if state["ui"] is not None:

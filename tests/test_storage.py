@@ -129,3 +129,88 @@ def test_recent_playlists_are_newest_first_bounded_and_persisted(tmp_path):
     assert RecentPlaylists(path, limit=3).ids() == ["d", "a", "c"]
     (tmp_path / "recent.json").write_text("not json")
     assert RecentPlaylists(path).ids() == []
+
+
+def test_local_playlists_ignore_malformed_entries(tmp_path):
+    import json
+    from infra.playlist_repository import LocalPlaylistRepository
+
+    path = tmp_path / "local_playlists.json"
+    path.write_text(json.dumps([None, 5, "x", [], {"playlistId": "a", "title": "A", "tracks": [None, {"videoId": "v1"}, 3]},
+                                {"playlistId": "b", "title": "B", "tracks": "roto"}]), encoding="utf-8")
+    repo = LocalPlaylistRepository(str(path))
+    assert [p["playlistId"] for p in repo.all()] == ["a", "b"]
+    assert repo.get("a")["tracks"] == [{"videoId": "v1"}] and repo.get("b")["tracks"] == []
+    assert repo.add_tracks("b", [{"videoId": "v9"}]) == 1
+    assert repo.delete("a") is True
+
+
+def test_stored_home_ignores_malformed_sections(tmp_path):
+    import json
+    from services.catalog_service import CatalogService
+
+    path = tmp_path / "home.json"
+    for raw in ([1, 2], [None], ["ab"], [["Titulo"]], [[5, []]], {"a": 1}, "texto", [["ok", "no-lista"]]):
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        assert CatalogService(None, None, str(path)).stored_home() is None
+    path.write_text(json.dumps([["Bien", [{"type": "song", "videoId": "v"}, None, 4]], ["Vacia", []], 7]), encoding="utf-8")
+    assert CatalogService(None, None, str(path)).stored_home() == [("Bien", [{"type": "song", "videoId": "v"}])]
+
+
+def test_gateway_ignores_unusable_credential_files(tmp_path):
+    from infra.ytmusic_gateway import YTMusicGateway
+
+    path = tmp_path / "oauth.json"
+    for raw in ("", "{", "null", "[]", "{}", '{"cookie": ""}', '"texto"', "\x00\x00"):
+        path.write_text(raw, encoding="utf-8")
+        assert YTMusicGateway(str(path)).is_authenticated is False
+    path.write_text('{"Cookie": "SAPISID=1", "x-goog-authuser": "0"}', encoding="utf-8")
+    assert YTMusicGateway(str(path)).is_authenticated is True
+    assert YTMusicGateway(str(tmp_path / "missing.json")).is_authenticated is False
+
+
+def test_gateway_keeps_credentials_when_the_first_connection_fails(tmp_path, monkeypatch):
+    import ytmusicapi
+    import requests
+    from infra.ytmusic_gateway import YTMusicGateway
+
+    path = tmp_path / "oauth.json"
+    path.write_text('{"cookie": "SAPISID=1"}', encoding="utf-8")
+    attempts = []
+
+    class FlakyClient:
+        def __init__(self, auth=None, **_options):
+            attempts.append(auth)
+            if len(attempts) == 1:
+                raise requests.exceptions.ConnectionError("sin red")
+            self.authenticated = bool(auth)
+
+    monkeypatch.setattr(ytmusicapi, "YTMusic", FlakyClient)
+    gateway = YTMusicGateway(str(path))
+    try:
+        gateway._client()
+    except requests.exceptions.ConnectionError:
+        pass
+    assert gateway.is_authenticated is True
+    client = gateway._client()
+    assert client.authenticated is True and gateway.is_authenticated is True
+    assert attempts == [str(path), str(path)]
+
+
+def test_gateway_still_falls_back_when_credentials_are_rejected(tmp_path, monkeypatch):
+    import ytmusicapi
+    from infra.ytmusic_gateway import YTMusicGateway
+
+    path = tmp_path / "oauth.json"
+    path.write_text('{"cookie": "x"}', encoding="utf-8")
+
+    class PickyClient:
+        def __init__(self, auth=None, **_options):
+            if auth:
+                raise KeyError("faltan cabeceras")
+            self.anonymous = True
+
+    monkeypatch.setattr(ytmusicapi, "YTMusic", PickyClient)
+    gateway = YTMusicGateway(str(path))
+    assert gateway._client().anonymous is True
+    assert gateway.is_authenticated is False

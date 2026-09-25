@@ -25,10 +25,6 @@ class ImprovedQueueItem(QWidget):
         layout.setSpacing(8)
 
         self.play_indicator = QLabel()
-        if is_current:
-            self.play_indicator.setPixmap(qta.icon('fa5s.volume-up', color='#FF0000').pixmap(14, 14))
-        else:
-            self.play_indicator.setPixmap(qta.icon('fa5s.grip-vertical', color='#666').pixmap(14, 14))
         self.play_indicator.setFixedWidth(20)
         self.play_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.play_indicator.setCursor(Qt.OpenHandCursor)
@@ -119,6 +115,12 @@ class ImprovedQueueItem(QWidget):
 
         self.setFixedHeight(56)
 
+        self.set_current(is_current)
+
+    def set_current(self, is_current):
+        self.is_current = is_current
+        icon = qta.icon('fa5s.volume-up', color='#FF0000') if is_current else qta.icon('fa5s.grip-vertical', color='#666')
+        self.play_indicator.setPixmap(icon.pixmap(14, 14))
         bg_color = "rgba(255,0,0,0.08)" if is_current else "transparent"
         border_color = "rgba(255,0,0,0.3)" if is_current else "transparent"
         self.setStyleSheet(f"""
