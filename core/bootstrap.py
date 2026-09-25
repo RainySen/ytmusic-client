@@ -5,7 +5,7 @@ from typing import Callable
 
 from PySide6.QtWidgets import QWidget
 
-from config import NETWORK_CACHING_MS, RADIO_QUEUE_LIMIT, STREAM_EXPIRY_MARGIN_S, AppPaths
+from core.config import NETWORK_CACHING_MS, RADIO_QUEUE_LIMIT, STREAM_EXPIRY_MARGIN_S, AppPaths
 from domain.play_queue import PlayQueue
 from domain.stream_cache import StreamCache
 from infra.audio_backend import VlcAudioBackend

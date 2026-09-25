@@ -3,11 +3,13 @@ import os
 import sys
 
 import qtawesome as qta
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QApplication
 
-from bootstrap import build_services, build_ui
-from config import AppPaths
-from logging_setup import setup_logging
+from core.bootstrap import build_services, build_ui
+from infra.web_session import configure_web_engine_environment
+from core.config import AppPaths
+from core.logging_setup import setup_logging
 from ui.login_window import LoginWindow
 
 log = logging.getLogger("app")
@@ -16,8 +18,11 @@ log = logging.getLogger("app")
 # entrada app arranque login ui
 def main() -> int:
     paths = AppPaths.detect()
+    paths.ensure_dirs()
     setup_logging(paths)
 
+    configure_web_engine_environment(os.environ)
+    QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     icon = qta.icon("fa5s.music", color="#03adb7")

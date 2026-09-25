@@ -292,6 +292,10 @@ class MainWindow(QWidget):
         self._logged_in = logged_in
         self.top_bar.set_login_state(logged_in)
 
+    def ask_relogin(self):
+        return dialogs.confirm(self, "Tu sesión caducó", "YouTube Music cerró tu sesión. Inicia sesión de nuevo para ver tu biblioteca y tus playlists.",
+                               ok="Iniciar sesión", cancel="Ahora no")
+
     def _on_account_clicked(self):
         if not self._logged_in:
             self.login_requested.emit()

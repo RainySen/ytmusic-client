@@ -28,7 +28,7 @@ from ui.components.track_list import TrackRow
 def rig(qapp):
     r = Rig()
     yield r
-    r.window.close()
+    r.dispose()
 
 
 def tracks(n=3):

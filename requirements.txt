@@ -1,7 +1,6 @@
-yt-dlp
-PySide6
-ytmusicapi
-requests
-python-vlc
-qtawesome
-pyinstaller
+PySide6>=6.11
+ytmusicapi>=1.12
+yt-dlp>=2026.8.19
+requests>=2.32
+python-vlc>=3.0.21203
+qtawesome>=1.4

@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from config import HOVER_PREFETCH_MS
+from core.config import HOVER_PREFETCH_MS
 from domain.models import artist_names, primary_artist, thumbnail_url
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail

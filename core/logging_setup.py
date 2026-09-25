@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 
 from PySide6.QtCore import QtMsgType, qInstallMessageHandler
 
-from config import AppPaths
+from core.config import AppPaths
 
 _QT_LEVELS = {
     QtMsgType.QtDebugMsg: logging.DEBUG,

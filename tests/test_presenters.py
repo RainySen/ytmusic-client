@@ -1,7 +1,8 @@
 import pytest
 import qtawesome as qta
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QEvent, QObject, Signal
 from PySide6.QtTest import QSignalSpy
+from PySide6.QtWidgets import QApplication
 
 from domain.models import LyricLine, Lyrics
 from domain.play_queue import PlayQueue
@@ -63,11 +64,16 @@ class ScriptedCatalog(FakeCatalog):
 
 class FakeAuth(QObject):
     auth_changed = Signal(bool)
+    session_expired = Signal()
 
     def __init__(self):
         super().__init__()
         self.is_authenticated = False
         self.logouts = 0
+        self.verifications = 0
+
+    def verify_session(self):
+        self.verifications += 1
 
     def logout(self):
         self.logouts += 1
@@ -133,6 +139,11 @@ class Rig:
         self.auth = FakeAuth()
         self._alive = []
 
+    def dispose(self):
+        self.window.close()
+        self.window.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+
     def keep(self, presenter):
         self._alive.append(presenter)
         return presenter
@@ -142,7 +153,7 @@ class Rig:
 def rig(qapp):
     r = Rig()
     yield r
-    r.window.close()
+    r.dispose()
 
 
 def test_show_view_switches_panels_and_nav(rig):

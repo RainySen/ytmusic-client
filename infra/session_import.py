@@ -4,7 +4,7 @@ import json
 import re
 import shlex
 
-from infra.browser_cookies import headers_from_cookies, parse_cookie_string, session_id
+from infra.auth_headers import headers_from_cookies, parse_cookie_string, session_id
 
 _GOOGLE_DOMAIN = re.compile(r"youtube|google", re.IGNORECASE)
 _HEADER_LINE = re.compile(r"^([A-Za-z][A-Za-z0-9-]*):\s?(.*)$")
@@ -144,6 +144,12 @@ def _from_bare_cookie(text: str) -> dict[str, str] | None:
 _READERS = (_from_json, _from_netscape, _from_powershell, _from_curl, _from_header_block, _from_bare_cookie)
 
 
+def cookies_to_headers(cookies: dict[str, str], *, user_agent: str | None = None, authuser: str = "0") -> dict[str, str]:
+    if not session_id(cookies):
+        raise SessionImportError(NO_SESSION)
+    return headers_from_cookies(cookies, user_agent=user_agent, authuser=authuser)
+
+
 # login pegar curl cookies
 def session_headers(text: str | None) -> dict[str, str]:
     text = (text or "").strip()
@@ -158,8 +164,5 @@ def session_headers(text: str | None) -> dict[str, str]:
     cookie = headers.get("cookie", "")
     if not cookie:
         raise SessionImportError(NO_COOKIE)
-    cookies = parse_cookie_string(cookie)
-    if not session_id(cookies):
-        raise SessionImportError(NO_SESSION)
-    return headers_from_cookies(cookies, user_agent=headers.get("user-agent"),
-                                authuser=headers.get("x-goog-authuser") or "0")
+    return cookies_to_headers(parse_cookie_string(cookie), user_agent=headers.get("user-agent"),
+                              authuser=headers.get("x-goog-authuser") or "0")

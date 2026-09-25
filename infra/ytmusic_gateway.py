@@ -5,7 +5,7 @@ import os
 import threading
 from typing import Any
 
-from config import CONTENT_LANGUAGE
+from core.config import CONTENT_LANGUAGE
 from infra.json_store import read_json, write_json_atomic
 
 log = logging.getLogger(__name__)
@@ -17,6 +17,18 @@ class GatewayError(Exception):
 
 class AuthRequired(GatewayError):
     pass
+
+
+class SessionRejected(GatewayError):
+    pass
+
+
+_AUTH_FAILURE_MARKERS = ("http 401", "http 403", "unauthorized", "forbidden", "authenticat", "sign in", "login required")
+
+
+def looks_like_auth_failure(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in _AUTH_FAILURE_MARKERS)
 
 
 # ytmusicapi cliente
@@ -93,6 +105,18 @@ class YTMusicGateway:
             self._authenticated = True
 
     # login cerrar sesion
+    # login verificar sesion caducada
+    def verify_session(self) -> None:
+        client = self._require_auth()
+        try:
+            client.get_library_playlists(limit=1)
+        except Exception as exc:  # noqa: BLE001
+            if looks_like_auth_failure(exc):
+                with self._client_lock:
+                    self._authenticated = False
+                raise SessionRejected(str(exc)) from exc
+            raise
+
     def logout(self) -> None:
         from ytmusicapi import YTMusic
 
