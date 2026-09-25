@@ -1,152 +1,145 @@
-# ui/login_window.py
-
-import re
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QMessageBox, QInputDialog
-)
-from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
+from importlib.util import find_spec
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
+
+from ui import theme
+from ui.components import dialogs
+
+WINDOW_HEIGHT = 480
+WEB_LOGIN_AVAILABLE = find_spec("PySide6.QtWebEngineWidgets") is not None
+
+_MANUAL_INSTRUCTIONS = (
+    "Pega lo que copies de tu navegador con la sesión de music.youtube.com iniciada. Sirve cualquiera de estas opciones:\n\n"
+    "• Chrome, Edge, Opera GX, Brave: F12 → Red (Network) → recarga con Ctrl+R → filtra por «browse» → clic "
+    "derecho en la petición → Copiar → Copiar como cURL (bash o cmd).\n\n"
+    "• Firefox: F12 → Red → clic derecho en una petición a music.youtube.com → Copiar valor → Copiar como "
+    "cURL (Windows o POSIX).\n\n"
+    "• Cualquier navegador: exporta las cookies de music.youtube.com con la extensión Cookie-Editor (formato "
+    "JSON) o como cookies.txt, y pégalas aquí."
+)
 
 
+# login ventana
 class LoginWindow(QWidget):
-    """
-    Una nueva ventana de bienvenida que se muestra al inicio.
-    Permite al usuario iniciar sesión o continuar como invitado.
-    """
-
-    # Señales para avisar a app.py la decisión del usuario
     login_success = Signal()
     login_skipped = Signal()
+    closed = Signal()
 
-    def __init__(self, service, app_icon, is_authenticated):  # <--- CAMBIO AQUÍ
+    def __init__(self, auth, app_icon):
         super().__init__()
-        self.service = service
-        self.app_icon = app_icon
-        self.is_authenticated = is_authenticated  # <--- CAMBIO AQUÍ
-        self.init_ui()
+        self._auth = auth
+        self._app_icon = app_icon
+        self._web = None
+        self._build()
 
-    def init_ui(self):
+    def _build(self):
         self.setWindowTitle("Bienvenido a YTMusic Client")
-        self.setWindowIcon(self.app_icon)
-        self.setFixedSize(400, 450)  # Tamaño fijo para la ventana de login
+        self.setWindowIcon(self._app_icon)
+        self.setFixedSize(400, WINDOW_HEIGHT)
+        self.setStyleSheet(f"QWidget {{ background-color: {theme.BG}; }} QLabel {{ background: transparent; }}")
 
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        self._layout = QVBoxLayout(self)
+        self._layout.setAlignment(Qt.AlignCenter)
+        self._layout.setSpacing(14)
+        self._layout.setContentsMargins(32, 32, 32, 32)
 
-        # 1. Icono/Logo
-        icon_label = QLabel()
-        pixmap = self.app_icon.pixmap(128, 128)
-        icon_label.setPixmap(pixmap)
-        icon_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(icon_label)
+        icon = QLabel()
+        icon.setPixmap(self._app_icon.pixmap(96, 96))
+        icon.setAlignment(Qt.AlignCenter)
+        self._layout.addWidget(icon)
 
-        # 2. Título
-        title_label = QLabel("YTMusic Minimal Client")
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: white;")
-        layout.addWidget(title_label)
+        title = QLabel("YTMusic Minimal Client")
+        title.setAlignment(Qt.AlignCenter)
+        title.setWordWrap(True)
+        title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {theme.TEXT};")
+        self._layout.addWidget(title)
 
-        # 3. Créditos
         credits_label = QLabel("by RainySen & Moonshine")
         credits_label.setAlignment(Qt.AlignCenter)
-        credits_label.setStyleSheet("font-size: 14px; color: #b3b3b3;")
-        layout.addWidget(credits_label)
+        credits_label.setStyleSheet(f"font-size: 13px; color: {theme.TEXT_MUTED};")
+        self._layout.addWidget(credits_label)
+        self._layout.addStretch(1)
 
-        layout.addStretch(1)  # Espaciador
+        if self._auth.is_authenticated:
+            button = self._make_button("Continuar", "primary")
+            button.setDefault(True)
+            button.clicked.connect(self.login_skipped)
+            self._layout.addWidget(button)
+            return
 
-        # 4. Botón de Iniciar Sesión
-        self.login_button = QPushButton()
-        self.login_button.setIcon(qta.icon('fa5s.user-circle', color='white'))
-        self.login_button.setText(" Iniciar Sesión")
-        self.login_button.clicked.connect(self.start_login)
-        self.login_button.setStyleSheet("""
-            QPushButton {
-                background-color: #03adb7; color: white; border: none;
-                padding: 12px; border-radius: 6px; font-weight: bold; font-size: 16px;
-            }
-            QPushButton:hover { background-color: #00dfe5; }
-        """)
-        layout.addWidget(self.login_button)
+        if WEB_LOGIN_AVAILABLE:
+            self._web_button = self._make_button("Iniciar sesión con Google", "primary")
+            self._web_button.setIcon(qta.icon("fa5b.google", color=theme.BG))
+            self._web_button.clicked.connect(self._login_with_web)
+            self._layout.addWidget(self._web_button)
 
-        # 5. Botón de Continuar (Saltar)
-        self.skip_button = QPushButton("Continuar sin sesión")
-        self.skip_button.clicked.connect(self.login_skipped.emit)
-        self.skip_button.setStyleSheet("""
-            QPushButton {
-                background-color: #2a3738; color: white; border: none;
-                padding: 10px; border-radius: 6px; font-size: 14px;
-            }
-            QPushButton:hover { background-color: #3a4748; }
-        """)
-        layout.addWidget(self.skip_button)
+        self._layout.addSpacing(4)
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet(f"color: {theme.BORDER};")
+        self._layout.addWidget(separator)
 
-        # --- INICIO DE LA NUEVA LÓGICA ---
-        # Revisa si el usuario ya está autenticado
-        if self.is_authenticated:
-            self.login_button.hide()  # Oculta el botón de "Iniciar Sesión"
-            self.skip_button.setText("Continuar")  # Cambia el texto del botón
-            self.skip_button.setDefault(True)  # Hace que 'Enter' presione este botón
+        manual = QPushButton("Pegar cURL o cookies")
+        manual.clicked.connect(self._manual_login)
+        manual.setCursor(Qt.PointingHandCursor)
+        manual.setStyleSheet(theme.button_qss("text", height=32))
+        self._layout.addWidget(manual)
+
+        skip = self._make_button("Continuar sin sesión", "tonal")
+        skip.clicked.connect(self.login_skipped)
+        self._layout.addWidget(skip)
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)
+
+    # login google chromium
+    def _login_with_web(self):
+        if self._web is not None:
+            self._web.raise_()
+            self._web.activateWindow()
+            return
+        from ui.web_login_window import WebLoginWindow
+
+        self._web = WebLoginWindow()
+        self._web.session_captured.connect(self._on_web_session)
+        self._web.closed.connect(self._on_web_closed)
+        self._web.start()
+        self._web.show()
+
+    def _on_web_session(self, cookies, user_agent):
+        self._web_button.setEnabled(False)
+        self._web_button.setText("Iniciando sesión…")
+        self._auth.login_with_web_session(cookies, user_agent, self._on_web_result)
+
+    def _on_web_closed(self):
+        self._web = None
+
+    def _on_web_result(self, ok, error):
+        self._web = None
+        self._web_button.setEnabled(True)
+        self._web_button.setText("Iniciar sesión con Google")
+        self._on_manual_result(ok, error)
+
+    # login pegar curl cookies
+    def _manual_login(self):
+        text = dialogs.prompt_text(self, "Iniciar sesión manualmente", _MANUAL_INSTRUCTIONS, ok="Iniciar sesión",
+                                   placeholder="curl 'https://music.youtube.com/youtubei/v1/browse…'  ·  cookies  ·  JSON",
+                                   multiline=True)
+        if text:
+            self._auth.login_with_text(text, self._on_manual_result)
+
+    def _on_manual_result(self, ok, error):
+        if ok:
+            self.login_success.emit()
         else:
-            self.login_button.setDefault(True)
-        # --- FIN DE LA NUEVA LÓGICA ---
+            dialogs.notify(self, "Error al iniciar sesión", f"No se pudo completar el inicio de sesión.\n\n{error}")
 
-        # Estilo de la ventana
-        self.setStyleSheet("background-color: #060d0e;")
-
-    def start_login(self):
-        """
-        Muestra el diálogo para obtener las cabeceras e intenta autenticarse.
-        """
-        headers_raw = self.get_login_headers()
-        if headers_raw:
-            # Llama al servicio para intentar el login
-            success = self.service.setup_authentication(headers_raw)
-
-            if success:
-                QMessageBox.information(self, "Éxito", "¡Inicio de sesión completado!")
-                self.login_success.emit()  # Avisa a app.py que el login fue exitoso
-            else:
-                QMessageBox.warning(self, "Error",
-                                    "No se pudo completar el inicio de sesión. Por favor, verifica las cabeceras e inténtalo de nuevo.")
-        # Si el usuario cancela, simplemente no hace nada y se queda en esta ventana.
-
-    def get_login_headers(self):
-        """
-        Muestra el QInputDialog con las instrucciones.
-        """
-        instructions = """
-            Para iniciar sesión, sigue estos pasos con atención:
-
-            1. Abre YouTube Music en tu navegador (Chrome, Firefox, Opera).
-            2. **IMPORTANTE: Asegúrate de haber iniciado sesión con tu cuenta.**
-            3. Abre las herramientas de desarrollador (con F12).
-            4. Ve a la pestaña "Red" (o "Network").
-            5. **IMPORTANTE: Haz una recarga forzada de la página (Ctrl + Shift + R)** para evitar la caché.
-            6. En el filtro, escribe `browse` para encontrar la petición correcta.
-            7. Busca la petición a `music.youtube.com/youtubei...`, haz clic derecho sobre ella.
-            8. Ve a "Copiar" -> "Copiar como cURL (bash)".
-            9. Pega el texto completo en el campo de abajo.
-        """
-        text, ok = QInputDialog.getMultiLineText(self, 'Iniciar Sesión - Obtener Credenciales', instructions, text="")
-
-        if ok and text:
-            # Esta es la misma lógica de parseo que ya tenías
-            unwrapped_text = re.sub(r'[\^\\]\s*\n', ' ', text)
-            unwrapped_text = unwrapped_text.replace('\n', ' ')
-            headers_list = []
-
-            h_matches = re.findall(r"-H\s+(['\"])(.*?)\1", unwrapped_text)
-            if h_matches:
-                headers_list.extend([match[1] for match in h_matches])
-
-            cookie_match = re.search(r"(--cookie|-b)\s+(['\"])(.*?)\2", unwrapped_text)
-            if cookie_match:
-                cookie_data = cookie_match.group(3)
-                headers_list.append(f"Cookie: {cookie_data}")
-
-            return "\n".join(headers_list)
-        return None
+    @staticmethod
+    def _make_button(text, kind):
+        button = QPushButton(text)
+        button.setCursor(Qt.PointingHandCursor)
+        button.setStyleSheet(theme.button_qss(kind))
+        return button
