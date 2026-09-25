@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from config import HOVER_PREFETCH_MS
+from core.config import HOVER_PREFETCH_MS
 from domain.models import LOCAL_SOURCES, artist_names, thumbnail_url
 from ui.components.chip import Chip
 from ui.components.clickable import ClickableWidget

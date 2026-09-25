@@ -26,7 +26,7 @@ ARTIST = "UC_artist"
 def rig(qapp):
     r = Rig()
     yield r
-    r.window.close()
+    r.dispose()
 
 
 def raw_song(n, **extra):

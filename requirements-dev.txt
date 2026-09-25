@@ -1,2 +1,4 @@
 -r requirements.txt
-pytest
+pytest>=9
+pyflakes>=4
+pyinstaller>=6.22

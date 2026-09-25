@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from infra.browser_cookies import headers_from_cookies, parse_cookie_string, session_id
+from infra.auth_headers import headers_from_cookies, parse_cookie_string, session_id
 from infra.concurrency import TaskRunner
 from infra.session_import import NO_COOKIE, NO_SESSION, SessionImportError, session_headers
 from infra.ytmusic_gateway import GatewayError

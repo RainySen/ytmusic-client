@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from config import HOME_SECTIONS
+from core.config import HOME_SECTIONS
 from domain.models import (
     Track, normalize_artist_card, normalize_playlist_item, normalize_release, normalize_track, normalize_tracks,
     normalize_video, parse_home_section, playlist_id_of, release_label,

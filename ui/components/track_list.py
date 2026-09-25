@@ -1,7 +1,7 @@
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from config import HOVER_PREFETCH_MS
+from core.config import HOVER_PREFETCH_MS
 from domain.models import artist_names, thumbnail_url
 from ui import theme
 from ui.components.clickable import ClickableWidget

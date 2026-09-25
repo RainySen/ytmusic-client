@@ -5,7 +5,7 @@ from typing import Protocol
 
 from PySide6.QtCore import QObject, Signal
 
-from config import EXTEND_BATCH, MAX_CONSECUTIVE_PLAY_FAILURES, PREFETCH_AHEAD, QUEUE_HISTORY_LIMIT, RADIO_FETCH
+from core.config import EXTEND_BATCH, MAX_CONSECUTIVE_PLAY_FAILURES, PREFETCH_AHEAD, QUEUE_HISTORY_LIMIT, RADIO_FETCH
 from domain.models import Track
 from domain.play_queue import LOOP_QUEUE, LOOP_SONG, PlayQueue
 from domain.stream_cache import StreamInfo

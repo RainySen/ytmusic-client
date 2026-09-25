@@ -1,4 +1,4 @@
-from infra.browser_cookies import parse_cookie_string
+from infra.auth_headers import parse_cookie_string
 from infra.session_import import session_headers
 
 COOKIES = ("VISITOR_INFO1_LIVE=abc; PREF=f6=40000080&tz=America.Bogota&volume=16; SAPISID=FAKEKEY/xyz; "

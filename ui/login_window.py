@@ -1,27 +1,21 @@
 import qtawesome as qta
+from importlib.util import find_spec
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ui import theme
 from ui.components import dialogs
 
-_BROWSER_ICONS = {
-    "firefox": "fa5b.firefox-browser",
-    "chrome": "fa5b.chrome",
-    "edge": "fa5b.edge",
-    "brave": "fa5b.brave",
-    "opera": "fa5b.opera",
-    "vivaldi": "fa5s.globe",
-    "chromium": "fa5b.chrome",
-    "whale": "fa5s.globe",
-}
+WINDOW_HEIGHT = 480
+WEB_LOGIN_AVAILABLE = find_spec("PySide6.QtWebEngineWidgets") is not None
 
 _MANUAL_INSTRUCTIONS = (
     "Pega lo que copies de tu navegador con la sesión de music.youtube.com iniciada. Sirve cualquiera de estas opciones:\n\n"
     "• Chrome, Edge, Opera GX, Brave: F12 → Red (Network) → recarga con Ctrl+R → filtra por «browse» → clic "
     "derecho en la petición → Copiar → Copiar como cURL (bash o cmd).\n\n"
-    "• Firefox: usa el botón «Firefox» de la pantalla anterior. Si no aparece: F12 → Red → clic derecho en una "
-    "petición a music.youtube.com → Copiar → Copiar como cURL.\n\n"
+    "• Firefox: F12 → Red → clic derecho en una petición a music.youtube.com → Copiar valor → Copiar como "
+    "cURL (Windows o POSIX).\n\n"
     "• Cualquier navegador: exporta las cookies de music.youtube.com con la extensión Cookie-Editor (formato "
     "JSON) o como cookies.txt, y pégalas aquí."
 )
@@ -37,15 +31,13 @@ class LoginWindow(QWidget):
         super().__init__()
         self._auth = auth
         self._app_icon = app_icon
-        self._status = None
+        self._web = None
         self._build()
-        if not auth.is_authenticated:
-            self._auth.detect_browsers(self._on_browsers_detected)
 
     def _build(self):
         self.setWindowTitle("Bienvenido a YTMusic Client")
         self.setWindowIcon(self._app_icon)
-        self.setFixedSize(400, 500)
+        self.setFixedSize(400, WINDOW_HEIGHT)
         self.setStyleSheet(f"QWidget {{ background-color: {theme.BG}; }} QLabel {{ background: transparent; }}")
 
         self._layout = QVBoxLayout(self)
@@ -77,13 +69,11 @@ class LoginWindow(QWidget):
             self._layout.addWidget(button)
             return
 
-        self._browser_area = QVBoxLayout()
-        self._browser_area.setSpacing(8)
-        self._detect_label = QLabel("🔍  Buscando sesiones en navegadores…")
-        self._detect_label.setAlignment(Qt.AlignCenter)
-        self._detect_label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 12px;")
-        self._browser_area.addWidget(self._detect_label)
-        self._layout.addLayout(self._browser_area)
+        if WEB_LOGIN_AVAILABLE:
+            self._web_button = self._make_button("Iniciar sesión con Google", "primary")
+            self._web_button.setIcon(qta.icon("fa5b.google", color=theme.BG))
+            self._web_button.clicked.connect(self._login_with_web)
+            self._layout.addWidget(self._web_button)
 
         self._layout.addSpacing(4)
         separator = QFrame()
@@ -105,63 +95,33 @@ class LoginWindow(QWidget):
         self.closed.emit()
         super().closeEvent(event)
 
-    def _clear_browser_area(self):
-        while self._browser_area.count():
-            widget = self._browser_area.takeAt(0).widget()
-            if widget is not None:
-                widget.deleteLater()
-
-    def _on_browsers_detected(self, browsers):
-        self._clear_browser_area()
-        if browsers:
-            label = QLabel("Iniciar sesión con:")
-            label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
-            label.setAlignment(Qt.AlignCenter)
-            self._browser_area.addWidget(label)
-            for browser in browsers:
-                button = QPushButton(f"  {browser.capitalize()}")
-                button.setIcon(qta.icon(_BROWSER_ICONS.get(browser, "fa5s.globe"), color=theme.BG))
-                button.setDefault(len(browsers) == 1)
-                button.setCursor(Qt.PointingHandCursor)
-                button.setStyleSheet(theme.button_qss("primary"))
-                button.clicked.connect(lambda _=False, b=browser: self._login_with_browser(b))
-                self._browser_area.addWidget(button)
-        else:
-            label = QLabel("No se encontraron sesiones de YouTube en\nningún navegador compatible.")
-            label.setAlignment(Qt.AlignCenter)
-            label.setWordWrap(True)
-            label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
-            self._browser_area.addWidget(label)
-        self.adjustSize()
-        self.setFixedSize(400, max(500, self.sizeHint().height() + 20))
-
-    def _set_browser_buttons_enabled(self, enabled):
-        for index in range(self._browser_area.count()):
-            widget = self._browser_area.itemAt(index).widget()
-            if widget is not None:
-                widget.setEnabled(enabled)
-
-    def _login_with_browser(self, browser):
-        self._set_browser_buttons_enabled(False)
-        self._status = QLabel(f"⏳  Autenticando con {browser.capitalize()}…")
-        self._status.setAlignment(Qt.AlignCenter)
-        self._status.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
-        self._browser_area.addWidget(self._status)
-        self._auth.login_with_browser(browser, lambda ok, err: self._on_browser_result(ok, err, browser))
-
-    def _on_browser_result(self, ok, error, browser):
-        if ok:
-            self.login_success.emit()
+    # login google chromium
+    def _login_with_web(self):
+        if self._web is not None:
+            self._web.raise_()
+            self._web.activateWindow()
             return
-        if self._status is not None:
-            self._status.deleteLater()
-            self._status = None
-        self._set_browser_buttons_enabled(True)
-        dialogs.notify(
-            self, "Error de autenticación",
-            f"No se pudo autenticar con {browser.capitalize()}:\n{error}\n\n"
-            "Asegúrate de estar iniciado sesión en YouTube Music en ese navegador.",
-        )
+        from ui.web_login_window import WebLoginWindow
+
+        self._web = WebLoginWindow()
+        self._web.session_captured.connect(self._on_web_session)
+        self._web.closed.connect(self._on_web_closed)
+        self._web.start()
+        self._web.show()
+
+    def _on_web_session(self, cookies, user_agent):
+        self._web_button.setEnabled(False)
+        self._web_button.setText("Iniciando sesión…")
+        self._auth.login_with_web_session(cookies, user_agent, self._on_web_result)
+
+    def _on_web_closed(self):
+        self._web = None
+
+    def _on_web_result(self, ok, error):
+        self._web = None
+        self._web_button.setEnabled(True)
+        self._web_button.setText("Iniciar sesión con Google")
+        self._on_manual_result(ok, error)
 
     # login pegar curl cookies
     def _manual_login(self):

@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from bootstrap import build_lyrics_providers
-from config import AppPaths
+from core.bootstrap import build_lyrics_providers
+from core.config import AppPaths
 from domain.lyrics_parsing import parse_lrc, parse_ttml, plain_lyrics
 from domain.models import LyricLine, Lyrics, LyricsQuery, LyricWord, clean_title, lyrics_query
 from infra.concurrency import TaskRunner
@@ -237,7 +237,8 @@ def test_settings_defaults_order_and_key(tmp_path):
 
 
 def test_providers_are_built_in_the_configured_order(tmp_path):
-    (tmp_path / "lyrics_settings.json").write_text(json.dumps({"providers": ["youtube", "nonsense", "lrclib"]}))
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "lyrics_settings.json").write_text(json.dumps({"providers": ["youtube", "nonsense", "lrclib"]}))
     providers = build_lyrics_providers(AppPaths(str(tmp_path)), gateway=object())
     assert [p.name for p in providers] == ["YouTube Music", "LRCLIB"]
     default = build_lyrics_providers(AppPaths(str(tmp_path / "empty")), gateway=object())

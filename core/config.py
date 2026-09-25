@@ -1,8 +1,13 @@
+import glob
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 
 APP_NAME = "YTMusic Client"
+DATA_DIR_NAME = "data"
+LEGACY_DATA = ("oauth.json", "local_playlists.json", "queue_and_cache.json", "lyrics_settings.json",
+               "ytmusic-client.log*", "cache", ".yt-dlp-cache")
 
 NETWORK_CACHING_MS = 3000
 RADIO_QUEUE_LIMIT = 6
@@ -26,10 +31,14 @@ class AppPaths:
     def detect() -> "AppPaths":
         if getattr(sys, "frozen", False):
             return AppPaths(os.path.dirname(sys.executable))
-        return AppPaths(os.path.dirname(os.path.abspath(__file__)))
+        return AppPaths(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    @property
+    def data_dir(self) -> str:
+        return os.path.join(self.base_dir, DATA_DIR_NAME)
 
     def _join(self, *parts: str) -> str:
-        return os.path.join(self.base_dir, *parts)
+        return os.path.join(self.data_dir, *parts)
 
     @property
     def auth_file(self) -> str:
@@ -71,6 +80,19 @@ class AppPaths:
     def log_file(self) -> str:
         return self._join("ytmusic-client.log")
 
+    # datos usuario carpeta data migrar
     def ensure_dirs(self) -> None:
+        os.makedirs(self.data_dir, exist_ok=True)
+        self._migrate_legacy()
         for path in (self.cache_dir, self.thumbnail_cache_dir, self.ytdlp_cache_dir):
             os.makedirs(path, exist_ok=True)
+
+    def _migrate_legacy(self) -> None:
+        for pattern in LEGACY_DATA:
+            for old in glob.glob(os.path.join(self.base_dir, pattern)):
+                new = os.path.join(self.data_dir, os.path.basename(old))
+                if not os.path.exists(new):
+                    try:
+                        shutil.move(old, new)
+                    except OSError:
+                        pass

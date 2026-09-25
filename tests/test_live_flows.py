@@ -9,8 +9,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module")
 def app(qapp, tmp_path_factory):
     import qtawesome as qta
-    import bootstrap
-    from config import AppPaths
+    from core import bootstrap
+    from core.config import AppPaths
 
     services = bootstrap.build_services(AppPaths(str(tmp_path_factory.mktemp("live"))))
     ui = bootstrap.build_ui(services, qta.icon("fa5s.music"))
