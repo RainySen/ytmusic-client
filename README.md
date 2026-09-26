@@ -155,7 +155,7 @@ Las contribuciones son bienvenidas. Abre un issue antes de un cambio grande.
 ## Donar y apoyar el proyecto
 
 Esto no es una obligación, si quieres aportar tu granito al proyecto te seremos eternamente agradecidos, "cada moneda cuenta"
-decía el homeless que pide monedas al lado de una areperia, puedes dirigirte al link de cofee o al paypal:
+decía el homeless que pide monedas al lado de una areperia:
 
   
 - **BuyMeaCoffee**:
