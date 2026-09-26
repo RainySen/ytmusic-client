@@ -29,7 +29,8 @@ _TAB_QSS = """
     QPushButton:hover { color: #dddddd; }
     QPushButton:checked { color: white; border-bottom: 2px solid white; }
 """
-LYRICS_TEXT_WIDTH = PANEL_WIDTH - 32 - 24
+LYRICS_TEXT_WIDTH = PANEL_WIDTH - 32 - 44
+LYRICS_FONT_PX = 17
 _SUNG, _ACTIVE_DIM, _OTHER_LINE = "#ffffff", "#a8a8a8", "#6c6c6c"
 _HINT_QSS = "color: #888; font-size: 13px; padding: 40px 12px;"
 
@@ -180,6 +181,11 @@ class SidePanel(QWidget):
         if 0 <= self._queue_current < len(self._queue_songs) and (not appended_only or previous_current != self._queue_current):
             QTimer.singleShot(100, self, lambda: self._scroll_to(self._queue_current))
 
+    def release_queue(self):
+        self._clear_queue_items()
+        self._queue_ids = []
+        self._queue_dirty = True
+
     def _clear_queue_items(self):
         while self._queue_layout.count() > 1:
             widget = self._queue_layout.takeAt(0).widget()
@@ -216,6 +222,8 @@ class SidePanel(QWidget):
             self._render_queue(self._queue_current)
 
     def _scroll_to(self, index):
+        if self._queue_dirty or not self.isVisible():
+            return
         if index >= self._queue_built:
             self._build_queue_items(index + 1)
         if 0 <= index < self._queue_layout.count() - 1:
@@ -229,6 +237,13 @@ class SidePanel(QWidget):
         layout.setContentsMargins(16, 12, 16, 8)
         self._lyrics = QListWidget()
         self._lyrics.setObjectName("lyrics_list")
+        self._lyrics.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._lyrics.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+        self._lyrics.setWordWrap(True)
+        self._lyrics.setTextElideMode(Qt.ElideNone)
+        self._lyrics.setResizeMode(QListWidget.Adjust)
+        self._lyrics.setUniformItemSizes(False)
+        self._lyrics.setSpacing(2)
         layout.addWidget(self._lyrics)
         self._lyrics_credit = QLabel()
         self._lyrics_credit.setAlignment(Qt.AlignCenter)
@@ -246,8 +261,8 @@ class SidePanel(QWidget):
         else:
             self._reset_lyrics()
             font = QFont()
-            font.setPixelSize(16)
-            font.setWeight(QFont.DemiBold)
+            font.setPixelSize(LYRICS_FONT_PX)
+            font.setWeight(QFont.Bold)
             for index, line in enumerate(lyrics.lines):
                 item = QListWidgetItem()
                 item.setFlags(Qt.ItemIsEnabled)

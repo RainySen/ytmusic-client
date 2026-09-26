@@ -38,6 +38,7 @@ class ScriptedCatalog(FakeCatalog):
         self.search_calls = []
         self.related_calls = []
         self.playlist_calls = []
+        self.pool_calls = []
         self.cleared = 0
 
     def stored_home(self):
@@ -57,6 +58,9 @@ class ScriptedCatalog(FakeCatalog):
 
     def playlist(self, playlist_id, on_done, on_error=None):
         self.playlist_calls.append({"id": playlist_id, "on_done": on_done, "on_error": on_error})
+
+    def discovery_pool(self, seed_ids, on_done):
+        self.pool_calls.append({"seeds": seed_ids, "on_done": on_done})
 
     def clear_cache(self):
         self.cleared += 1

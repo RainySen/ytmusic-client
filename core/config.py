@@ -10,9 +10,12 @@ LEGACY_DATA = ("oauth.json", "local_playlists.json", "queue_and_cache.json", "ly
                "ytmusic-client.log*", "cache", ".yt-dlp-cache")
 
 NETWORK_CACHING_MS = 3000
-RADIO_QUEUE_LIMIT = 6
-RADIO_FETCH = 10
+RADIO_QUEUE_LIMIT = 50
+RADIO_FETCH = 50
+RADIO_STAGE_START = 100
+RADIO_EXHAUSTED_RATIO = 0.7
 EXTEND_BATCH = 2
+EXTEND_BATCH_UNLIMITED = 10
 HOVER_PREFETCH_MS = 350
 PREFETCH_AHEAD = 3
 STREAM_EXPIRY_MARGIN_S = 120
@@ -51,6 +54,10 @@ class AppPaths:
     @property
     def playlists_file(self) -> str:
         return self._join("local_playlists.json")
+
+    @property
+    def settings_file(self) -> str:
+        return self._join("settings.json")
 
     @property
     def lyrics_settings_file(self) -> str:

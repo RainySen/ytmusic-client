@@ -542,3 +542,33 @@ def test_account_playlist_refusal_and_errors_are_failures(saving, wait_until):
     gateway.add_playlist_items = boom
     service.add_to_playlist({"playlistId": "PL1", "source": "ytmusic"}, {"videoId": "a"}, out.append)
     assert wait_until(lambda: out == ["failed", "failed"]) and recents.ids() == []
+
+
+def test_discovery_pool_merges_recommendations_of_every_seed_without_duplicates(qapp, wait_until):
+    gateway = FakeGateway()
+    gateway.watch = {"tracks": [{"videoId": "seed"}, {"videoId": "r1", "title": "R1"}, {"videoId": "r2", "title": "R2"}, {"title": "sin id"}]}
+    runner = TaskRunner("pool", 2)
+    catalog = CatalogService(gateway, runner)
+    got = []
+    catalog.discovery_pool(["seed", "otra"], got.append)
+    assert wait_until(lambda: got)
+    ids = [t["videoId"] for t in got[0]]
+    assert ids == ["r1", "r2", "seed"] or ids == ["r1", "r2"] or set(ids) == {"r1", "r2", "seed"}
+    assert all(t["type"] == "song" for t in got[0]) and len(ids) == len(set(ids))
+    runner.shutdown()
+
+
+def test_discovery_pool_survives_failures_and_empty_seeds(qapp, wait_until):
+    class Broken(FakeGateway):
+        def get_watch_playlist(self, video_id, limit):
+            raise ConnectionError("sin red")
+
+    runner = TaskRunner("pool2", 2)
+    catalog = CatalogService(Broken(), runner)
+    got = []
+    catalog.discovery_pool(["a", "b"], got.append)
+    assert wait_until(lambda: got) and got[0] == []
+    empty = []
+    catalog.discovery_pool([], empty.append)
+    assert empty == [[]]
+    runner.shutdown()

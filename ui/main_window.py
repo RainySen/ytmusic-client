@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import qtawesome as qta
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSplitter, QSystemTrayIcon, QVBoxLayout, QWidget
 
@@ -37,7 +37,9 @@ class MainWindow(QWidget):
 
     view_shown = Signal(str)
     login_requested = Signal()
+    settings_requested = Signal()
     logout_requested = Signal()
+    presence_changed = Signal(bool)
 
     play_pause_clicked = Signal()
     next_clicked = Signal()
@@ -58,6 +60,8 @@ class MainWindow(QWidget):
         self._app_icon = app_icon
         self._logged_in = False
         self._view = "home"
+        self._presented = False
+        self._close_to_tray = True
 
         self.setWindowIcon(app_icon)
         self.setWindowTitle("YouTube Music - Minimal Client")
@@ -113,7 +117,8 @@ class MainWindow(QWidget):
         self.top_bar = TopBar(self.icons["search"], self.icons["login"], self.icons["login_active"])
         self.top_bar.search_box.returnPressed.connect(self._submit_search)
         self.top_bar.search_requested.connect(self._submit_search)
-        self.top_bar.login_requested.connect(self._on_account_clicked)
+        self.top_bar.login_requested.connect(self.account_action)
+        self.top_bar.settings_requested.connect(self.settings_requested)
         return self.top_bar
 
     def _build_sidebar(self):
@@ -210,15 +215,49 @@ class MainWindow(QWidget):
         self.raise_()
         self.activateWindow()
 
+    def notify(self, title: str, message: str) -> None:
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.NoIcon, 4000)
+
+    def set_close_to_tray(self, enabled: bool) -> None:
+        self._close_to_tray = enabled
+
     def closeEvent(self, event):
-        event.ignore()
-        self.hide()
-        self.tray_icon.showMessage("Minimizado", "Reproduciendo en 2do plano.",
-                                   QSystemTrayIcon.MessageIcon.Information, 2000)
+        if self._close_to_tray and QSystemTrayIcon.isSystemTrayAvailable():
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage("Minimizado", "Reproduciendo en 2do plano.",
+                                       QSystemTrayIcon.MessageIcon.Information, 2000)
+            return
+        event.accept()
+        QApplication.instance().quit()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._toast.reposition()
+
+    @property
+    def is_presented(self) -> bool:
+        return self.isVisible() and not self.isMinimized()
+
+    def _emit_presence(self) -> None:
+        presented = self.is_presented
+        if presented != self._presented:
+            self._presented = presented
+            self.presence_changed.emit(presented)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._emit_presence()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._emit_presence()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            self._emit_presence()
 
     @property
     def current_view(self):
@@ -301,7 +340,12 @@ class MainWindow(QWidget):
         return dialogs.confirm(self, "Tu sesión caducó", "YouTube Music cerró tu sesión. Inicia sesión de nuevo para ver tu biblioteca y tus playlists.",
                                ok="Iniciar sesión", cancel="Ahora no")
 
-    def _on_account_clicked(self):
+    @property
+    def logged_in(self) -> bool:
+        return self._logged_in
+
+    # cuenta iniciar o cerrar sesion
+    def account_action(self):
         if not self._logged_in:
             self.login_requested.emit()
             return

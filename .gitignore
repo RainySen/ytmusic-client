@@ -226,3 +226,4 @@ local_playlists.json
 coverage.xml
 .coverage
 htmlcov/
+/tests/chaos/

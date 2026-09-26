@@ -241,7 +241,7 @@ class World:
         stack.enter_context(mock.patch.object(YtDlpStreamResolver, "warm_up", lambda _self: None))
         stack.enter_context(mock.patch.object(YtDlpStreamResolver, "resolve", lambda _resolver, video_id: self._resolve(video_id)))
         stack.enter_context(mock.patch.object(ThumbnailCache, "request", lambda _cache, url, callback: self._thumbnail(url, callback)))
-        stack.enter_context(mock.patch.object(bootstrap, "build_lyrics_providers", lambda paths, gateway: [ChaosLyrics(self)]))
+        stack.enter_context(mock.patch.object(bootstrap, "build_lyrics_providers", lambda *_args, **_kwargs: [ChaosLyrics(self)]))
         import ui.login_window as login_window
         stack.enter_context(mock.patch.object(login_window, "WEB_LOGIN_AVAILABLE", False))
 

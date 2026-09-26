@@ -28,6 +28,19 @@ class ThumbnailCache(QObject):
         self._max_items = max_items
         self._pending: dict[str, list[PixmapCallback]] = {}
 
+    def clear_memory(self) -> None:
+        self._memory.clear()
+
+    def disk_size(self) -> int:
+        disk = self._manager.cache()
+        return int(disk.cacheSize()) if disk is not None else 0
+
+    def clear_disk(self) -> None:
+        disk = self._manager.cache()
+        if disk is not None:
+            disk.clear()
+        self._memory.clear()
+
     def request(self, url: str, callback: PixmapCallback) -> None:
         if not url:
             return
