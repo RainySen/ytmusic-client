@@ -118,20 +118,21 @@ QScrollBar::sub-page:horizontal { background: transparent; }
 #lyrics_list {
     background: transparent;
     border: none;
-    font-size: 15px;
+    font-size: 17px;
+    font-weight: 700;
     outline: none;
 }
 #lyrics_list::item {
     border: none;
     padding: 6px 8px;
     background: transparent;
-    color: #888;
+    color: #777;
 }
 #lyrics_list::item:selected {
     background: transparent;
     color: white;
     font-weight: 700;
-    font-size: 16px;
+    font-size: 19px;
 }
 
 QMenu {

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication
 @pytest.fixture(scope="session")
 def qapp():
     app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
     yield app
 
 
@@ -32,3 +33,17 @@ def wait_until(qapp):
         poll.stop()
         return predicate()
     return _wait
+
+
+@pytest.fixture(autouse=True)
+def no_real_quit(monkeypatch):
+    monkeypatch.setattr(QApplication, "quit", staticmethod(lambda: None))
+
+
+@pytest.fixture(autouse=True)
+def close_leftover_windows(request):
+    yield
+    if "qapp" in request.fixturenames:
+        for widget in QApplication.topLevelWidgets():
+            widget.close()
+        QApplication.processEvents()

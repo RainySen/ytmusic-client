@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QPushButt
 class TopBar(QWidget):
     search_requested = Signal()
     login_requested = Signal()
+    settings_requested = Signal()
 
     def __init__(self, icon_search, icon_login, icon_login_active, parent=None):
         super().__init__(parent)
@@ -100,6 +101,18 @@ class TopBar(QWidget):
         top_layout.addStretch()
         top_layout.addWidget(search_wrapper, stretch=1)
         top_layout.addStretch()
+        self.settings_button = QPushButton()
+        self.settings_button.setIcon(qta.icon("fa5s.cog", color="white"))
+        self.settings_button.setToolTip("Configuración")
+        self.settings_button.setFixedSize(40, 40)
+        self.settings_button.setCursor(Qt.PointingHandCursor)
+        self.settings_button.setStyleSheet("""
+            QPushButton { background: transparent; border: none; border-radius: 20px; }
+            QPushButton:hover { background: rgba(255,255,255,0.10); }
+        """)
+        self.settings_button.clicked.connect(self.settings_requested.emit)
+
+        top_layout.addWidget(self.settings_button)
         top_layout.addWidget(self.login_button)
 
     def set_login_state(self, is_logged_in):

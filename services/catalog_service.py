@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Callable
 
 from core.config import HOME_SECTIONS
@@ -32,6 +33,8 @@ ALBUM_TTL = 600
 PLAYLIST_PAGE_FALLBACK_TRACKS = 50
 
 FEED_KEY = "feed"
+DISCOVERY_KEY = "home-discovery"
+DISCOVERY_LIMIT = 30
 EXPLORE_TTL = 900
 
 NEW_RELEASES_TITLE = "Álbumes y sencillos nuevos"
@@ -52,6 +55,16 @@ class CatalogService:
 
     def clear_cache(self) -> None:
         self._cache.clear()
+
+    # idioma contenido cambiar
+    def change_language(self, language: str) -> None:
+        self._gateway.set_language(language)
+        self._cache.clear()
+        if self._home_cache_file:
+            try:
+                os.remove(self._home_cache_file)
+            except OSError:
+                pass
 
     def stored_home(self) -> list[Section] | None:
         if not self._home_cache_file:
@@ -93,6 +106,30 @@ class CatalogService:
             on_done(sections)
 
         self._runner.gather([lambda: self._fetch_home(HOME_SECTIONS), self._fetch_extras], finish, key=FEED_KEY)
+
+    # recomendaciones de canciones recientes
+    def discovery_pool(self, seed_ids: list[str], on_done: Done) -> None:
+        if not seed_ids:
+            on_done([])
+            return
+
+        def fetch(video_id: str):
+            def work() -> list[Track]:
+                watch = self._gateway.get_watch_playlist(video_id, DISCOVERY_LIMIT)
+                return [t for t in normalize_tracks(watch.get("tracks") or []) if t["videoId"] != video_id]
+            return work
+
+        def finish(results: list[Any]) -> None:
+            pool: list[Track] = []
+            seen: set[str] = set()
+            for found in results:
+                for track in found if isinstance(found, list) else []:
+                    if track["videoId"] not in seen:
+                        seen.add(track["videoId"])
+                        pool.append({**track, "type": "song"})
+            on_done(pool)
+
+        self._runner.gather([fetch(v) for v in seed_ids], finish, key=DISCOVERY_KEY)
 
     def _fetch_home(self, limit: int) -> list[Section]:
         sections = []

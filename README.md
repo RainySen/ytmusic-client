@@ -12,6 +12,7 @@ Inspirado en [ytmdesktop](https://github.com/ytmdesktop/ytmdesktop). No está af
 ## Contenido
 
 - [Características](#características)
+- [Configuración](#configuración)
 - [Instalación](#instalación)
 - [Inicio de sesión](#inicio-de-sesión)
 - [Letras](#letras)
@@ -35,6 +36,23 @@ Inspirado en [ytmdesktop](https://github.com/ytmdesktop/ytmdesktop). No está af
 - **Bandeja del sistema:** al minimizar sigue sonando.
 
 Solo se ha probado en Windows 10 y 11.
+
+## Configuración
+
+El engranaje de la barra superior abre la configuración; los cambios se aplican al instante y se guardan en `data/settings.json`.
+
+- **Seguir en segundo plano al cerrar:** al cerrar la ventana la música sigue y la app queda en la bandeja. Si se apaga, cerrar la ventana cierra la app.
+- **Mini reproductor:** ventana pequeña siempre visible con los controles cuando minimizas o cierras a la bandeja. Se puede mover y recuerda su posición.
+- **Cola de radio:** cuántas canciones se cargan al elegir una canción (de 5 hasta 1000 o ilimitada). Las primeras 50 llegan junto con la canción (~2 s) y el resto se carga en segundo plano por etapas; con "ilimitada" la cola se sigue extendiendo sola. El tamaño casi no afecta a la memoria: cada canción ocupa unos 230 bytes.
+- **Liberar memoria en segundo plano:** con la ventana cerrada o minimizada se descartan miniaturas y listas tras 10 s, 20 s, 1 min o 3 min, y se recargan al volver. El botón **Liberar RAM ahora** hace lo mismo al instante, sin cerrar la ventana, y muestra cuántos MB devolvió al sistema (equivale a "Empty Working Set" de RAMMap).
+- **Iniciar con Windows:** la app arranca al encender el equipo, minimizada en la bandeja y sin abrir la ventana. Se registra en la clave `Run` del usuario y se quita al apagar el ajuste.
+- **Recordar el volumen** y **restaurar la cola al abrir.**
+- **Teclas multimedia:** pausa, siguiente y anterior desde el teclado, incluso con la app en segundo plano. Si otra aplicación ya tiene registrada alguna de esas teclas, esa tecla queda para ella.
+- **Aviso al cambiar de canción:** notificación de la bandeja cuando la ventana está oculta o minimizada.
+- **Idioma del contenido:** idioma de los textos que entrega YouTube Music (secciones del inicio, Explorar, búsquedas). Al cambiarlo se recarga el inicio. Los menús de la app siguen en español.
+- **Letras:** orden y activación de cada proveedor, y la clave de Better Lyrics (ver [Letras](#letras)).
+- **Caché:** muestra cuánto ocupan las miniaturas y los datos temporales, y permite vaciarlos. No toca la sesión, las playlists ni la cola.
+- **Cuenta:** iniciar o cerrar sesión desde la misma ventana.
 
 ## Instalación
 
@@ -67,13 +85,9 @@ Se consultan varios proveedores en orden y gana la primera respuesta sincronizad
 2. **LRCLIB** ([lrclib.net](https://lrclib.net)): gratuito, sincronizado por línea.
 3. **YouTube Music:** la letra de YouTube, normalmente sin tiempos.
 
-Para cambiar el orden o poner tu clave, crea `data/lyrics_settings.json` o define la variable de entorno `BETTER_LYRICS_API_KEY`:
+El orden, qué proveedores usar y la clave de Better Lyrics se cambian en la configuración y se aplican a la siguiente letra que se pida. También puedes definir la clave con la variable de entorno `BETTER_LYRICS_API_KEY`, que tiene prioridad. Si tenías un `data/lyrics_settings.json` de versiones anteriores, se importa solo la primera vez y se renombra a `lyrics_settings.json.migrated`.
 
-```json
-{ "providers": ["betterlyrics", "lrclib", "youtube"], "better_lyrics_api_key": "" }
-```
-
-Un proveedor que falla se omite durante 5 minutos. Con letra por palabra se ilumina cada palabra al cantarse.
+Si un proveedor falla (por ejemplo LRCLIB con un error 503), se reintenta una vez y, si sigue fallando, se omite durante 1 minuto; mientras tanto la letra que se muestre no se guarda, así que se vuelve a buscar en cuanto el proveedor responda. Con letra por palabra se ilumina cada palabra al cantarse.
 
 ## Ejecutar desde el código
 

@@ -33,8 +33,9 @@ def looks_like_auth_failure(exc: Exception) -> bool:
 
 # ytmusicapi cliente
 class YTMusicGateway:
-    def __init__(self, auth_file: str):
+    def __init__(self, auth_file: str, language: str = CONTENT_LANGUAGE):
         self._auth_file = auth_file
+        self._language = language
         self._client_lock = threading.Lock()
         self._ytm: Any = None
         self._ytm_browse: Any = None
@@ -60,7 +61,14 @@ class YTMusicGateway:
                 self._ytm, self._authenticated = self._build()
             return self._ytm
 
-    # cliente idioma es
+    # idioma contenido reconstruir cliente
+    def set_language(self, language: str) -> None:
+        with self._client_lock:
+            if language != self._language:
+                self._language = language
+                self._ytm_browse = None
+
+    # cliente idioma configurado
     def _browse_client(self) -> Any:
         ytm = self._ytm_browse
         if ytm is not None:
@@ -68,7 +76,7 @@ class YTMusicGateway:
         self._client()
         with self._client_lock:
             if self._ytm_browse is None:
-                self._ytm_browse, _ = self._build(language=CONTENT_LANGUAGE)
+                self._ytm_browse, _ = self._build(language=self._language)
             return self._ytm_browse
 
     def _build(self, language: str | None = None) -> tuple[Any, bool]:
@@ -103,7 +111,7 @@ class YTMusicGateway:
         if not write_json_atomic(self._auth_file, headers, indent=4):
             raise GatewayError("No se pudieron guardar las credenciales.")
         try:
-            browse = YTMusic(auth=headers, language=CONTENT_LANGUAGE)
+            browse = YTMusic(auth=headers, language=self._language)
         except Exception:
             browse = None
         with self._client_lock:

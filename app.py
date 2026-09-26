@@ -5,13 +5,14 @@ import sys
 
 import qtawesome as qta
 from PySide6.QtCore import QCoreApplication, Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from core.bootstrap import build_services, build_ui
 from infra.web_session import configure_web_engine_environment
 from core.config import AppPaths
 from core.single_instance import SingleInstance
 from core.logging_setup import setup_logging
+from infra.autostart import BACKGROUND_FLAG
 from ui.login_window import LoginWindow
 
 log = logging.getLogger("app")
@@ -35,6 +36,7 @@ def main() -> int:
         return 0
 
     services = build_services(paths)
+    background = BACKGROUND_FLAG in sys.argv[1:] and QSystemTrayIcon.isSystemTrayAvailable()
     state = {"ui": None, "login": None}
 
     def bring_to_front():
@@ -53,12 +55,15 @@ def main() -> int:
         state["ui"] = ui
         ui.start(services)
         ui.window.resize(1240, 750)
-        ui.window.show()
+        if background:
+            ui.memory.start_hidden()
+        else:
+            ui.window.show()
         if state["login"] is not None:
             state["login"].close()
         services.warm_up()
 
-    if services.auth.is_authenticated:
+    if background or services.auth.is_authenticated:
         start_main_application()
     else:
         login = LoginWindow(services.auth, icon)

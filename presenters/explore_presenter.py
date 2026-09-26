@@ -19,6 +19,7 @@ class ExplorePresenter:
         self._notifier = notifier
         self._sections: list = []
         self._detail: str | None = None
+        self._released = False
 
         window.explore_requested.connect(self.show)
         panel = self._panel
@@ -32,12 +33,27 @@ class ExplorePresenter:
 
     def show(self) -> None:
         self._window.show_view("explore")
-        if self._sections and self._detail is None:
+        if self._sections and self._detail is None and not self._released:
             return
         self.show_shelves()
 
+    # liberar ram segundo plano
+    def release(self) -> None:
+        self._panel.feed.clear()
+        self._released = True
+
+    # idioma cambiado descartar estantes
+    def invalidate(self) -> None:
+        self._sections = []
+        if self._window.current_view == "explore":
+            self.show_shelves()
+        else:
+            self._panel.feed.clear()
+            self._released = True
+
     def show_shelves(self) -> None:
         self._detail = None
+        self._released = False
         self._panel.set_detail_mode(False)
         if self._sections:
             self._render_shelves()

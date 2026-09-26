@@ -67,6 +67,13 @@ class HomePanel(QWidget):
             chip.setChecked(chip.text() == mood)
         self.mood_selected.emit(mood)
 
+    def reset_mood(self):
+        for chip in self._chips:
+            chip.setChecked(chip.text() == "Todos")
+
+    def scroll_to_top(self):
+        self.feed.scroll_to_top()
+
     def set_loading(self):
         self.feed.set_loading()
 

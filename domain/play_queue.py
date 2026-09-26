@@ -20,7 +20,7 @@ class PlayQueue(QObject):
     LOOP_QUEUE = LOOP_QUEUE
     LOOP_SONG = LOOP_SONG
 
-    def __init__(self, radio_limit: int = 6, parent: QObject | None = None):
+    def __init__(self, radio_limit: int | None = 6, parent: QObject | None = None):
         super().__init__(parent)
         self._songs: list[Track] = []
         self._index = -1
@@ -48,6 +48,14 @@ class PlayQueue(QObject):
     @property
     def loop_mode(self) -> int:
         return self._loop_mode
+
+    @property
+    def radio_limit(self) -> int | None:
+        return self._radio_limit
+
+    @radio_limit.setter
+    def radio_limit(self, value: int | None) -> None:
+        self._radio_limit = value
 
     @property
     def radio_seed(self) -> str | None:
