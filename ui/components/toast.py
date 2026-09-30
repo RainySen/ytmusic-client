@@ -8,7 +8,6 @@ _COLORS = {
 }
 
 
-# avisos
 class Toast(QLabel):
     def __init__(self, parent: QWidget, bottom_offset: int = 96, duration_ms: int = 4500):
         super().__init__(parent)

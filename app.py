@@ -3,21 +3,23 @@ import logging
 import os
 import sys
 
-import qtawesome as qta
-from PySide6.QtCore import QCoreApplication, Qt
-from PySide6.QtWidgets import QApplication
+from core.icons import import_qtawesome, load_used_fonts
+
+qta = import_qtawesome()
+from PySide6.QtCore import QCoreApplication, Qt  # noqa: E402
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from core.bootstrap import build_services, build_ui
 from infra.web_session import configure_web_engine_environment
 from core.config import AppPaths
 from core.single_instance import SingleInstance
 from core.logging_setup import setup_logging
+from infra.autostart import BACKGROUND_FLAG
 from ui.login_window import LoginWindow
 
 log = logging.getLogger("app")
 
 
-# entrada app arranque login ui
 def main() -> int:
     paths = AppPaths.detect()
     paths.ensure_dirs()
@@ -27,6 +29,7 @@ def main() -> int:
     QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    load_used_fonts()
     icon = qta.icon("fa5s.music", color="#03adb7")
     app.setWindowIcon(icon)
 
@@ -35,6 +38,7 @@ def main() -> int:
         return 0
 
     services = build_services(paths)
+    background = BACKGROUND_FLAG in sys.argv[1:] and QSystemTrayIcon.isSystemTrayAvailable()
     state = {"ui": None, "login": None}
 
     def bring_to_front():
@@ -53,12 +57,15 @@ def main() -> int:
         state["ui"] = ui
         ui.start(services)
         ui.window.resize(1240, 750)
-        ui.window.show()
+        if background:
+            ui.memory.start_hidden()
+        else:
+            ui.window.show()
         if state["login"] is not None:
             state["login"].close()
         services.warm_up()
 
-    if services.auth.is_authenticated:
+    if background or services.auth.is_authenticated:
         start_main_application()
     else:
         login = LoginWindow(services.auth, icon)

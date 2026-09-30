@@ -6,10 +6,13 @@ QWidget {
     font-size: 13px;
 }
 QLabel { background: transparent; }
+QLabel#card_title { font-size: 13px; font-weight: 600; color: #fff; }
+QLabel#card_subtitle { font-size: 11px; color: #aaa; }
+QLabel#compact_title { font-size: 13px; font-weight: 600; color: #e0e0e0; }
+QLabel#compact_subtitle { font-size: 11px; color: #888; }
 
 #top_bar {
     background: #212121;
-    border-bottom: 1px solid #333;
 }
 #logo_label {
     color: white;
@@ -34,11 +37,9 @@ QLineEdit::placeholder { color: #717171; }
 
 #sidebar {
     background: #212121;
-    border-right: 1px solid #333;
 }
 #right_panel {
     background: #212121;
-    border-left: 1px solid #333;
 }
 
 #player_widget {
@@ -118,20 +119,21 @@ QScrollBar::sub-page:horizontal { background: transparent; }
 #lyrics_list {
     background: transparent;
     border: none;
-    font-size: 15px;
+    font-size: 17px;
+    font-weight: 700;
     outline: none;
 }
 #lyrics_list::item {
     border: none;
     padding: 6px 8px;
     background: transparent;
-    color: #888;
+    color: #777;
 }
 #lyrics_list::item:selected {
     background: transparent;
     color: white;
     font-weight: 700;
-    font-size: 16px;
+    font-size: 19px;
 }
 
 QMenu {
@@ -152,5 +154,5 @@ QMenu::separator {
     margin: 4px 8px;
 }
 
-QSplitter::handle { background: #333; width: 1px; height: 1px; }
+QSplitter::handle { background: transparent; width: 1px; height: 1px; }
 """

@@ -1,7 +1,27 @@
 from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QToolButton
+from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import QFrame, QScrollArea, QVBoxLayout, QToolButton, QWidget
 
-_ACTIVE = """
+from ui.components.playlist_rail import PlaylistRail
+
+COLLAPSED_WIDTH = 90
+EXPANDED_WIDTH = 240
+COLLAPSED_BTN = QSize(74, 62)
+EXPANDED_BTN = QSize(216, 44)
+ICON_PX = 22
+INLINE_ICON_GAP = 12
+
+
+# QToolButton has no icon-text spacing: pad the icon
+def _spaced_icon(icon: QIcon, size: int, gap: int) -> QIcon:
+    pixmap = QPixmap(size + gap, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.drawPixmap(0, 0, icon.pixmap(size, size))
+    painter.end()
+    return QIcon(pixmap)
+
+_ACTIVE_STACKED = """
     QToolButton {
         background: rgba(255,255,255,0.12);
         color: white;
@@ -12,7 +32,7 @@ _ACTIVE = """
         padding-top: 6px;
     }
 """
-_INACTIVE = """
+_INACTIVE_STACKED = """
     QToolButton {
         background: transparent;
         color: #aaa;
@@ -27,18 +47,32 @@ _INACTIVE = """
         color: #e0e0e0;
     }
 """
-_SMALL = """
+_ACTIVE_INLINE = """
+    QToolButton {
+        background: rgba(255,255,255,0.12);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 700;
+        padding-left: 14px;
+        text-align: left;
+    }
+"""
+_INACTIVE_INLINE = """
     QToolButton {
         background: transparent;
-        color: #666;
+        color: #aaa;
         border: none;
-        border-radius: 8px;
-        font-size: 10px;
-        padding-top: 4px;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 500;
+        padding-left: 14px;
+        text-align: left;
     }
     QToolButton:hover {
-        background: rgba(255,255,255,0.06);
-        color: #aaa;
+        background: rgba(255,255,255,0.08);
+        color: #e0e0e0;
     }
 """
 
@@ -47,20 +81,22 @@ class Sidebar(QWidget):
     home_requested    = Signal()
     explore_requested = Signal()
     library_requested = Signal()
-    import_requested  = Signal()
 
     def __init__(self, icons, parent=None):
         super().__init__(parent)
         self.icons = icons
         self.setObjectName("sidebar")
-        self.setFixedWidth(90)
+        self.setFixedWidth(COLLAPSED_WIDTH)
+        self._expanded = False
+        self._active = "Inicio"
 
-        layout = QVBoxLayout(self)
+        self._nav_layout = layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 20, 8, 12)
         layout.setSpacing(4)
         layout.setAlignment(Qt.AlignTop)
 
         self.nav_buttons = {}
+        self._nav_icons = {}
         for label, icon_key, signal in [
             ("Inicio",    "home",    self.home_requested),
             ("Explorar",  "explore", self.explore_requested),
@@ -69,31 +105,57 @@ class Sidebar(QWidget):
             btn = QToolButton()
             btn.setText(label)
             btn.setIcon(icons[icon_key])
-            btn.setIconSize(QSize(22, 22))
+            btn.setIconSize(QSize(ICON_PX, ICON_PX))
             btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-            btn.setFixedSize(74, 62)
+            btn.setFixedSize(COLLAPSED_BTN)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setStyleSheet(_INACTIVE)
             btn.clicked.connect(signal.emit)
             layout.addWidget(btn, alignment=Qt.AlignHCenter)
             self.nav_buttons[label] = btn
+            self._nav_icons[label] = icons[icon_key]
 
-        layout.addSpacing(12)
+        self.rail = PlaylistRail()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background: transparent; }")
+        scroll.setWidget(self.rail)
+        scroll.hide()
+        self._rail_scroll = scroll
+        layout.addWidget(scroll, stretch=1)
 
-        self.import_button = QToolButton()
-        self.import_button.setText("Importar")
-        self.import_button.setIcon(icons["import"])
-        self.import_button.setIconSize(QSize(18, 18))
-        self.import_button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self.import_button.setFixedSize(74, 54)
-        self.import_button.setCursor(Qt.PointingHandCursor)
-        self.import_button.setStyleSheet(_SMALL)
-        self.import_button.clicked.connect(self.import_requested.emit)
-        layout.addWidget(self.import_button, alignment=Qt.AlignHCenter)
-
-        layout.addStretch()
         self.set_active("Inicio")
 
     def set_active(self, name: str):
+        self._active = name
+        active_qss = _ACTIVE_INLINE if self._expanded else _ACTIVE_STACKED
+        inactive_qss = _INACTIVE_INLINE if self._expanded else _INACTIVE_STACKED
         for btn_name, btn in self.nav_buttons.items():
-            btn.setStyleSheet(_ACTIVE if btn_name == name else _INACTIVE)
+            btn.setStyleSheet(active_qss if btn_name == name else inactive_qss)
+
+    @property
+    def expanded(self) -> bool:
+        return self._expanded
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._expanded = expanded
+        self.setFixedWidth(EXPANDED_WIDTH if expanded else COLLAPSED_WIDTH)
+        self._rail_scroll.setVisible(expanded)
+        style = Qt.ToolButtonTextBesideIcon if expanded else Qt.ToolButtonTextUnderIcon
+        size = EXPANDED_BTN if expanded else COLLAPSED_BTN
+        alignment = Qt.AlignLeft | Qt.AlignVCenter if expanded else Qt.AlignHCenter
+        for name, btn in self.nav_buttons.items():
+            btn.setToolButtonStyle(style)
+            btn.setFixedSize(size)
+            btn.setIcon(_spaced_icon(self._nav_icons[name], ICON_PX, INLINE_ICON_GAP) if expanded
+                       else self._nav_icons[name])
+            self._nav_layout.setAlignment(btn, alignment)
+        self.set_active(self._active)
+
+    def set_playlists(self, playlists, thumbnails) -> None:
+        self.rail.set_playlists(playlists, thumbnails)
+
+    def release_rail(self) -> None:
+        if not self._expanded:
+            self.rail.set_playlists([], None)

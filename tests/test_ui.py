@@ -410,14 +410,39 @@ def test_search_shows_artist_hero_with_name(qapp):
     assert "Daft Punk" in [label.text() for label in hero.findChildren(QLabel)]
 
 
-def test_search_non_artist_top_result_becomes_a_row(qapp):
+def test_search_song_top_result_is_featured_above_the_list(qapp):
+    from ui.components.search_panel import _TopResultHero
+
     panel = SearchPanel()
-    top = {"resultType": "song", "videoId": "t", "title": "Top", "artists": [{"name": "X"}]}
+    top = {"resultType": "song", "videoId": "t", "title": "Top", "artists": [{"name": "X"}], "duration": "3:10"}
     panel.show_results({"top_result": top, "songs": [{"resultType": "song", "videoId": "s", "title": "S"}],
                         "more": []}, FakeThumbnails())
     widgets = rows_of(panel)
     assert not any(isinstance(w, _ArtistHero) for w in widgets)
-    assert sum(isinstance(w, _ResultRow) for w in widgets) == 2
+    hero = next(w for w in widgets if isinstance(w, _TopResultHero))
+    assert widgets.index(hero) == 0 and sum(isinstance(w, _ResultRow) for w in widgets) == 1
+    texts = [label.text() for label in hero.findChildren(QLabel)]
+    assert "MEJOR RESULTADO" in texts and "Top" in texts and "Canción  •  X  •  3:10" in texts
+    opened, queued = [], []
+    panel.item_clicked.connect(opened.append)
+    panel.add_queue_clicked.connect(queued.append)
+    hero.play_button.click()
+    hero.queue_button.click()
+    assert opened == [top] and queued == [top]
+
+
+def test_search_album_top_result_offers_open_and_no_queue_button(qapp):
+    from ui.components.search_panel import _TopResultHero
+
+    panel = SearchPanel()
+    top = {"resultType": "album", "browseId": "MPRE1", "title": "Disco", "artists": [{"name": "X"}]}
+    panel.show_results({"top_result": top, "songs": [], "more": []}, FakeThumbnails())
+    hero = next(w for w in rows_of(panel) if isinstance(w, _TopResultHero))
+    assert hero.queue_button is None and "Abrir" in hero.play_button.text()
+    opened = []
+    panel.item_clicked.connect(opened.append)
+    QTest.mouseClick(hero, Qt.LeftButton, pos=QPoint(200, 60))
+    assert opened == [top]
 
 
 def test_search_no_results_message(qapp):

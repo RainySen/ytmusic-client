@@ -7,7 +7,6 @@ COVER_RADIUS = 10
 MARGIN = 48
 
 
-# portada grande
 class NowPlayingPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)

@@ -4,7 +4,6 @@ from services.playback_service import PlaybackService
 from ui.main_window import MainWindow
 
 
-# similares lazy
 class SimilarPresenter:
     def __init__(self, window: MainWindow, catalog: CatalogService, playback: PlaybackService,
                  opener: ItemOpener):

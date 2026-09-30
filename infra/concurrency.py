@@ -27,7 +27,7 @@ class TaskHandle:
         return self._runner._cancel_if_queued(self)
 
 
-# hilo principal callbacks
+# results delivered on the main thread
 class _Dispatcher(QObject):
     finished = Signal(object)
 
@@ -51,7 +51,6 @@ class _Job(QRunnable):
             pass
 
 
-# hilos pool callbacks
 class TaskRunner(QObject):
     def __init__(self, name: str = "tasks", max_threads: int = 4, parent: QObject | None = None):
         super().__init__(parent)
@@ -63,7 +62,6 @@ class TaskRunner(QObject):
         self._latest: dict[str, TaskHandle] = {}
         self._live: dict[int, tuple[TaskHandle, Callback | None, Callback | None]] = {}
 
-    # hilos tareas key
     def submit(
         self,
         fn: Callable[[], Any],
@@ -85,7 +83,6 @@ class TaskRunner(QObject):
         self._pool.start(job, priority)
         return handle
 
-    # hilos paralelo
     def gather(
         self,
         fns: list[Callable[[], Any]],

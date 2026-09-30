@@ -1,17 +1,19 @@
+import qtawesome as qta
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from core.config import HOVER_PREFETCH_MS
-from domain.models import LOCAL_SOURCES, artist_names, thumbnail_url
+from ui import imaging
+from domain.models import LOCAL_SOURCES, thumbnail_url
 from ui.components.chip import Chip
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
-from ui.components.track_actions import TrackActionsButton
+from ui.components.track_list import TrackList
 
-CHIP_LABELS = ["Playlists", "Canciones", "Artistas"]
+CHIP_LABELS = ["Playlists", "Canciones", "Me gusta", "Artistas"]
 GRID_COLUMNS = 4
+LOAD_MORE_MARGIN = 200
 
 _SEPARATOR = "background: #1a1a1a; max-height: 1px;"
 
@@ -31,14 +33,23 @@ class PlaylistCard(ClickableWidget):
         layout.setSpacing(6)
 
         thumb = LazyThumbnail(152, radius=6, icon="fa5s.list", background="#1e1e1e")
-        thumb.set_source(thumbnail_url(playlist, 304), thumbnails)
+        thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(152)), thumbnails)
         layout.addWidget(thumb)
 
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(4)
         title = QLabel(playlist.get("title", ""))
         title.setStyleSheet("font-size: 13px; font-weight: 600; color: #e0e0e0;")
         title.setWordWrap(True)
-        title.setMaximumWidth(152)
-        layout.addWidget(title)
+        title.setMaximumWidth(140 if playlist.get("pinned") else 152)
+        title_row.addWidget(title, 1)
+        if playlist.get("pinned"):
+            pin = QLabel()
+            pin.setPixmap(qta.icon("fa5s.thumbtack", color="#aaa").pixmap(11, 11))
+            pin.setToolTip("Fijada")
+            title_row.addWidget(pin, alignment=Qt.AlignTop)
+        layout.addLayout(title_row)
 
         local = playlist.get("source", "ytmusic") in LOCAL_SOURCES
         count = playlist.get("track_count", 0)
@@ -51,48 +62,6 @@ class PlaylistCard(ClickableWidget):
         self.activated.connect(lambda: self.chosen.emit(self.playlist))
 
 
-class SongRow(ClickableWidget):
-    chosen = Signal(dict)
-    add_next = Signal(dict)
-    add_queue = Signal(dict)
-    add_playlist = Signal(dict)
-    hovered = Signal(dict)
-
-    def __init__(self, song, thumbnails, parent=None):
-        super().__init__(parent, dwell_ms=HOVER_PREFETCH_MS)
-        self.song = song
-        self.setFixedHeight(56)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 16, 4)
-        layout.setSpacing(12)
-
-        thumb = LazyThumbnail(40, radius=4, background="#1e1e1e")
-        thumb.set_source(thumbnail_url(song, 80), thumbnails)
-        layout.addWidget(thumb)
-
-        info = QVBoxLayout()
-        info.setContentsMargins(0, 0, 0, 0)
-        info.setSpacing(2)
-        title = QLabel(song.get("title", ""))
-        title.setStyleSheet("font-size: 13px; color: #e0e0e0;")
-        artists = QLabel(artist_names(song))
-        artists.setStyleSheet("font-size: 11px; color: #888;")
-        info.addWidget(title)
-        info.addWidget(artists)
-        layout.addLayout(info, stretch=1)
-
-        actions = TrackActionsButton()
-        actions.add_next.connect(lambda: self.add_next.emit(self.song))
-        actions.add_queue.connect(lambda: self.add_queue.emit(self.song))
-        actions.add_playlist.connect(lambda: self.add_playlist.emit(self.song))
-        layout.addWidget(actions)
-
-        self.activated.connect(lambda: self.chosen.emit(self.song))
-        self.hover_changed.connect(actions.set_revealed)
-        self.context_requested.connect(actions.show_menu)
-        self.dwelled.connect(lambda: self.hovered.emit(self.song))
-
-
 class ArtistRow(QWidget):
     def __init__(self, artist, thumbnails, parent=None):
         super().__init__(parent)
@@ -102,23 +71,23 @@ class ArtistRow(QWidget):
         layout.setSpacing(16)
 
         thumb = LazyThumbnail(48, circle=True, icon="fa5s.user")
-        thumb.set_source(thumbnail_url(artist, 96), thumbnails)
+        thumb.set_source(thumbnail_url(artist, imaging.thumb_px(48)), thumbnails)
         layout.addWidget(thumb)
 
         info = QVBoxLayout()
         info.setContentsMargins(0, 0, 0, 0)
         info.setSpacing(3)
-        name = QLabel(artist.get("name", artist.get("artist", "")))
+        name = QLabel(artist.get("name") or artist.get("title") or artist.get("artist", ""))
         name.setStyleSheet("font-size: 14px; font-weight: 500; color: #e0e0e0;")
         info.addWidget(name)
-        if artist.get("count"):
-            count = QLabel(f"{artist['count']} canciones")
+        detail = f"{artist['count']} canciones" if artist.get("count") else artist.get("subscribers", "")
+        if detail:
+            count = QLabel(detail)
             count.setStyleSheet("font-size: 12px; color: #888;")
             info.addWidget(count)
         layout.addLayout(info, stretch=1)
 
 
-# biblioteca vista
 class LibraryBrowserPanel(QWidget):
     playlist_activated = Signal(dict)
     song_activated = Signal(dict)
@@ -127,10 +96,13 @@ class LibraryBrowserPanel(QWidget):
     song_add_playlist = Signal(dict)
     song_hovered = Signal(dict)
     chip_selected = Signal(str)
+    load_more_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._chips = {}
+        self._can_load_more = False
+        self._loading_more = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -168,6 +140,8 @@ class LibraryBrowserPanel(QWidget):
         self._layout.addStretch()
         self._scroll.setWidget(content)
         outer.addWidget(self._scroll, stretch=1)
+        self._scroll.verticalScrollBar().valueChanged.connect(self._maybe_load_more)
+        self.songs: TrackList | None = None
 
     def _clear(self):
         while self._layout.count() > 1:
@@ -175,6 +149,31 @@ class LibraryBrowserPanel(QWidget):
             if widget is not None:
                 widget.setParent(None)
                 widget.deleteLater()
+        self._loading_more = False
+        self._can_load_more = False
+        self.songs = None
+
+    def release(self):
+        self._clear()
+
+    def _maybe_load_more(self, value):
+        bar = self._scroll.verticalScrollBar()
+        if (self._can_load_more and not self._loading_more and self.songs is not None
+                and value >= bar.maximum() - LOAD_MORE_MARGIN):
+            self._loading_more = True
+            self.songs.show_loading_more()
+            self.load_more_requested.emit()
+
+    def _start_songs(self, songs, thumbnails):
+        listing = TrackList()
+        listing.track_chosen.connect(lambda _position, song: self.song_activated.emit(song))
+        listing.add_next_clicked.connect(self.song_add_next)
+        listing.add_queue_clicked.connect(self.song_add_queue)
+        listing.add_playlist_clicked.connect(self.song_add_playlist)
+        listing.track_hovered.connect(self.song_hovered)
+        listing.set_tracks(songs, thumbnails)
+        self.songs = listing
+        self._layout.insertWidget(0, listing)
 
     def set_active_chip(self, label):
         for name, chip in self._chips.items():
@@ -195,7 +194,7 @@ class LibraryBrowserPanel(QWidget):
         self.set_active_chip("Playlists")
         self._clear()
         if not playlists:
-            self.show_message("Aún no tienes playlists. Importa una desde la barra lateral.")
+            self.show_message("Aún no tienes playlists. Guarda una desde una canción o desde la cola.")
             return
         grid_widget = QWidget()
         grid = QGridLayout(grid_widget)
@@ -208,14 +207,41 @@ class LibraryBrowserPanel(QWidget):
             grid.addWidget(card, position // GRID_COLUMNS, position % GRID_COLUMNS)
         self._layout.insertWidget(0, grid_widget)
 
-    def show_songs(self, songs, thumbnails):
+    # append: songs is only the new page
+    def show_songs(self, songs, thumbnails, has_more=False, append=False):
         self.set_active_chip("Canciones")
+        if append:
+            self._append_page(songs, thumbnails, has_more)
+            return
         self._clear()
         if not songs:
             self.show_message("No hay canciones guardadas todavía.")
             return
-        rows = [self._song_row(song, thumbnails) for song in songs]
-        self._layout.insertWidget(0, self._list_of(rows))
+        self._can_load_more = has_more
+        self._start_songs(songs, thumbnails)
+
+    def show_liked(self, songs, thumbnails, has_more=False, append=False):
+        self.set_active_chip("Me gusta")
+        if append:
+            self._append_page(songs, thumbnails, has_more)
+            return
+        self._clear()
+        if songs is None:
+            self.show_message("Inicia sesión para ver las canciones a las que les diste Me gusta.")
+            return
+        if not songs:
+            self.show_message("Todavía no le diste Me gusta a ninguna canción.")
+            return
+        self._can_load_more = has_more
+        self._start_songs(songs, thumbnails)
+
+    def _append_page(self, songs, thumbnails, has_more):
+        self._can_load_more = has_more
+        self._loading_more = False
+        if self.songs is not None:
+            self.songs.hide_loading_more()
+            if songs:
+                self.songs.append_tracks(songs, thumbnails)
 
     def show_artists(self, artists, thumbnails):
         self.set_active_chip("Artistas")
@@ -224,15 +250,6 @@ class LibraryBrowserPanel(QWidget):
             self.show_message("No hay artistas todavía.")
             return
         self._layout.insertWidget(0, self._list_of([ArtistRow(a, thumbnails) for a in artists]))
-
-    def _song_row(self, song, thumbnails):
-        row = SongRow(song, thumbnails)
-        row.chosen.connect(self.song_activated)
-        row.add_next.connect(self.song_add_next)
-        row.add_queue.connect(self.song_add_queue)
-        row.add_playlist.connect(self.song_add_playlist)
-        row.hovered.connect(self.song_hovered)
-        return row
 
     @staticmethod
     def _list_of(rows):

@@ -54,8 +54,11 @@ def test_removed_cookies_disappear_and_snapshots_are_copies():
 
 
 def test_login_user_agent_is_firefox_for_every_platform():
+    from infra.web_session import firefox_version
+
+    version = firefox_version()
     windows = google_login_user_agent("win32")
-    assert windows == "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0"
+    assert windows == f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{version}) Gecko/20100101 Firefox/{version}"
     assert "Macintosh" in google_login_user_agent("darwin") and "X11; Linux" in google_login_user_agent("linux2")
     assert google_login_user_agent("freebsd") == windows
     for agent in (windows, google_login_user_agent("darwin"), google_login_user_agent("linux")):
@@ -384,3 +387,26 @@ def test_links_that_open_a_new_window_load_in_the_same_page(web, monkeypatch):
 @needs_webengine
 def test_login_window_offers_the_manual_continue_button(web):
     assert web._continue.text() == "Ya inicié sesión, continuar"
+
+
+def test_firefox_version_follows_the_release_calendar():
+    from datetime import date
+
+    from infra.web_session import firefox_version
+
+    assert firefox_version(date(2025, 5, 27)) == "139.0"
+    assert firefox_version(date(2025, 6, 24)) == "140.0"
+    assert firefox_version(date(2026, 1, 13)) == "147.0"
+    assert firefox_version(date(2024, 1, 1)) == "139.0"
+
+
+@needs_webengine
+def test_window_retries_when_google_rejects_the_browser_and_then_explains(web):
+    from ui.web_login_window import GAVE_UP_HINT, MAX_REJECT_RETRIES, RETRYING_HINT
+
+    rejected = QUrl("https://accounts.google.com/v3/signin/rejected")
+    for attempt in range(1, MAX_REJECT_RETRIES + 1):
+        web._on_url(rejected)
+        assert web._rejections == attempt and web._status.text() == RETRYING_HINT
+    web._on_url(rejected)
+    assert web._rejections == MAX_REJECT_RETRIES and web._status.text() == GAVE_UP_HINT

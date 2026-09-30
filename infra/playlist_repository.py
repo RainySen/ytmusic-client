@@ -10,7 +10,6 @@ from infra.json_store import read_json, write_json_atomic
 log = logging.getLogger(__name__)
 
 
-# playlists locales json
 class LocalPlaylistRepository:
     def __init__(self, path: str):
         self._path = path
@@ -27,6 +26,8 @@ class LocalPlaylistRepository:
     def _clean(playlist: dict) -> dict:
         tracks = playlist.get("tracks")
         playlist["tracks"] = [t for t in tracks if isinstance(t, dict)] if isinstance(tracks, list) else []
+        if not playlist.get("updated_at"):
+            playlist["updated_at"] = playlist.get("created_at", "")
         return playlist
 
     def all(self) -> list[dict]:
@@ -39,12 +40,14 @@ class LocalPlaylistRepository:
 
     def add(self, title: str, tracks: list[dict], source: str = "imported") -> str | None:
         playlist_id = f"local_{uuid.uuid4().hex}"
+        now = datetime.now().isoformat()
         playlist = {
             "playlistId": playlist_id,
             "title": title,
             "source": source,
             "tracks": tracks,
-            "created_at": datetime.now().isoformat(),
+            "created_at": now,
+            "updated_at": now,
             "track_count": len(tracks),
         }
         with self._lock:
@@ -55,7 +58,6 @@ class LocalPlaylistRepository:
             playlists.pop()
             return None
 
-    # playlist agregar canciones
     def add_tracks(self, playlist_id: str, tracks: list[dict]) -> int | None:
         with self._lock:
             playlist = self.get(playlist_id)
@@ -70,12 +72,15 @@ class LocalPlaylistRepository:
             if not fresh:
                 return 0
             before = playlist.get("tracks", [])
+            before_updated = playlist.get("updated_at", "")
             playlist["tracks"] = before + fresh
             playlist["track_count"] = len(playlist["tracks"])
+            playlist["updated_at"] = datetime.now().isoformat()
             if write_json_atomic(self._path, self._load()):
                 return len(fresh)
             playlist["tracks"] = before
             playlist["track_count"] = len(before)
+            playlist["updated_at"] = before_updated
             return None
 
     def delete(self, playlist_id: str) -> bool:
@@ -93,4 +98,5 @@ class LocalPlaylistRepository:
             if playlist is None:
                 return False
             playlist["title"] = new_title
+            playlist["updated_at"] = datetime.now().isoformat()
             return write_json_atomic(self._path, self._load())

@@ -13,7 +13,6 @@ _CLOSE_QSS = """
 """
 
 
-# modal dialogos
 class Modal(QDialog):
     def __init__(self, parent, title, *, width=440, height=None, closable=True):
         super().__init__(parent, Qt.Dialog | Qt.FramelessWindowHint)

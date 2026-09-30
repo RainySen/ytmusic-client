@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.config import HOVER_PREFETCH_MS
+from ui import imaging
 from domain.models import artist_names, primary_artist, thumbnail_url
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
@@ -42,7 +43,7 @@ class _ArtistHero(QFrame):
         layout.setSpacing(20)
 
         image = LazyThumbnail(96, circle=True, icon="fa5s.user", background="#333")
-        image.set_source(thumbnail_url(data, 192), thumbnails)
+        image.set_source(thumbnail_url(data, imaging.thumb_px(96)), thumbnails)
         layout.addWidget(image)
 
         info = QVBoxLayout()
@@ -83,6 +84,73 @@ class _ArtistHero(QFrame):
         super().mouseReleaseEvent(event)
 
 
+class _TopResultHero(QFrame):
+    opened = Signal(dict)
+    queue_clicked = Signal(dict)
+
+    def __init__(self, data, thumbnails, parent=None):
+        super().__init__(parent)
+        self._data = data
+        kind = data.get("resultType", data.get("type", ""))
+        self.setObjectName("top_hero")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet("QFrame#top_hero { background: #1e1e1e; border-radius: 12px; }"
+                           "QFrame#top_hero:hover { background: #262626; }")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(28, 22, 28, 22)
+        layout.setSpacing(22)
+
+        image = LazyThumbnail(112, radius=8, icon="fa5s.music", background="#333")
+        image.set_source(thumbnail_url(data, imaging.thumb_px(112)), thumbnails)
+        layout.addWidget(image)
+
+        info = QVBoxLayout()
+        info.setSpacing(4)
+        info.setContentsMargins(0, 0, 0, 0)
+        label = QLabel("MEJOR RESULTADO")
+        label.setStyleSheet("font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #888; background: transparent;")
+        info.addWidget(label)
+        name = QLabel(_result_title(data))
+        name.setWordWrap(True)
+        name.setStyleSheet("font-size: 24px; font-weight: 700; color: white; background: transparent;")
+        info.addWidget(name)
+
+        parts = [_TYPE_LABELS.get(kind, kind.title())] if kind else []
+        by = artist_names(data, limit=2) or data.get("author", "")
+        if by:
+            parts.append(by)
+        if data.get("duration"):
+            parts.append(data["duration"])
+        subtitle = QLabel("  •  ".join(parts))
+        subtitle.setStyleSheet("font-size: 12px; color: #aaa; background: transparent;")
+        info.addWidget(subtitle)
+        info.addSpacing(10)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+        playable = bool(data.get("videoId"))
+        self.play_button = pill_button("Reproducir" if playable else "Abrir", "primary",
+                                       "fa5s.play" if playable else "fa5s.folder-open", height=36)
+        self.play_button.clicked.connect(lambda: self.opened.emit(data))
+        row.addWidget(self.play_button)
+        self.queue_button = None
+        if playable:
+            self.queue_button = pill_button("A la cola", "tonal", "fa5s.list", height=36)
+            self.queue_button.clicked.connect(lambda: self.queue_clicked.emit(data))
+            row.addWidget(self.queue_button)
+        row.addStretch()
+        info.addLayout(row)
+        layout.addLayout(info, stretch=1)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.opened.emit(self._data)
+        super().mouseReleaseEvent(event)
+
+
 class _ResultRow(ClickableWidget):
     chosen = Signal(dict)
     add_next = Signal(dict)
@@ -102,7 +170,7 @@ class _ResultRow(ClickableWidget):
 
         is_artist = kind == "artist"
         thumb = LazyThumbnail(48, radius=4, circle=is_artist, icon="fa5s.user" if is_artist else "fa5s.music")
-        thumb.set_source(thumbnail_url(item, 96), thumbnails)
+        thumb.set_source(thumbnail_url(item, imaging.thumb_px(48)), thumbnails)
         layout.addWidget(thumb)
 
         info = QVBoxLayout()
@@ -127,6 +195,7 @@ class _ResultRow(ClickableWidget):
         layout.addLayout(info, stretch=1)
 
         self._actions = TrackActionsButton()
+        self._actions.song = item
         self._actions.setVisible(bool(item.get("videoId")))
         self._actions.add_next.connect(lambda: self.add_next.emit(self._item))
         self._actions.add_queue.connect(lambda: self.add_queue.emit(self._item))
@@ -139,7 +208,6 @@ class _ResultRow(ClickableWidget):
         self.dwelled.connect(lambda: self.hovered.emit(self._item))
 
 
-# resultados busqueda
 class SearchPanel(QWidget):
     item_clicked = Signal(dict)
     add_next_clicked = Signal(dict)
@@ -189,18 +257,18 @@ class SearchPanel(QWidget):
         songs = list(grouped.get("songs", []))
         more = list(grouped.get("more", []))
 
-        hero = None
-        if top and top.get("resultType") == "artist":
-            hero = top
-        elif top:
-            (songs if top.get("resultType") == "song" else more).insert(0, top)
-
         widgets = []
-        if hero:
-            card = _ArtistHero(hero, thumbnails)
+        if top and top.get("resultType") == "artist":
+            card = _ArtistHero(top, thumbnails)
             card.opened.connect(self.item_clicked)
             card.shuffle_clicked.connect(self.artist_shuffle_requested)
             card.mix_clicked.connect(self.artist_mix_requested)
+            widgets.append(card)
+            widgets.append(self._spacer(20))
+        elif top:
+            card = _TopResultHero(top, thumbnails)
+            card.opened.connect(self.item_clicked)
+            card.queue_clicked.connect(self.add_queue_clicked)
             widgets.append(card)
             widgets.append(self._spacer(20))
         if songs:

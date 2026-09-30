@@ -4,7 +4,6 @@ from PySide6.QtWidgets import QPushButton
 from ui import theme
 
 
-# chips filtros
 class Chip(QPushButton):
     def __init__(self, text, parent=None):
         super().__init__(text, parent)

@@ -12,6 +12,7 @@ from domain.models import Lyrics
 from ui.components.drop_queue_container import DroppableQueueContainer
 from ui.components.queue_widgets import ImprovedQueueItem
 from ui.components.section_feed import CardsSection, CompactSection
+from ui.components.switch import Switch
 
 PANEL_WIDTH = 420
 QUEUE_BATCH = 40
@@ -29,7 +30,8 @@ _TAB_QSS = """
     QPushButton:hover { color: #dddddd; }
     QPushButton:checked { color: white; border-bottom: 2px solid white; }
 """
-LYRICS_TEXT_WIDTH = PANEL_WIDTH - 32 - 24
+LYRICS_TEXT_WIDTH = PANEL_WIDTH - 32 - 44
+LYRICS_FONT_PX = 17
 _SUNG, _ACTIVE_DIM, _OTHER_LINE = "#ffffff", "#a8a8a8", "#6c6c6c"
 _HINT_QSS = "color: #888; font-size: 13px; padding: 40px 12px;"
 
@@ -38,13 +40,13 @@ def _song_key(song):
     return (song.get("videoId"), song.get("title"))
 
 
-# panel lateral cola letra similares
 class SidePanel(QWidget):
     queue_item_activated = Signal(int)
     queue_item_removed = Signal(int)
     queue_item_moved = Signal(int, int)
     clear_requested = Signal()
     save_requested = Signal()
+    auto_queue_toggled = Signal(bool)
 
     similar_tab_opened = Signal()
     similar_item_chosen = Signal(dict)
@@ -96,6 +98,11 @@ class SidePanel(QWidget):
         if index == TAB_SIMILAR:
             self.similar_tab_opened.emit()
 
+    def set_auto_queue(self, enabled: bool) -> None:
+        self._auto_queue_switch.blockSignals(True)
+        self._auto_queue_switch.setChecked(enabled)
+        self._auto_queue_switch.blockSignals(False)
+
     def current_tab(self):
         return self._stack.currentIndex()
 
@@ -121,6 +128,16 @@ class SidePanel(QWidget):
         header.addWidget(self._icon_button("fa5s.broom", "Limpiar cola",
                                            "rgba(255,0,0,0.2)", self.clear_requested.emit))
         layout.addLayout(header)
+
+        auto_row = QHBoxLayout()
+        auto_label = QLabel("Reproducción automática")
+        auto_label.setStyleSheet("color: #ccc; font-size: 12px;")
+        self._auto_queue_switch = Switch(True)
+        self._auto_queue_switch.toggled.connect(self.auto_queue_toggled)
+        auto_row.addWidget(auto_label)
+        auto_row.addStretch()
+        auto_row.addWidget(self._auto_queue_switch)
+        layout.addLayout(auto_row)
 
         self._queue_scroll = QScrollArea()
         self._queue_scroll.setWidgetResizable(True)
@@ -154,7 +171,6 @@ class SidePanel(QWidget):
         button.clicked.connect(on_click)
         return button
 
-    # cola perezosa solo visible por lotes
     def set_queue(self, songs, current_index, thumbnails):
         previous_current = self._queue_current
         self._queue_songs = list(songs)
@@ -179,6 +195,11 @@ class SidePanel(QWidget):
             self._mark_current(previous_current, self._queue_current)
         if 0 <= self._queue_current < len(self._queue_songs) and (not appended_only or previous_current != self._queue_current):
             QTimer.singleShot(100, self, lambda: self._scroll_to(self._queue_current))
+
+    def release_queue(self):
+        self._clear_queue_items()
+        self._queue_ids = []
+        self._queue_dirty = True
 
     def _clear_queue_items(self):
         while self._queue_layout.count() > 1:
@@ -216,6 +237,8 @@ class SidePanel(QWidget):
             self._render_queue(self._queue_current)
 
     def _scroll_to(self, index):
+        if self._queue_dirty or not self.isVisible():
+            return
         if index >= self._queue_built:
             self._build_queue_items(index + 1)
         if 0 <= index < self._queue_layout.count() - 1:
@@ -229,6 +252,13 @@ class SidePanel(QWidget):
         layout.setContentsMargins(16, 12, 16, 8)
         self._lyrics = QListWidget()
         self._lyrics.setObjectName("lyrics_list")
+        self._lyrics.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._lyrics.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+        self._lyrics.setWordWrap(True)
+        self._lyrics.setTextElideMode(Qt.ElideNone)
+        self._lyrics.setResizeMode(QListWidget.Adjust)
+        self._lyrics.setUniformItemSizes(False)
+        self._lyrics.setSpacing(2)
         layout.addWidget(self._lyrics)
         self._lyrics_credit = QLabel()
         self._lyrics_credit.setAlignment(Qt.AlignCenter)
@@ -238,16 +268,17 @@ class SidePanel(QWidget):
         self._lyric_words = {}
         self._lyric_sung = {}
         self._lyric_active = -1
+        self._lyric_romanization = {}
         return tab
 
     def set_lyrics(self, lyrics: Lyrics):
         if not lyrics.word_synced:
-            self.set_lyrics_lines(lyrics.texts)
+            self._set_lyrics_plain(lyrics)
         else:
             self._reset_lyrics()
             font = QFont()
-            font.setPixelSize(16)
-            font.setWeight(QFont.DemiBold)
+            font.setPixelSize(LYRICS_FONT_PX)
+            font.setWeight(QFont.Bold)
             for index, line in enumerate(lyrics.lines):
                 item = QListWidgetItem()
                 item.setFlags(Qt.ItemIsEnabled)
@@ -260,17 +291,39 @@ class SidePanel(QWidget):
                 label.setStyleSheet("background: transparent;")
                 label.setFont(font)
                 self._lyric_words[index] = (label, line.words)
+                self._lyric_romanization[index] = line.romanization
                 self._render_lyric(index, lit=0, active=False)
                 item.setSizeHint(QSize(LYRICS_TEXT_WIDTH, label.heightForWidth(LYRICS_TEXT_WIDTH) + 16))
                 self._lyrics.setItemWidget(item, label)
         self._lyrics_credit.setText(f"Letra: {lyrics.source}" if lyrics.source else "")
         self._lyrics_credit.setVisible(bool(lyrics.source))
 
+    def _set_lyrics_plain(self, lyrics: Lyrics):
+        self._reset_lyrics()
+        self._lyrics_credit.hide()
+        for line in lyrics.lines:
+            item = QListWidgetItem()
+            item.setTextAlignment(Qt.AlignCenter)
+            self._lyrics.addItem(item)
+            if not line.romanization:
+                item.setText(line.text)
+                continue
+            label = QLabel(f'{escape(line.text)}<br><span style="color:{_OTHER_LINE}; font-size: 12px;">'
+                           f'{escape(line.romanization)}</span>')
+            label.setWordWrap(True)
+            label.setTextFormat(Qt.RichText)
+            label.setAlignment(Qt.AlignCenter)
+            label.setFixedWidth(LYRICS_TEXT_WIDTH)
+            label.setStyleSheet("background: transparent;")
+            item.setSizeHint(QSize(LYRICS_TEXT_WIDTH, label.heightForWidth(LYRICS_TEXT_WIDTH) + 16))
+            self._lyrics.setItemWidget(item, label)
+
     def _reset_lyrics(self):
         self._lyrics.clear()
         self._lyric_words = {}
         self._lyric_sung = {}
         self._lyric_active = -1
+        self._lyric_romanization = {}
 
     def set_lyrics_lines(self, lines):
         self._reset_lyrics()
@@ -290,7 +343,6 @@ class SidePanel(QWidget):
             self._lyrics.setCurrentRow(index)
             self._lyrics.scrollToItem(self._lyrics.item(index), QListWidget.PositionAtCenter)
 
-    # letra palabras
     def set_lyric_progress(self, index, current_ms):
         entry = self._lyric_words.get(index)
         if entry is None:
@@ -312,7 +364,11 @@ class SidePanel(QWidget):
         html = "".join(
             f'<span style="color:{_SUNG if position < lit else dim}">{escape(word.text)}</span>'
             for position, word in enumerate(words))
-        label.setText(html.replace("  ", "&nbsp; "))
+        html = html.replace("  ", "&nbsp; ")
+        romanization = self._lyric_romanization.get(index, "")
+        if romanization:
+            html += f'<br><span style="color:{_OTHER_LINE}; font-size: 12px;">{escape(romanization)}</span>'
+        label.setText(html)
 
     def _build_similar_tab(self):
         scroll = QScrollArea()

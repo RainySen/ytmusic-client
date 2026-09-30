@@ -8,7 +8,6 @@ from PySide6.QtCore import QObject, QTimer, Qt, Signal, Slot
 log = logging.getLogger(__name__)
 
 
-# vlc audio
 class VlcAudioBackend(QObject):
     position_changed = Signal(float)
     time_changed = Signal(int, int)
@@ -70,7 +69,6 @@ class VlcAudioBackend(QObject):
     def has_media(self) -> bool:
         return self._has_media
 
-    # vlc reproducir
     def play_url(self, url: str) -> None:
         player = self._ensure()
         player.set_media(self._instance.media_new(url))
@@ -122,7 +120,6 @@ class VlcAudioBackend(QObject):
         self._timer.stop()
         self.failed.emit()
 
-    # tiempo progreso
     def _poll(self) -> None:
         player = self._player
         if player is None or not self._playing:

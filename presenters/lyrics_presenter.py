@@ -6,7 +6,6 @@ from services.playback_service import PlaybackService
 from ui.main_window import MainWindow
 
 
-# letras resaltado palabra
 class LyricsPresenter:
     def __init__(self, window: MainWindow, playback: PlaybackService, lyrics: LyricsService):
         self._panel = window.side_panel

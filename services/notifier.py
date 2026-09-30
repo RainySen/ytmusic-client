@@ -1,7 +1,6 @@
 from PySide6.QtCore import QObject, Signal
 
 
-# avisos toast
 class Notifier(QObject):
     message = Signal(str, str)
 

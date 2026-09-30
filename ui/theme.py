@@ -12,7 +12,6 @@ DANGER = "#ff4e45"
 SCRIM = "rgba(0, 0, 0, 0.6)"
 
 
-# tema botones
 def button_qss(kind: str = "primary", height: int = 40) -> str:
     palette = {
         "primary": ("#ffffff", "#0f0f0f", "#e6e6e6", "#cccccc"),
