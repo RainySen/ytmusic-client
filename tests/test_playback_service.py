@@ -240,6 +240,10 @@ def test_volume_and_seek_delegate(rig):
     rig.service.set_volume(40)
     rig.service.seek(0.5)
     assert rig.audio.volume == 40 and rig.audio.seeks == [0.5]
+    rig.service.set_volume(100)
+    assert rig.audio.volume == 100
+    rig.service.set_volume(0)
+    assert rig.audio.volume == 0
 
 
 def test_radio_history_stays_bounded(rig):
@@ -282,3 +286,95 @@ def test_shuffle_reorders_upcoming_and_prefetches(rig):
     rig.service.shuffle()
     assert rig.queue.current["videoId"] == "v0"
     assert len(rig.streams.prefetched) == 3
+
+
+def sized_rig(size):
+    r = Rig()
+    r.queue = PlayQueue(radio_limit=6)
+    r.service = PlaybackService(r.queue, r.streams, r.audio, r.catalog, r.notifier, radio_size=lambda: size)
+    return r
+
+
+def radio_calls(r):
+    return [(i, c["limit"]) for i, c in enumerate(r.catalog.calls) if c["key"] == "radio"]
+
+
+def answer_radio(r, count):
+    index, _limit = radio_calls(r)[-1]
+    r.catalog.answer(index, [song(i) for i in range(1, count + 1)])
+
+
+def test_radio_size_200_loads_the_queue_in_growing_stages(qapp):
+    r = sized_rig(200)
+    r.service.start_radio(song(0))
+    assert [limit for _, limit in radio_calls(r)] == [50] and r.queue.radio_limit == 200
+    answer_radio(r, 49)
+    assert [limit for _, limit in radio_calls(r)] == [50, 100] and len(r.queue) == 50
+    answer_radio(r, 100)
+    assert [limit for _, limit in radio_calls(r)] == [50, 100, 200] and len(r.queue) == 101
+    answer_radio(r, 200)
+    assert len(radio_calls(r)) == 3 and len(r.queue) == 200
+
+
+def test_radio_size_25_asks_for_only_25_and_stops(qapp):
+    r = sized_rig(25)
+    r.service.start_radio(song(0))
+    assert [limit for _, limit in radio_calls(r)] == [25]
+    answer_radio(r, 25)
+    assert len(radio_calls(r)) == 1 and len(r.queue) == 25
+
+
+def test_radio_size_500_uses_doubling_stages_capped_at_the_target(qapp):
+    r = sized_rig(500)
+    r.service.start_radio(song(0))
+    for count in (49, 148, 246, 403):
+        answer_radio(r, count)
+    assert [limit for _, limit in radio_calls(r)] == [50, 100, 200, 400, 500]
+
+
+def test_unlimited_radio_starts_with_a_hundred_and_extends_in_bigger_batches(qapp):
+    r = sized_rig(0)
+    r.service.start_radio(song(0))
+    answer_radio(r, 49)
+    answer_radio(r, 100)
+    assert [limit for _, limit in radio_calls(r)] == [50, 100] and r.queue.radio_limit is None
+    assert r.service._extend_batch() == 10
+
+
+def test_radio_stops_growing_when_youtube_runs_out_or_nothing_is_new(qapp):
+    r = sized_rig(200)
+    r.service.start_radio(song(0))
+    answer_radio(r, 30)
+    assert len(radio_calls(r)) == 1
+    r2 = sized_rig(200)
+    r2.service.start_radio(song(0))
+    answer_radio(r2, 50)
+    answer_radio(r2, 50)
+    assert len(radio_calls(r2)) == 2
+
+
+def test_radio_size_is_read_again_for_every_new_radio(qapp):
+    size = [25]
+    r = Rig()
+    r.service = PlaybackService(r.queue, r.streams, r.audio, r.catalog, r.notifier, radio_size=lambda: size[0])
+    r.service.start_radio(song(0))
+    assert r.queue.radio_limit == 25
+    size[0] = 100
+    r.service.start_radio(song(50))
+    assert r.queue.radio_limit == 100 and radio_calls(r)[-1][1] == 50
+
+
+def test_small_radio_sizes_ask_for_exactly_that_many_and_never_stage(qapp):
+    for size in (5, 10, 15):
+        r = sized_rig(size)
+        r.service.start_radio(song(0))
+        assert [limit for _, limit in radio_calls(r)] == [size] and r.queue.radio_limit == size
+        answer_radio(r, 49)
+        assert len(radio_calls(r)) == 1 and len(r.queue) == size
+
+
+def test_every_offered_radio_size_is_valid_and_ordered():
+    from domain.settings import RADIO_SIZE_OPTIONS
+
+    sizes = [s for s in RADIO_SIZE_OPTIONS if s]
+    assert sizes == sorted(sizes) and sizes[0] == 5 and RADIO_SIZE_OPTIONS[-1] == 0

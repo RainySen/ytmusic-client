@@ -10,9 +10,12 @@ LEGACY_DATA = ("oauth.json", "local_playlists.json", "queue_and_cache.json", "ly
                "ytmusic-client.log*", "cache", ".yt-dlp-cache")
 
 NETWORK_CACHING_MS = 3000
-RADIO_QUEUE_LIMIT = 6
-RADIO_FETCH = 10
+RADIO_QUEUE_LIMIT = 50
+RADIO_FETCH = 50
+RADIO_STAGE_START = 100
+RADIO_EXHAUSTED_RATIO = 0.7
 EXTEND_BATCH = 2
+EXTEND_BATCH_UNLIMITED = 10
 HOVER_PREFETCH_MS = 350
 PREFETCH_AHEAD = 3
 STREAM_EXPIRY_MARGIN_S = 120
@@ -22,7 +25,6 @@ QUEUE_HISTORY_LIMIT = 50
 MAX_CONSECUTIVE_PLAY_FAILURES = 3
 
 
-# rutas archivos cache
 @dataclass(frozen=True)
 class AppPaths:
     base_dir: str
@@ -53,8 +55,16 @@ class AppPaths:
         return self._join("local_playlists.json")
 
     @property
+    def settings_file(self) -> str:
+        return self._join("settings.json")
+
+    @property
     def lyrics_settings_file(self) -> str:
         return self._join("lyrics_settings.json")
+
+    @property
+    def search_history_file(self) -> str:
+        return self._join("search_history.json")
 
     @property
     def cache_dir(self) -> str:
@@ -73,6 +83,14 @@ class AppPaths:
         return os.path.join(self.cache_dir, "recent_playlists.json")
 
     @property
+    def pinned_playlists_file(self) -> str:
+        return self._join("pinned_playlists.json")
+
+    @property
+    def listen_again_file(self) -> str:
+        return self._join("listen_again_pins.json")
+
+    @property
     def ytdlp_cache_dir(self) -> str:
         return self._join(".yt-dlp-cache")
 
@@ -80,7 +98,6 @@ class AppPaths:
     def log_file(self) -> str:
         return self._join("ytmusic-client.log")
 
-    # datos usuario carpeta data migrar
     def ensure_dirs(self) -> None:
         os.makedirs(self.data_dir, exist_ok=True)
         self._migrate_legacy()

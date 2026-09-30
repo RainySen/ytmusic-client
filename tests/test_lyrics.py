@@ -3,8 +3,8 @@ import json
 import pytest
 
 from core.bootstrap import build_lyrics_providers
-from core.config import AppPaths
 from domain.lyrics_parsing import parse_lrc, parse_ttml, plain_lyrics
+from domain.settings import Settings
 from domain.models import LyricLine, Lyrics, LyricsQuery, LyricWord, clean_title, lyrics_query
 from infra.concurrency import TaskRunner
 from infra.lyrics_providers import BetterLyricsProvider, LrcLibProvider, YouTubeMusicProvider
@@ -236,13 +236,20 @@ def test_settings_defaults_order_and_key(tmp_path):
     assert load_lyrics_settings(str(path), {}).providers == DEFAULT_PROVIDERS
 
 
-def test_providers_are_built_in_the_configured_order(tmp_path):
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "lyrics_settings.json").write_text(json.dumps({"providers": ["youtube", "nonsense", "lrclib"]}))
-    providers = build_lyrics_providers(AppPaths(str(tmp_path)), gateway=object())
+def test_providers_are_built_in_the_configured_order():
+    ordered = Settings(lyrics_providers=("youtube", "lrclib"))
+    providers = build_lyrics_providers(ordered, gateway=object(), environ={})
     assert [p.name for p in providers] == ["YouTube Music", "LRCLIB"]
-    default = build_lyrics_providers(AppPaths(str(tmp_path / "empty")), gateway=object())
+    default = build_lyrics_providers(Settings(), gateway=object(), environ={})
     assert [p.name for p in default] == ["Better Lyrics", "LRCLIB", "YouTube Music"]
+
+
+def test_better_lyrics_key_comes_from_settings_and_the_environment_wins():
+    def key_of(settings, environ):
+        return build_lyrics_providers(settings, gateway=object(), environ=environ)[0]._api_key
+
+    assert key_of(Settings(better_lyrics_key="saved"), {}) == "saved"
+    assert key_of(Settings(better_lyrics_key="saved"), {"BETTER_LYRICS_API_KEY": "env"}) == "env"
 
 
 class Scripted:
@@ -314,6 +321,58 @@ def test_answers_and_misses_are_cached_per_song(make_service):
     nothing = Scripted("n", None)
     service = build(nothing)
     assert ask(service) is None and ask(service) is None and nothing.calls == 1
+
+
+def test_a_fallback_found_while_a_provider_was_down_is_not_remembered(make_service):
+    build, ask = make_service
+    now = [1000.0]
+    broken, plain = Scripted("broken", error=RuntimeError("503")), Scripted("plain", PLAIN)
+    service = build(broken, plain, clock=lambda: now[0])
+    assert ask(service) is PLAIN and plain.calls == 1
+    assert ask(service) is PLAIN and plain.calls == 2 and broken.calls == 1
+    now[0] += PROVIDER_COOLDOWN_S + 1
+    broken.error, broken.result = None, TIMED
+    assert ask(service) is TIMED and broken.calls == 2
+    assert ask(service) is TIMED and broken.calls == 2
+
+
+def test_a_plain_answer_is_remembered_when_every_provider_answered(make_service):
+    build, ask = make_service
+    plain = Scripted("plain", PLAIN)
+    service = build(Scripted("none", None), plain)
+    assert ask(service) is PLAIN and ask(service) is PLAIN and plain.calls == 1
+
+
+def test_http_get_retries_once_after_a_server_error_or_a_dropped_connection(monkeypatch):
+    import requests
+
+    from infra import lyrics_providers
+
+    monkeypatch.setattr(lyrics_providers.time, "sleep", lambda _s: None)
+
+    def run(outcomes):
+        calls = []
+
+        def fake_get(url, **_kwargs):
+            calls.append(url)
+            outcome = outcomes[len(calls) - 1]
+            if isinstance(outcome, Exception):
+                raise outcome
+            return type("R", (), {"status_code": outcome})()
+
+        monkeypatch.setattr(requests, "get", fake_get)
+        return calls, lyrics_providers._http_get("http://x")
+
+    calls, response = run([503, 200])
+    assert len(calls) == 2 and response.status_code == 200
+    calls, response = run([503, 503])
+    assert len(calls) == 2 and response.status_code == 503
+    calls, response = run([404])
+    assert len(calls) == 1 and response.status_code == 404
+    calls, response = run([requests.exceptions.ConnectionError(), 200])
+    assert len(calls) == 2 and response.status_code == 200
+    with pytest.raises(requests.exceptions.ConnectionError):
+        run([requests.exceptions.ConnectionError(), requests.exceptions.ConnectionError()])
 
 
 def word_lyrics():

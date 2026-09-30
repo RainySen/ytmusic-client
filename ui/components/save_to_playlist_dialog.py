@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from domain.models import LOCAL_SOURCES, thumbnail_url
-from ui import theme
+from ui import imaging, theme
 from ui.components import dialogs
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
@@ -32,7 +32,7 @@ class _RecentTile(ClickableWidget):
         layout.setContentsMargins(4, 4, 4, 6)
         layout.setSpacing(4)
         thumb = LazyThumbnail(self.WIDTH, radius=4, icon="fa5s.list", background="#1e1e1e")
-        thumb.set_source(thumbnail_url(playlist, 2 * self.WIDTH), thumbnails)
+        thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(self.WIDTH)), thumbnails)
         layout.addWidget(thumb)
         for text, style in ((playlist.get("title", ""), "font-size: 12px; font-weight: 600; color: #e8e8e8;"),
                             (_count_text(playlist, "canción", "canciones"), "font-size: 11px; color: #999;")):
@@ -52,7 +52,7 @@ class _PlaylistRow(ClickableWidget):
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(14)
         thumb = LazyThumbnail(52, radius=4, icon="fa5s.list", background="#1e1e1e")
-        thumb.set_source(thumbnail_url(playlist, 104), thumbnails)
+        thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(52)), thumbnails)
         layout.addWidget(thumb)
 
         info = QVBoxLayout()
@@ -71,7 +71,6 @@ class _PlaylistRow(ClickableWidget):
         layout.addLayout(info, stretch=1)
 
 
-# modal guardar playlist
 class SaveToPlaylistDialog(dialogs.Modal):
     def __init__(self, targets, thumbnails, parent=None):
         super().__init__(parent, "Guardar en una playlist", width=DIALOG_SIZE[0], height=DIALOG_SIZE[1])

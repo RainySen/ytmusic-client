@@ -1,7 +1,9 @@
 import random
 
-from services.catalog_service import CatalogService
+from presenters.paging import Pager
+from services.catalog_service import PLAYLIST_PAGE_CAP, PLAYLIST_PAGE_SIZE, PLAYLIST_PAGE_STEP, CatalogService
 from services.item_opener import ItemOpener
+from services.library_service import CHANNEL_ID, LibraryService
 from services.navigation import Navigator
 from services.notifier import Notifier
 from services.playback_service import PlaybackService
@@ -12,24 +14,27 @@ PROFILE_VIEWS = ("artist", "album")
 COLLECTION_KINDS = ("album", "playlist")
 
 
-# perfil artista album playlist
 class ProfilePresenter:
     def __init__(self, window: MainWindow, catalog: CatalogService, playback: PlaybackService,
-                 opener: ItemOpener, navigator: Navigator, notifier: Notifier):
+                 opener: ItemOpener, navigator: Navigator, notifier: Notifier, library: LibraryService | None = None):
         self._window = window
         self._catalog = catalog
         self._playback = playback
         self._notifier = notifier
         self._navigator = navigator
         self._opener = opener
+        self._library = library
         self._history: list[tuple[str, str]] = []
         self._current: tuple[str, str] | None = None
         self._profile: dict | None = None
         self._collection: dict | None = None
+        self._pager = Pager(self._fetch_playlist_page, self._deliver_playlist_page, PLAYLIST_PAGE_STEP,
+                            PLAYLIST_PAGE_CAP)
 
         navigator.artist_requested.connect(lambda artist_id: self._go(("artist", artist_id)))
         navigator.album_requested.connect(lambda album_id: self._go(("album", album_id)))
         navigator.playlist_requested.connect(lambda playlist_id: self._go(("playlist", playlist_id)))
+        navigator.channel_requested.connect(lambda: self._go(("channel", CHANNEL_ID)))
         window.view_shown.connect(self._on_view_shown)
 
         artist = window.artist_panel
@@ -54,8 +59,8 @@ class ProfilePresenter:
         album.add_queue_clicked.connect(playback.enqueue_last)
         album.artist_clicked.connect(lambda artist_id: navigator.artist_requested.emit(artist_id))
         album.item_clicked.connect(opener.open)
+        album.load_more_requested.connect(self._pager.more)
 
-    # navegacion historial back
     def _go(self, target: tuple[str, str]) -> None:
         if target == self._current:
             self._render(target)
@@ -64,6 +69,10 @@ class ProfilePresenter:
         del self._history[:-HISTORY_LIMIT]
         self._current = target
         self._render(target)
+
+    def reload(self) -> None:
+        if self._current is not None:
+            self._render(self._current)
 
     def back(self) -> None:
         if not self._history:
@@ -80,17 +89,31 @@ class ProfilePresenter:
         if name not in PROFILE_VIEWS:
             self._history.clear()
             self._current = None
+            self._pager.stop()
 
     def _render(self, target: tuple[str, str]) -> None:
         kind, ident = target
+        self._pager.stop()
         if kind in COLLECTION_KINDS:
             self._window.show_view("album")
             self._window.album_panel.set_loading()
-            fetch = self._catalog.album if kind == "album" else self._catalog.playlist_details
-            fetch(ident, lambda data: self._on_collection(target, data), lambda e: self._on_failed(target, "album"))
+            if kind == "playlist":
+                self._catalog.playlist_details(ident, lambda data: self._on_collection(target, data),
+                                               lambda e: self._on_failed(target, "album"),
+                                               limit=PLAYLIST_PAGE_SIZE)
+            else:
+                self._catalog.album(ident, lambda data: self._on_collection(target, data),
+                                    lambda e: self._on_failed(target, "album"))
             return
         self._window.show_view("artist")
         self._window.artist_panel.set_loading()
+        if kind == "channel":
+            if self._library is None:
+                self._on_failed(target, "artist")
+                return
+            self._library.channel_profile(lambda p: self._on_profile(target, p) if p is not None
+                                          else self._on_failed(target, "artist"))
+            return
         self._catalog.artist_profile(ident, lambda p: self._on_profile(target, p),
                                      lambda e: self._on_failed(target, "artist"))
 
@@ -124,6 +147,21 @@ class ProfilePresenter:
             panel.show_album(data, self._window.thumbnails)
         else:
             panel.show_playlist(data, self._window.thumbnails)
+            self._pager.resume(len(data["tracks"]), bool(data.get("has_more")))
+
+    def _fetch_playlist_page(self, limit: int, done) -> None:
+        playlist_id = self._current[1]
+        self._catalog.playlist_details(
+            playlist_id, lambda data: done(data["tracks"], data["track_count"]) if data else done(None),
+            lambda _exc: done(None), limit=limit)
+
+    def _deliver_playlist_page(self, new_tracks, has_more: bool, _append: bool) -> None:
+        panel = self._window.album_panel
+        if new_tracks is None or panel.tracks is None or not self._collection:
+            panel.load_more_failed()
+            return
+        self._collection = {**self._collection, "tracks": self._collection["tracks"] + new_tracks}
+        panel.update_tracks(new_tracks, has_more, self._window.thumbnails)
 
     def _on_failed(self, target: tuple[str, str], view: str) -> None:
         if target != self._current:
@@ -132,17 +170,42 @@ class ProfilePresenter:
         panel = self._window.album_panel if view == "album" else self._window.artist_panel
         panel.show_message(text)
 
+    def _is_channel(self) -> bool:
+        return bool(self._profile) and self._profile.get("id") == CHANNEL_ID
+
     def _shuffle_artist(self) -> None:
-        if self._profile:
-            self._opener.shuffle_artist(self._profile["id"], self._profile["name"])
+        if not self._profile:
+            return
+        if self._is_channel():
+            songs = self._profile.get("top_songs") or []
+            if songs:
+                self._playback.play_collection(random.sample(songs, len(songs)))
+            else:
+                self._notifier.warning("No hay canciones para reproducir.")
+            return
+        self._opener.shuffle_artist(self._profile["id"], self._profile["name"])
 
     def _start_mix(self) -> None:
-        if self._profile:
-            self._opener.mix_artist(self._profile["id"])
+        if not self._profile:
+            return
+        if self._is_channel():
+            songs = self._profile.get("top_songs") or []
+            if songs:
+                self._playback.start_radio(random.choice(songs))
+            else:
+                self._notifier.warning("No hay canciones para empezar un mix.")
+            return
+        self._opener.mix_artist(self._profile["id"])
 
     def _show_all_songs(self) -> None:
-        if self._profile:
-            self._go(("songs", self._profile["id"]))
+        if not self._profile:
+            return
+        if self._is_channel():
+            self._window.artist_panel.show_all_songs(
+                self._profile["name"], self._profile.get("top_songs") or [], self._window.thumbnails,
+                title=self._profile.get("songs_title") or "Canciones más populares")
+            return
+        self._go(("songs", self._profile["id"]))
 
     def _play_album(self, shuffle: bool = False) -> None:
         if not self._collection:

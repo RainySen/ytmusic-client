@@ -214,3 +214,55 @@ def test_gateway_still_falls_back_when_credentials_are_rejected(tmp_path, monkey
     gateway = YTMusicGateway(str(path))
     assert gateway._client().anonymous is True
     assert gateway.is_authenticated is False
+
+
+def test_session_save_runs_in_the_background_and_the_last_snapshot_wins(qapp, tmp_path, wait_until):
+    from PySide6.QtTest import QTest
+
+    from domain.play_queue import PlayQueue
+    from infra.concurrency import TaskRunner
+    from services.session_service import SessionService
+
+    class Streams:
+        def export_state(self):
+            return {}
+
+    queue = PlayQueue()
+    runner = TaskRunner("session", 1)
+    path = tmp_path / "queue.json"
+    session = SessionService(str(path), queue, Streams(), runner=runner)
+    session.restore(load=False)
+    queue.replace([{"videoId": f"v{n}", "title": "t"} for n in range(5000)], 0)
+    session.save()
+    session.save()
+    queue.replace([{"videoId": "final", "title": "t"}], 0)
+    session.save(wait=True)
+    assert wait_until(lambda: path.exists())
+    QTest.qWait(200)
+    assert [s["videoId"] for s in json.loads(path.read_text(encoding="utf-8"))["queue"]] == ["final"]
+    runner.shutdown()
+    fresh = SessionService(str(tmp_path / "other.json"), queue, Streams(), runner=None)
+    fresh.restore(load=False)
+    fresh.save()
+    assert (tmp_path / "other.json").exists()
+
+
+def test_session_restore_can_be_skipped(qapp, tmp_path):
+    from domain.play_queue import PlayQueue
+    from services.session_service import SessionService
+
+    path = tmp_path / "queue.json"
+    path.write_text('{"queue": [{"videoId": "a"}], "current_index": 0}', encoding="utf-8")
+
+    class Streams:
+        def export_state(self):
+            return {}
+
+        def import_state(self, data):
+            return 0
+
+    queue = PlayQueue()
+    SessionService(str(path), queue, Streams()).restore(load=False)
+    assert len(queue) == 0
+    SessionService(str(path), queue, Streams()).restore()
+    assert len(queue) == 1

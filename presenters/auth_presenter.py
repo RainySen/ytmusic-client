@@ -13,7 +13,6 @@ from ui.main_window import MainWindow
 SESSION_CHECK_MS = 30 * 60 * 1000
 
 
-# login ventana
 class AuthPresenter:
     def __init__(self, window: MainWindow, auth: AuthService, catalog: CatalogService,
                  home: HomePresenter, login_window_factory: Callable[[], QWidget], notifier: Notifier):

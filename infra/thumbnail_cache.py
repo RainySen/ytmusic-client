@@ -13,7 +13,6 @@ log = logging.getLogger(__name__)
 PixmapCallback = Callable[[QPixmap], None]
 
 
-# miniaturas cache disco
 class ThumbnailCache(QObject):
     def __init__(self, cache_dir: str | None = None, max_items: int = 400,
                  disk_bytes: int = 150 * 1024 * 1024, parent: QObject | None = None):
@@ -27,6 +26,24 @@ class ThumbnailCache(QObject):
         self._memory: "OrderedDict[str, QPixmap]" = OrderedDict()
         self._max_items = max_items
         self._pending: dict[str, list[PixmapCallback]] = {}
+
+    def clear_memory(self) -> None:
+        self._memory.clear()
+
+    def set_max_items(self, max_items: int) -> None:
+        self._max_items = max_items
+        while len(self._memory) > self._max_items:
+            self._memory.popitem(last=False)
+
+    def disk_size(self) -> int:
+        disk = self._manager.cache()
+        return int(disk.cacheSize()) if disk is not None else 0
+
+    def clear_disk(self) -> None:
+        disk = self._manager.cache()
+        if disk is not None:
+            disk.clear()
+        self._memory.clear()
 
     def request(self, url: str, callback: PixmapCallback) -> None:
         if not url:

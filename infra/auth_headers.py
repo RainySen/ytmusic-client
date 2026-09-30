@@ -21,7 +21,6 @@ def parse_cookie_string(value: str) -> dict[str, str]:
     return cookies
 
 
-# login cabeceras sesion
 def headers_from_cookies(cookies: dict[str, str], *, user_agent: str | None = None, authuser: str = "0") -> dict[str, str]:
     sapisid = session_id(cookies)
     timestamp = str(int(time.time()))

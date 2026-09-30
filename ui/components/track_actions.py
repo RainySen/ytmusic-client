@@ -1,5 +1,5 @@
 import qtawesome as qta
-from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtCore import QObject, QPoint, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QMenu, QPushButton
 
@@ -8,6 +8,44 @@ SONG_ACTIONS = (
     ("queue", "Agregar a la cola", "fa5s.list"),
     ("playlist", "Agregar a una playlist", "fa5s.plus"),
 )
+ARTIST_ACTION = ("artist", "Ir al artista", "fa5s.user")
+PIN_ACTION = ("pin", "Fijar en volver a escuchar", "fa5s.thumbtack")
+UNPIN_ACTION = ("pin", "Quitar de volver a escuchar", "fa5s.thumbtack")
+
+
+# song actions routed through one hub instead of every widget
+class SongMenuHub(QObject):
+    artist_requested = Signal(dict)
+    pin_toggled = Signal(dict)
+
+    def __init__(self):
+        super().__init__()
+        self.is_pinned = lambda _song: False
+
+    def relay(self, key: str, song: dict) -> bool:
+        if key == "artist":
+            self.artist_requested.emit(song)
+        elif key == "pin":
+            self.pin_toggled.emit(song)
+        else:
+            return False
+        return True
+
+
+song_hub = SongMenuHub()
+
+
+def has_artist(song: dict | None) -> bool:
+    return any(isinstance(a, dict) and a.get("id") for a in (song or {}).get("artists") or [])
+
+
+def song_entries(song: dict | None) -> tuple:
+    entries = list(SONG_ACTIONS)
+    if has_artist(song):
+        entries.append(ARTIST_ACTION)
+    if song and song.get("videoId"):
+        entries.append(UNPIN_ACTION if song_hub.is_pinned(song) else PIN_ACTION)
+    return tuple(entries)
 COLLECTION_ACTIONS = (
     ("shuffle", "Reproducir aleatoriamente", "fa5s.random"),
     ("mix", "Comenzar mix", "fa5s.broadcast-tower"),
@@ -17,7 +55,7 @@ COLLECTION_ACTIONS = (
     ("share", "Compartir", "fa5s.share"),
 )
 
-_MENU_QSS = """
+MENU_QSS = """
     QMenu { background: #282828; border: 1px solid #383838; border-radius: 8px; padding: 6px; }
     QMenu::item { padding: 9px 20px 9px 14px; border-radius: 4px; color: #e0e0e0; }
     QMenu::item:selected { background: rgba(255,255,255,0.10); }
@@ -33,7 +71,6 @@ _OVERLAY_QSS = """
 """
 
 
-# menu tres puntos
 class ActionsButton(QPushButton):
     action_chosen = Signal(str)
     menu_opened = Signal()
@@ -64,13 +101,13 @@ class ActionsButton(QPushButton):
         self.setIcon(self._icon if revealed else QIcon())
         self.setEnabled(revealed)
 
-    # menu clic derecho
     def show_menu(self, global_pos: QPoint | None = None) -> None:
         if self.isHidden() or self._menu_open:
             return
         menu = QMenu(self.window())
-        menu.setStyleSheet(_MENU_QSS)
-        actions = {menu.addAction(qta.icon(icon, color="#e0e0e0"), label): key for key, label, icon in self._entries}
+        menu.setStyleSheet(MENU_QSS)
+        actions = {menu.addAction(qta.icon(icon, color="#e0e0e0"), label): key
+                   for key, label, icon in self._current_entries()}
         if global_pos is None:
             global_pos = self.mapToGlobal(self.rect().bottomRight())
             global_pos.setX(global_pos.x() - menu.sizeHint().width())
@@ -86,6 +123,9 @@ class ActionsButton(QPushButton):
         if chosen in actions:
             self.action_chosen.emit(actions[chosen])
 
+    def _current_entries(self):
+        return self._entries
+
 
 class TrackActionsButton(ActionsButton):
     add_next = Signal()
@@ -94,9 +134,15 @@ class TrackActionsButton(ActionsButton):
 
     def __init__(self, parent=None):
         super().__init__(SONG_ACTIONS, parent)
+        self.song: dict | None = None
         self.action_chosen.connect(self._relay)
 
+    def _current_entries(self):
+        return song_entries(self.song)
+
     def _relay(self, key: str) -> None:
+        if self.song is not None and song_hub.relay(key, self.song):
+            return
         {"next": self.add_next, "queue": self.add_queue, "playlist": self.add_playlist}[key].emit()
 
 

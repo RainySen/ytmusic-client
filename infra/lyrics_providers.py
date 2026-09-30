@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Callable, Protocol
 
 import requests
@@ -14,6 +15,8 @@ log = logging.getLogger(__name__)
 USER_AGENT = "YTMusicClient/1.0 (https://github.com/RainySen/ytmusic-client)"
 TIMEOUT_S = 6
 DURATION_TOLERANCE_S = 3
+RETRIES = 1
+RETRY_DELAY_S = 0.6
 
 HttpGet = Callable[..., Any]
 
@@ -24,11 +27,22 @@ class LyricsProvider(Protocol):
     def fetch(self, query: LyricsQuery) -> Lyrics | None: ...
 
 
+# retry once on server error or dropped connection
 def _http_get(url: str, params: dict | None = None, headers: dict | None = None):
-    return requests.get(url, params=params, headers={"User-Agent": USER_AGENT, **(headers or {})}, timeout=TIMEOUT_S)
+    for attempt in range(RETRIES + 1):
+        last = attempt == RETRIES
+        try:
+            response = requests.get(url, params=params, headers={"User-Agent": USER_AGENT, **(headers or {})},
+                                    timeout=TIMEOUT_S)
+        except requests.exceptions.ConnectionError:
+            if last:
+                raise
+        else:
+            if response.status_code < 500 or last:
+                return response
+        time.sleep(RETRY_DELAY_S)
 
 
-# letras better lyrics ttml
 class BetterLyricsProvider:
     name = "Better Lyrics"
     URL = "https://api.betterlyrics.org/getLyrics"
@@ -49,7 +63,6 @@ class BetterLyricsProvider:
         return parse_ttml((response.json() or {}).get("ttml"), self.name)
 
 
-# letras lrclib lrc
 class LrcLibProvider:
     name = "LRCLIB"
     BASE = "https://lrclib.net/api"
@@ -95,7 +108,6 @@ class LrcLibProvider:
         return parse_lrc(data.get("syncedLyrics"), self.name) or plain_lyrics(data.get("plainLyrics"), self.name)
 
 
-# letras youtube
 class YouTubeMusicProvider:
     name = "YouTube Music"
 

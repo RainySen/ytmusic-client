@@ -21,7 +21,6 @@ _MANUAL_INSTRUCTIONS = (
 )
 
 
-# login ventana
 class LoginWindow(QWidget):
     login_success = Signal()
     login_skipped = Signal()
@@ -95,7 +94,6 @@ class LoginWindow(QWidget):
         self.closed.emit()
         super().closeEvent(event)
 
-    # login google chromium
     def _login_with_web(self):
         if self._web is not None:
             self._web.raise_()
@@ -123,7 +121,6 @@ class LoginWindow(QWidget):
         self._web_button.setText("Iniciar sesión con Google")
         self._on_manual_result(ok, error)
 
-    # login pegar curl cookies
     def _manual_login(self):
         text = dialogs.prompt_text(self, "Iniciar sesión manualmente", _MANUAL_INSTRUCTIONS, ok="Iniciar sesión",
                                    placeholder="curl 'https://music.youtube.com/youtubei/v1/browse…'  ·  cookies  ·  JSON",

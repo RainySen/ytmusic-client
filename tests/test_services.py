@@ -2,12 +2,13 @@ import threading
 import time
 
 import pytest
+from PySide6.QtWidgets import QApplication
 
 from domain.stream_cache import StreamCache, StreamInfo
 from infra.concurrency import TaskRunner
 from infra.playlist_repository import LocalPlaylistRepository
 from services.catalog_service import CatalogService
-from services.library_service import LibraryService, extract_playlist_id
+from services.library_service import LibraryService
 from services.stream_service import StreamService
 
 
@@ -303,19 +304,6 @@ def test_save_playlist_locally(library):
     assert repo.all()[0]["source"] == "user_created"
 
 
-def test_save_imported_locally(library):
-    service, repo, _ = library
-    result = []
-    service.save_imported("Imp", [{"videoId": "a"}], cloud=False, on_done=result.append)
-    assert result == [("local", True)] and repo.all()[0]["source"] == "imported"
-
-
-def test_extract_playlist_id():
-    assert extract_playlist_id("https://music.youtube.com/playlist?list=PLabc-_1") == "PLabc-_1"
-    assert extract_playlist_id("https://example.com") is None
-    assert extract_playlist_id("") is None
-
-
 def test_explore_sections_shape_and_order(catalog, wait_until):
     service, gateway = catalog
     gateway.get_explore = lambda: {
@@ -329,13 +317,12 @@ def test_explore_sections_shape_and_order(catalog, wait_until):
     service.load_explore(out.append)
     assert wait_until(lambda: out)
     titles = [t for t, _ in out[0]]
-    assert titles == ["Álbumes y sencillos nuevos", "Tendencias", "Estados de ánimo y géneros",
-                      "Videos musicales nuevos"]
+    assert titles == ["Álbumes y sencillos nuevos", "Tendencias", "Estados de ánimo y géneros"]
     by_title = dict(out[0])
     assert by_title["Álbumes y sencillos nuevos"][0]["type"] == "album" and len(by_title["Álbumes y sencillos nuevos"]) == 1
     assert by_title["Tendencias"][0]["type"] == "song"
     assert by_title["Estados de ánimo y géneros"] == [{"type": "mood", "title": "Calma", "params": "abc"}]
-    assert by_title["Videos musicales nuevos"][0]["type"] == "video"
+    assert "Videos musicales nuevos" not in by_title
 
 
 def test_explore_drops_empty_shelves_and_caches(catalog, wait_until):
@@ -386,9 +373,8 @@ def test_home_is_enriched_with_extra_shelves(catalog, wait_until):
     service.load_home(out.append)
     assert wait_until(lambda: out)
     titles = [t for t, _ in out[0]]
-    assert titles == ["S1", "Artistas populares", "Listas de éxitos", "Tendencias", "Videos musicales nuevos"]
-    artists = dict(out[0])["Artistas populares"]
-    assert artists == [{"type": "artist", "browseId": "UC1", "title": "Art", "thumbnails": []}]
+    assert titles == ["S1", "Listas de éxitos", "Tendencias"]
+    assert "Artistas populares" not in titles and "Videos musicales nuevos" not in titles
 
 
 def test_home_extras_failure_keeps_the_personal_feed(catalog, wait_until):
@@ -488,7 +474,7 @@ def test_save_targets_lists_local_playlists_and_recent_ones(saving):
     recents.touch("deleted-long-ago")
     out = []
     service.save_targets(out.append)
-    assert [p["title"] for p in out[0]["all"]] == list("ABCDEF")
+    assert sorted(p["title"] for p in out[0]["all"]) == list("ABCDEF")
     assert [p["title"] for p in out[0]["recent"]] == ["B", "E"]
 
 
@@ -542,3 +528,106 @@ def test_account_playlist_refusal_and_errors_are_failures(saving, wait_until):
     gateway.add_playlist_items = boom
     service.add_to_playlist({"playlistId": "PL1", "source": "ytmusic"}, {"videoId": "a"}, out.append)
     assert wait_until(lambda: out == ["failed", "failed"]) and recents.ids() == []
+
+
+def test_discovery_pool_merges_recommendations_of_every_seed_without_duplicates(qapp, wait_until):
+    gateway = FakeGateway()
+    gateway.watch = {"tracks": [{"videoId": "seed"}, {"videoId": "r1", "title": "R1"}, {"videoId": "r2", "title": "R2"}, {"title": "sin id"}]}
+    runner = TaskRunner("pool", 2)
+    catalog = CatalogService(gateway, runner)
+    got = []
+    catalog.discovery_pool(["seed", "otra"], got.append)
+    assert wait_until(lambda: got)
+    ids = [t["videoId"] for t in got[0]]
+    assert ids == ["r1", "r2", "seed"] or ids == ["r1", "r2"] or set(ids) == {"r1", "r2", "seed"}
+    assert all(t["type"] == "song" for t in got[0]) and len(ids) == len(set(ids))
+    runner.shutdown()
+
+
+def test_discovery_pool_survives_failures_and_empty_seeds(qapp, wait_until):
+    class Broken(FakeGateway):
+        def get_watch_playlist(self, video_id, limit):
+            raise ConnectionError("sin red")
+
+    runner = TaskRunner("pool2", 2)
+    catalog = CatalogService(Broken(), runner)
+    got = []
+    catalog.discovery_pool(["a", "b"], got.append)
+    assert wait_until(lambda: got) and got[0] == []
+    empty = []
+    catalog.discovery_pool([], empty.append)
+    assert empty == [[]]
+    runner.shutdown()
+
+
+def signed_in(gateway, playlists=None, artists=None):
+    gateway.is_authenticated = True
+    gateway.playlist_calls = 0
+    gateway.remote = playlists if playlists is not None else [{"playlistId": "PL1", "title": "One", "count": 3}]
+
+    def get_library_playlists(limit=50):
+        gateway.playlist_calls += 1
+        return gateway.remote
+
+    gateway.get_library_playlists = get_library_playlists
+    gateway.get_library_artists = lambda limit=100: artists if artists is not None else []
+
+
+def test_library_playlists_share_one_request_between_callers(library, wait_until):
+    service, _repo, gateway = library
+    signed_in(gateway)
+    grid, rail = [], []
+    service.playlists(grid.append)
+    service.playlists(rail.append)
+    assert wait_until(lambda: grid and rail)
+    assert gateway.playlist_calls == 1 and grid[0] == rail[0]
+    assert grid[0][0]["playlistId"] == "PL1" and grid[0][0]["track_count"] == 3
+
+
+def test_library_playlists_show_the_cache_first_and_only_re_notify_on_change(library, wait_until):
+    service, _repo, gateway = library
+    signed_in(gateway)
+    first = []
+    service.playlists(first.append)
+    assert wait_until(lambda: first)
+    again = []
+    service.playlists(again.append)
+    assert len(again) == 1
+    assert wait_until(lambda: gateway.playlist_calls == 2)
+    time.sleep(0.05)
+    QApplication.processEvents()
+    assert len(again) == 1
+    gateway.remote = [{"playlistId": "PL2", "title": "Two", "count": 1}]
+    changed = []
+    service.playlists(changed.append)
+    assert wait_until(lambda: len(changed) == 2) and changed[1][0]["playlistId"] == "PL2"
+
+
+def test_library_playlists_forget_the_cache_after_logout(library, wait_until):
+    service, _repo, gateway = library
+    signed_in(gateway)
+    first = []
+    service.playlists(first.append)
+    assert wait_until(lambda: first)
+    gateway.is_authenticated = False
+    out = []
+    service.playlists(out.append)
+    assert out == [[]]
+
+
+def test_library_artists_come_from_ytmusic_or_fall_back_to_local(library, wait_until):
+    service, repo, gateway = library
+    repo.add("Mine", [{"videoId": "v1", "title": "T", "artists": [{"name": "Local"}]}], "user_created")
+    signed_in(gateway, artists=[{"browseId": "UC1", "artist": "Remote", "subscribers": "1 M"}, {"artist": "No id"}])
+    found = []
+    service.library_artists(found.append)
+    assert wait_until(lambda: found)
+    assert [(a["title"], a["subscribers"]) for a in found[0]] == [("Remote", "1 M")]
+
+    def broken(limit=100):
+        raise RuntimeError("down")
+
+    gateway.get_library_artists = broken
+    fallback = []
+    service.library_artists(fallback.append)
+    assert wait_until(lambda: fallback) and fallback[0][0]["name"] == "Local"

@@ -1,13 +1,12 @@
 from domain.models import normalize_track
 from services.auth_service import AuthService
 from services.catalog_service import CatalogService
-from services.library_service import LibraryService, extract_playlist_id
+from services.library_service import LibraryService
 from services.notifier import Notifier
 from services.playback_service import PlaybackService
 from ui.main_window import MainWindow
 
 
-# playlists guardar importar
 class PlaylistPresenter:
     def __init__(self, window: MainWindow, catalog: CatalogService, library: LibraryService,
                  playback: PlaybackService, auth: AuthService, notifier: Notifier):
@@ -18,33 +17,8 @@ class PlaylistPresenter:
         self._auth = auth
         self._notifier = notifier
 
-        window.import_url_submitted.connect(self.import_url)
         window.queue_save_requested.connect(self.save_queue)
         window.save_to_playlist_requested.connect(self.save_song)
-
-    def import_url(self, url: str) -> None:
-        playlist_id = extract_playlist_id(url)
-        if not playlist_id:
-            self._notifier.error("URL inválida. Formato esperado: https://music.youtube.com/playlist?list=PL…")
-            return
-        self._notifier.info("Importando playlist…")
-        self._catalog.playlist(playlist_id, self._on_imported, self._on_import_error)
-
-    def _on_imported(self, data) -> None:
-        if not data:
-            self._notifier.error("La playlist está vacía, es privada o no existe.")
-            return
-        title, tracks = data["title"], data["tracks"]
-        self._playback.play_collection(tracks)
-        target = self._window.ask_save_target(title, self._auth.is_authenticated)
-        if target:
-            self._library.save_imported(
-                title, tracks, cloud=target == "cloud",
-                on_done=lambda result: self._report(title, *result),
-            )
-
-    def _on_import_error(self, exc: Exception) -> None:
-        self._notifier.error("No se pudo acceder a la playlist. Verifica la URL y tu conexión.")
 
     def save_queue(self, title: str) -> None:
         tracks = [s for s in self._playback.queue.snapshot() if s.get("videoId")]

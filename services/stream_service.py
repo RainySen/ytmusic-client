@@ -17,7 +17,6 @@ class StreamResolver(Protocol):
     def resolve(self, video_id: str) -> StreamInfo: ...
 
 
-# streams cache prefetch
 class StreamService(QObject):
     resolved = Signal(str, object)
     failed = Signal(str, str)

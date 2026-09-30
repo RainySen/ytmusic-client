@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import qtawesome as qta
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSplitter, QSystemTrayIcon, QVBoxLayout, QWidget
 
@@ -20,6 +20,7 @@ from ui.components.side_panel import SidePanel
 from ui.components.sidebar import Sidebar
 from ui.components.toast import Toast
 from ui.components.top_bar import TopBar
+from ui.components.track_actions import MENU_QSS
 from ui.imaging import scale_cover
 from ui.styles import APP_STYLESHEET
 
@@ -27,17 +28,24 @@ _VIEW_NAV_LABELS = {"home": "Inicio", "explore": "Explorar", "search": "", "libr
                     "artist": "", "album": ""}
 
 
-# ventana principal vistas
 class MainWindow(QWidget):
     search_submitted = Signal(str)
     explore_requested = Signal()
     home_requested = Signal()
     library_requested = Signal()
-    import_url_submitted = Signal(str)
 
     view_shown = Signal(str)
     login_requested = Signal()
+    settings_requested = Signal()
     logout_requested = Signal()
+    channel_requested = Signal()
+    presence_changed = Signal(bool)
+    like_clicked = Signal()
+    history_removed = Signal(str)
+    history_cleared = Signal()
+    sidebar_expanded = Signal(bool)
+    now_artist_clicked = Signal()
+    now_album_clicked = Signal()
 
     play_pause_clicked = Signal()
     next_clicked = Signal()
@@ -58,6 +66,8 @@ class MainWindow(QWidget):
         self._app_icon = app_icon
         self._logged_in = False
         self._view = "home"
+        self._presented = False
+        self._close_to_tray = True
 
         self.setWindowIcon(app_icon)
         self.setWindowTitle("YouTube Music - Minimal Client")
@@ -100,7 +110,6 @@ class MainWindow(QWidget):
             "search": icon("fa5s.search", color="white"),
             "login": icon("fa5s.user-circle", color="white"),
             "login_active": icon("fa5s.user-circle", color="#FF0000"),
-            "import": icon("fa5s.file-import", color="white"),
             "loop_off": icon("fa5s.sync-alt", color="gray"),
             "loop_queue": icon("fa5s.sync-alt", color="#FF0000"),
             "loop_song": icon("fa5s.redo", color="#FF0000"),
@@ -113,19 +122,28 @@ class MainWindow(QWidget):
         self.top_bar = TopBar(self.icons["search"], self.icons["login"], self.icons["login_active"])
         self.top_bar.search_box.returnPressed.connect(self._submit_search)
         self.top_bar.search_requested.connect(self._submit_search)
-        self.top_bar.login_requested.connect(self._on_account_clicked)
+        self.top_bar.history.chosen.connect(self._search_from_history)
+        self.top_bar.history.removed.connect(self.history_removed)
+        self.top_bar.history.cleared.connect(self.history_cleared)
+        self.top_bar.login_requested.connect(self.account_action)
+        self.top_bar.settings_requested.connect(self.settings_requested)
+        self.top_bar.menu_toggled.connect(self._on_menu_toggled)
         return self.top_bar
 
     def _build_sidebar(self):
         self.sidebar = Sidebar({
             "home": self.icons["home"], "explore": self.icons["explore"],
-            "library": self.icons["library"], "import": self.icons["import"],
+            "library": self.icons["library"],
         })
         self.sidebar.home_requested.connect(self.home_requested)
         self.sidebar.explore_requested.connect(self.explore_requested)
         self.sidebar.library_requested.connect(self.library_requested)
-        self.sidebar.import_requested.connect(self._prompt_import_url)
+        self.sidebar.rail.playlist_chosen.connect(lambda _p: self.top_bar.menu_button.setChecked(False))
         return self.sidebar
+
+    def _on_menu_toggled(self, expanded: bool) -> None:
+        self.sidebar.set_expanded(expanded)
+        self.sidebar_expanded.emit(expanded)
 
     def _build_center(self):
         container = QWidget()
@@ -169,6 +187,9 @@ class MainWindow(QWidget):
         })
         self.player_panel.cover_label.setPixmap(self.icons["library"].pixmap(56, 56))
         self.player_panel.expand_clicked.connect(self.toggle_now_playing)
+        self.player_panel.like_clicked.connect(self.like_clicked)
+        self.player_panel.artist_clicked.connect(self.now_artist_clicked)
+        self.player_panel.album_clicked.connect(self.now_album_clicked)
         self.player_panel.prev_button.clicked.connect(self.previous_clicked)
         self.player_panel.play_button.clicked.connect(self.play_pause_clicked)
         self.player_panel.next_button.clicked.connect(self.next_clicked)
@@ -204,27 +225,61 @@ class MainWindow(QWidget):
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.bring_to_front()
+            self.home_requested.emit()
 
     def bring_to_front(self):
         self.showNormal()
         self.raise_()
         self.activateWindow()
 
+    def notify(self, title: str, message: str) -> None:
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.NoIcon, 4000)
+
+    def set_close_to_tray(self, enabled: bool) -> None:
+        self._close_to_tray = enabled
+
     def closeEvent(self, event):
-        event.ignore()
-        self.hide()
-        self.tray_icon.showMessage("Minimizado", "Reproduciendo en 2do plano.",
-                                   QSystemTrayIcon.MessageIcon.Information, 2000)
+        if self._close_to_tray and QSystemTrayIcon.isSystemTrayAvailable():
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage("Minimizado", "Reproduciendo en 2do plano.",
+                                       QSystemTrayIcon.MessageIcon.Information, 2000)
+            return
+        event.accept()
+        QApplication.instance().quit()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._toast.reposition()
 
     @property
+    def is_presented(self) -> bool:
+        return self.isVisible() and not self.isMinimized()
+
+    def _emit_presence(self) -> None:
+        presented = self.is_presented
+        if presented != self._presented:
+            self._presented = presented
+            self.presence_changed.emit(presented)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._emit_presence()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self._emit_presence()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            self._emit_presence()
+
+    @property
     def current_view(self):
         return self._view
 
-    # vistas navegacion
     def show_view(self, name):
         self._view = name
         for key, panel in self._pages.items():
@@ -245,15 +300,28 @@ class MainWindow(QWidget):
         self.side_panel.show()
         self.player_panel.set_expanded(True)
 
+    def set_search_history(self, items):
+        self.top_bar.history.set_items(items)
+
+    def _search_from_history(self, query):
+        self.top_bar.search_box.setText(query)
+        self._submit_search()
+        self.top_bar.search_box.clearFocus()
+
     def _submit_search(self):
         text = self.top_bar.search_box.text().strip()
         if text:
             self.search_submitted.emit(text)
 
-    def set_now_playing(self, title, artist):
+    def set_now_playing(self, title, artist, album="", artist_linked=False, album_linked=False):
         self.player_panel.song_label.setText(title)
-        self.player_panel.artist_label.setText(artist)
+        self.player_panel.set_meta(artist, album)
+        self.player_panel.artist_label.set_linked(artist_linked)
+        self.player_panel.album_label.set_linked(album_linked)
         self.player_panel.show()
+
+    def set_liked(self, liked):
+        self.player_panel.set_liked(liked, self._logged_in)
 
     def set_cover(self, pixmap: QPixmap | None):
         if pixmap is None or pixmap.isNull():
@@ -264,6 +332,7 @@ class MainWindow(QWidget):
         self.now_playing_panel.set_cover(pixmap)
 
     def set_playing(self, is_playing):
+        self.player_panel.set_playing(is_playing)
         self.player_panel.play_button.setIcon(self.icons["pause"] if is_playing else self.icons["play"])
         self._tray_play_action.setText("⏸ Pausar" if is_playing else "▶ Reproducir")
 
@@ -296,27 +365,41 @@ class MainWindow(QWidget):
     def set_auth_state(self, logged_in):
         self._logged_in = logged_in
         self.top_bar.set_login_state(logged_in)
+        self.player_panel.like_button.setEnabled(logged_in)
 
     def ask_relogin(self):
         return dialogs.confirm(self, "Tu sesión caducó", "YouTube Music cerró tu sesión. Inicia sesión de nuevo para ver tu biblioteca y tus playlists.",
                                ok="Iniciar sesión", cancel="Ahora no")
 
-    def _on_account_clicked(self):
+    @property
+    def logged_in(self) -> bool:
+        return self._logged_in
+
+    def account_action(self):
         if not self._logged_in:
             self.login_requested.emit()
             return
+        menu = QMenu(self)
+        menu.setStyleSheet(MENU_QSS)
+        menu.addAction(qta.icon("fa5s.user-circle", color="#e0e0e0"), "Tu canal").triggered.connect(
+            self.channel_requested)
+        menu.addSeparator()
+        menu.addAction(qta.icon("fa5s.sign-out-alt", color="#e0e0e0"), "Cerrar sesión").triggered.connect(
+            self._confirm_logout)
+        self._show_account_menu(menu)
+
+    def _show_account_menu(self, menu) -> None:
+        pos = self.top_bar.login_button.mapToGlobal(self.top_bar.login_button.rect().bottomRight())
+        pos.setX(pos.x() - menu.sizeHint().width())
+        menu.exec(pos)
+
+    def _confirm_logout(self) -> None:
         if dialogs.confirm(self, "¿Cerrar sesión?", "Dejarás de ver tu biblioteca y tus playlists de YouTube Music.",
                            ok="Cerrar sesión"):
             self.logout_requested.emit()
 
     def show_toast(self, level, text):
         self._toast.show_message(level, text)
-
-    def _prompt_import_url(self):
-        url = dialogs.prompt_text(self, "Importar playlist", "Pega la URL de la playlist de YouTube Music.",
-                                  ok="Importar", placeholder="https://music.youtube.com/playlist?list=…")
-        if url:
-            self.import_url_submitted.emit(url)
 
     def _confirm_clear_queue(self):
         if dialogs.confirm(self, "¿Limpiar la cola?", "Se quitarán todas las canciones excepto la que suena ahora.",
@@ -336,10 +419,3 @@ class MainWindow(QWidget):
         dialog = SaveToPlaylistDialog(targets, self.thumbnails, self)
         dialog.exec()
         return dialog.choice
-
-    def ask_save_target(self, title, authenticated):
-        if authenticated:
-            return dialogs.choose(self, "Guardar playlist", f"¿Dónde quieres guardar «{title}»?",
-                                  [("En este equipo", "local"), ("En YouTube Music", "cloud")])
-        return "local" if dialogs.confirm(self, "Guardar playlist", f"¿Guardar «{title}» en este equipo?",
-                                          ok="Guardar") else None

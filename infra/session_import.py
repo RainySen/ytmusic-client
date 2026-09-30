@@ -31,7 +31,6 @@ def _cookie_header(cookies: dict[str, str]) -> dict[str, str]:
     return {"cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())} if cookies else {}
 
 
-# login cookies json
 def _from_json(text: str) -> dict[str, str] | None:
     try:
         data = json.loads(text)
@@ -46,7 +45,6 @@ def _from_json(text: str) -> dict[str, str] | None:
                            and _wanted_domain(c.get("domain"))})
 
 
-# login cookies txt
 def _from_netscape(text: str) -> dict[str, str] | None:
     cookies: dict[str, str] = {}
     for line in text.splitlines():
@@ -61,7 +59,6 @@ def _from_netscape(text: str) -> dict[str, str] | None:
     return _cookie_header(cookies) or None
 
 
-# login powershell
 def _from_powershell(text: str) -> dict[str, str] | None:
     if "Invoke-WebRequest" not in text and "System.Net.Cookie" not in text:
         return None
@@ -83,7 +80,6 @@ def _from_powershell(text: str) -> dict[str, str] | None:
     return headers
 
 
-# login curl bash cmd
 def _from_curl(text: str) -> dict[str, str] | None:
     if "curl" not in text.lower():
         return None
@@ -150,7 +146,6 @@ def cookies_to_headers(cookies: dict[str, str], *, user_agent: str | None = None
     return headers_from_cookies(cookies, user_agent=user_agent, authuser=authuser)
 
 
-# login pegar curl cookies
 def session_headers(text: str | None) -> dict[str, str]:
     text = (text or "").strip()
     if not text:

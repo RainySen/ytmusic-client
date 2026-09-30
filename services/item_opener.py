@@ -15,7 +15,6 @@ log = logging.getLogger(__name__)
 _ALBUM_KINDS = ("album", "single", "ep")
 
 
-# abrir items navegar
 class ItemOpener:
     def __init__(self, catalog: CatalogService, playback: PlaybackService, notifier: Notifier,
                  navigator: Navigator):
@@ -24,7 +23,6 @@ class ItemOpener:
         self._notifier = notifier
         self._navigator = navigator
 
-    # abrir cancion artista album
     def open(self, item: dict) -> None:
         if item.get("videoId"):
             self._playback.start_radio(item)

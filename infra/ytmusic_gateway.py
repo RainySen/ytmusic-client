@@ -31,10 +31,10 @@ def looks_like_auth_failure(exc: Exception) -> bool:
     return any(marker in text for marker in _AUTH_FAILURE_MARKERS)
 
 
-# ytmusicapi cliente
 class YTMusicGateway:
-    def __init__(self, auth_file: str):
+    def __init__(self, auth_file: str, language: str = CONTENT_LANGUAGE):
         self._auth_file = auth_file
+        self._language = language
         self._client_lock = threading.Lock()
         self._ytm: Any = None
         self._ytm_browse: Any = None
@@ -46,7 +46,6 @@ class YTMusicGateway:
             return self._has_credentials()
         return self._authenticated
 
-    # credenciales archivo valido
     def _has_credentials(self) -> bool:
         data = read_json(self._auth_file) if os.path.exists(self._auth_file) else None
         return isinstance(data, dict) and any(str(k).lower() == "cookie" and v for k, v in data.items())
@@ -60,7 +59,12 @@ class YTMusicGateway:
                 self._ytm, self._authenticated = self._build()
             return self._ytm
 
-    # cliente idioma es
+    def set_language(self, language: str) -> None:
+        with self._client_lock:
+            if language != self._language:
+                self._language = language
+                self._ytm_browse = None
+
     def _browse_client(self) -> Any:
         ytm = self._ytm_browse
         if ytm is not None:
@@ -68,7 +72,7 @@ class YTMusicGateway:
         self._client()
         with self._client_lock:
             if self._ytm_browse is None:
-                self._ytm_browse, _ = self._build(language=CONTENT_LANGUAGE)
+                self._ytm_browse, _ = self._build(language=self._language)
             return self._ytm_browse
 
     def _build(self, language: str | None = None) -> tuple[Any, bool]:
@@ -91,7 +95,6 @@ class YTMusicGateway:
             except Exception:
                 log.debug("Header warm-up failed", exc_info=True)
 
-    # login validar guardar credenciales
     def authenticate(self, headers: dict[str, str]) -> None:
         from ytmusicapi import YTMusic
 
@@ -103,7 +106,7 @@ class YTMusicGateway:
         if not write_json_atomic(self._auth_file, headers, indent=4):
             raise GatewayError("No se pudieron guardar las credenciales.")
         try:
-            browse = YTMusic(auth=headers, language=CONTENT_LANGUAGE)
+            browse = YTMusic(auth=headers, language=self._language)
         except Exception:
             browse = None
         with self._client_lock:
@@ -111,8 +114,6 @@ class YTMusicGateway:
             self._ytm_browse = browse
             self._authenticated = True
 
-    # login cerrar sesion
-    # login verificar sesion caducada
     def verify_session(self) -> None:
         client = self._require_auth()
         try:
@@ -155,8 +156,8 @@ class YTMusicGateway:
     def get_playlist(self, playlist_id: str, limit: int | None = None) -> dict:
         return self._client().get_playlist(playlist_id, limit=limit)
 
-    def get_playlist_page(self, playlist_id: str) -> dict:
-        return self._browse_client().get_playlist(playlist_id, limit=None)
+    def get_playlist_page(self, playlist_id: str, limit: int | None = None) -> dict:
+        return self._browse_client().get_playlist(playlist_id, limit=limit)
 
     def get_related(self, video_id: str) -> list[dict]:
         client = self._browse_client()
@@ -187,6 +188,16 @@ class YTMusicGateway:
     def get_lyrics_browse_id(self, video_id: str) -> str | None:
         return self._client().get_watch_playlist(videoId=video_id, limit=1).get("lyrics")
 
+    def get_liked_songs(self, limit: int = 100) -> list[dict]:
+        return self._require_auth().get_liked_songs(limit=limit).get("tracks") or []
+
+    def get_like_status(self, video_id: str) -> str | None:
+        tracks = self._require_auth().get_watch_playlist(videoId=video_id, limit=1).get("tracks") or []
+        return tracks[0].get("likeStatus") if tracks else None
+
+    def rate_song(self, video_id: str, status: str) -> None:
+        self._require_auth().rate_song(video_id, status)
+
     def get_library_playlists(self, limit: int = 50) -> list[dict]:
         return self._require_auth().get_library_playlists(limit=limit)
 
@@ -195,6 +206,12 @@ class YTMusicGateway:
 
     def get_library_artists(self, limit: int = 50) -> list[dict]:
         return self._require_auth().get_library_artists(limit=limit)
+
+    def get_account_info(self) -> dict:
+        return self._require_auth().get_account_info()
+
+    def get_history(self) -> list[dict]:
+        return self._require_auth().get_history()
 
     def add_playlist_items(self, playlist_id: str, video_ids: list[str]) -> bool:
         response = self._require_auth().add_playlist_items(playlist_id, video_ids, duplicates=False)

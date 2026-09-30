@@ -1,11 +1,13 @@
 import qtawesome as qta
 from PySide6.QtCore import Property, QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout,
+    QWidget,
 )
 
 from core.config import HOVER_PREFETCH_MS
+from ui import imaging
 from domain.models import artist_names, thumbnail_url
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
@@ -46,6 +48,14 @@ def _clear_layout(layout) -> None:
             widget.deleteLater()
 
 
+# measure with the font the global stylesheet applies
+def _elided(text: str, pixel_size: int, weight, width: int) -> str:
+    font = QFont(QApplication.font())
+    font.setPixelSize(pixel_size)
+    font.setWeight(weight)
+    return QFontMetrics(font).elidedText(text or "", Qt.ElideRight, width)
+
+
 def is_collection_card(item: dict) -> bool:
     return (item.get("type") in ("playlist", "album") and not str(item.get("browseId", "")).startswith("UC")
             and not item.get("videoId"))
@@ -78,7 +88,6 @@ class _CardOverlay(QWidget):
         painter.end()
 
 
-# tarjeta overlay hover
 class HomeCard(ClickableWidget):
     chosen = Signal(dict)
     action_requested = Signal(str, dict)
@@ -94,38 +103,49 @@ class HomeCard(ClickableWidget):
         kind = item.get("type", "")
         self.thumb = LazyThumbnail(size, radius=0 if kind == "playlist" else 6, circle=kind == "artist",
                                    icon="fa5s.user" if kind == "artist" else "fa5s.music")
-        self.thumb.set_source(thumbnail_url(item, size * 2), thumbnails)
+        self.thumb.set_source(thumbnail_url(item, imaging.thumb_px(size)), thumbnails)
         layout.addWidget(self.thumb)
 
         title = QLabel()
-        title.setStyleSheet("font-size: 13px; font-weight: 600; color: #fff;")
+        title.setObjectName("card_title")
         title.setMaximumWidth(size)
-        title.setText(title.fontMetrics().elidedText(item.get("title", ""), Qt.ElideRight, size))
+        title.setText(_elided(item.get("title", ""), 13, QFont.DemiBold, size))
         layout.addWidget(title)
 
         subtitle = (item.get("subtitle") or artist_names(item, limit=2) or item.get("subscribers", "")
                     or {"playlist": "Playlist", "album": "Álbum", "artist": "Artista"}.get(kind, ""))
         if subtitle:
-            sub = QLabel(sub_text := subtitle)
-            sub.setStyleSheet("font-size: 11px; color: #aaa;")
-            sub.setText(sub.fontMetrics().elidedText(sub_text, Qt.ElideRight, size))
+            sub = QLabel(_elided(subtitle, 11, QFont.Normal, size))
+            sub.setObjectName("card_subtitle")
             sub.setMaximumWidth(size)
             layout.addWidget(sub)
 
         self.activated.connect(lambda: self.chosen.emit(self.item))
 
-        self._overlay = None
-        if is_collection_card(item):
-            self._overlay = _CardOverlay(self.thumb, size)
-            self._overlay.play_clicked.connect(lambda: self.action_requested.emit("play", self.item))
-            self._overlay.action_chosen.connect(lambda key: self.action_requested.emit(key, self.item))
-            self._overlay.menu_button.menu_closed.connect(self._sync_overlay)
+        # overlay built on first hover, ~160 KB each
+        self._size = size
+        self._overlay_widget = None
+        self._collection = is_collection_card(item)
+        if self._collection:
             self.hover_changed.connect(self._sync_overlay)
-            self.context_requested.connect(self._overlay.menu_button.show_menu)
+            self.context_requested.connect(lambda pos: self._overlay.menu_button.show_menu(pos))
+
+    @property
+    def _overlay(self):
+        if self._collection and self._overlay_widget is None:
+            overlay = _CardOverlay(self.thumb, self._size)
+            overlay.play_clicked.connect(lambda: self.action_requested.emit("play", self.item))
+            overlay.action_chosen.connect(lambda key: self.action_requested.emit(key, self.item))
+            overlay.menu_button.menu_closed.connect(self._sync_overlay)
+            self._overlay_widget = overlay
+        return self._overlay_widget
 
     def _sync_overlay(self, *_):
-        if self._overlay is not None:
-            self._overlay.setVisible(self.hovered or self._overlay.menu_button.menu_is_open)
+        if self._overlay_widget is None and not self.hovered:
+            return
+        overlay = self._overlay
+        if overlay is not None:
+            overlay.setVisible(self.hovered or overlay.menu_button.menu_is_open)
 
 
 class CompactSongItem(ClickableWidget):
@@ -144,21 +164,22 @@ class CompactSongItem(ClickableWidget):
         layout.setSpacing(10)
 
         thumb = LazyThumbnail(44, radius=4)
-        thumb.set_source(thumbnail_url(item, 88), thumbnails)
+        thumb.set_source(thumbnail_url(item, imaging.thumb_px(44)), thumbnails)
         layout.addWidget(thumb)
 
         info = QVBoxLayout()
         info.setContentsMargins(0, 0, 0, 0)
         info.setSpacing(3)
         title = QLabel(item.get("title", ""))
-        title.setStyleSheet("font-size: 13px; font-weight: 600; color: #e0e0e0;")
+        title.setObjectName("compact_title")
         sub = QLabel(artist_names(item))
-        sub.setStyleSheet("font-size: 11px; color: #888;")
+        sub.setObjectName("compact_subtitle")
         info.addWidget(title)
         info.addWidget(sub)
         layout.addLayout(info, stretch=1)
 
         self._actions = TrackActionsButton()
+        self._actions.song = self.item
         self._actions.add_next.connect(lambda: self.add_next.emit(self.item))
         self._actions.add_queue.connect(lambda: self.add_queue.emit(self.item))
         self._actions.add_playlist.connect(lambda: self.add_playlist.emit(self.item))
@@ -219,7 +240,6 @@ class _Viewport(QWidget):
             self._set_offset(x)
 
 
-# carrusel tarjetas
 class CardsSection(QWidget):
     item_clicked = Signal(dict)
     collection_action_requested = Signal(str, dict)
@@ -299,7 +319,6 @@ class CardsSection(QWidget):
         self._update_arrows()
 
 
-# grilla canciones
 class CompactSection(QWidget):
     item_clicked = Signal(dict)
     add_next_clicked = Signal(dict)
@@ -440,7 +459,6 @@ class MoodGridSection(QWidget):
         root.addLayout(grid)
 
 
-# secciones lazy scroll
 class SectionFeed(QWidget):
     item_clicked = Signal(dict)
     add_next_clicked = Signal(dict)
@@ -555,7 +573,7 @@ class SectionFeed(QWidget):
         section.show()
         self._layout.activate()
 
-    # layout cache viejo tras limpiar
+    # stale layout cache after clear
     def _needs_more_content(self):
         bar = self._scroll.verticalScrollBar()
         viewport_height = max(self._scroll.viewport().height(), 400)
