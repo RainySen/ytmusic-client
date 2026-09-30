@@ -227,6 +227,9 @@ class SidePanel(QWidget):
                     widget.set_current(current)
 
     def _on_queue_scrolled(self, value):
+        # clearing rows moves the scrollbar; don't rebuild a released or hidden queue
+        if self._queue_dirty or not self.isVisible():
+            return
         bar = self._queue_scroll.verticalScrollBar()
         if self._queue_built < len(self._queue_songs) and value >= bar.maximum() - QUEUE_LOOKAHEAD_PX:
             self._build_queue_items(self._queue_built + QUEUE_BATCH)

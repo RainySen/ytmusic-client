@@ -22,6 +22,7 @@ class HomePresenter:
                  pins: ListenAgainPins | None = None):
         self._rng = rng or random.Random()
         self._pins = pins
+        self._first_swapped = False
         self._sections: list = []
         self._swaps: dict[str, dict[str, dict]] = {}
         self._pool_ready: list | None = None
@@ -66,8 +67,8 @@ class HomePresenter:
         self._mood = ALL_MOODS
         self._panel.reset_mood()
         self._swaps = {}
+        self._first_swapped = self._should_reorder()
         if self._sections:
-            self._sections = self._maybe_reorder(self._sections)
             self._render(self._sections, reset_scroll=True)
             ready, self._pool_ready = self._pool_ready, None
             if ready:
@@ -129,13 +130,16 @@ class HomePresenter:
         self._scroll_top = False
         sections = self._with_swaps(sections)
         self._sections = sections
-        self._panel.set_sections(self._with_pins(sections), self._window.thumbnails, reset_scroll=reset_scroll)
+        self._panel.set_sections(self._displayed(sections), self._window.thumbnails, reset_scroll=reset_scroll)
         if self._pool_ready is None:
             self._prefetch_pool()
 
     def refresh_pins(self) -> None:
         if self._has_content and not self._released and self._sections:
-            self._panel.set_sections(self._with_pins(self._sections), self._window.thumbnails, reset_scroll=False)
+            self._panel.set_sections(self._displayed(self._sections), self._window.thumbnails, reset_scroll=False)
+
+    def _displayed(self, sections):
+        return self._with_pins(self._ordered(sections))
 
     # local pins first in listen again; shelf created if missing; not in moods
     def _with_pins(self, sections):
@@ -149,9 +153,12 @@ class HomePresenter:
                 return [*sections[:position], (title, pinned + rest), *sections[position + 1:]]
         return [(LISTEN_AGAIN_TITLE, pinned), *sections]
 
-    # randomly swap the first shelves, like ytmusic
-    def _maybe_reorder(self, sections):
-        if len(sections) < 2 or self._rng.random() >= REORDER_CHANCE:
+    # random first-shelf swap, kept until the next reload so the fresh feed doesn't undo it
+    def _should_reorder(self) -> bool:
+        return self._rng.random() < REORDER_CHANCE
+
+    def _ordered(self, sections):
+        if not self._first_swapped or self._mood != ALL_MOODS or len(sections) < 2:
             return sections
         first, second, *rest = sections
         return [second, first, *rest]

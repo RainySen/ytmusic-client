@@ -108,7 +108,7 @@ def test_explore_is_rendered_again_after_being_released(rig):
     assert rig.window.explore_panel.feed._built and not m.explore._released
 
 
-def test_queue_widgets_are_dropped_and_rebuilt_on_demand(rig):
+def test_queue_widgets_are_dropped_and_rebuilt_on_demand(rig, wait_until):
     m = MemoryRig(rig)
     songs = [{"videoId": f"v{n}", "title": f"T{n}", "artists": []} for n in range(30)]
     side = rig.window.side_panel
@@ -116,8 +116,9 @@ def test_queue_widgets_are_dropped_and_rebuilt_on_demand(rig):
     side.set_queue(songs, 2, rig.window.thumbnails)
     assert side._queue_layout.count() > 1
     rig.window.hide()
-    QTest.qWait(80)
-    assert side._queue_layout.count() == 1 and m.memory._released
+    assert wait_until(lambda: m.memory._released and side._queue_layout.count() == 1)
+    side._queue_scroll.verticalScrollBar().valueChanged.emit(0)
+    assert side._queue_layout.count() == 1
 
 
 def test_thumbnail_cache_memory_can_be_cleared_but_keeps_working(qapp, tmp_path):
