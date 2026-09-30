@@ -326,7 +326,7 @@ def test_library_browser_shows_the_three_liked_states(qapp):
     panel.show_liked([], Thumbs())
     assert any("Me gusta" in w.text() for w in panel.findChildren(QLabel))
     panel.show_liked([song(1)], Thumbs())
-    assert any("Titulo 1" == w.text() for w in panel.findChildren(QLabel))
+    assert panel.songs is not None and panel.songs.tracks[0]["title"] == "Titulo 1"
 
 
 def test_library_presenter_wires_the_liked_chip(rig):
