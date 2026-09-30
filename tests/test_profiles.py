@@ -1,6 +1,8 @@
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtTest import QSignalSpy, QTest
+from PySide6.QtWidgets import QApplication, QWidget
 
 from domain.models import (
     normalize_artist_card, normalize_release, normalize_track, normalize_video, parse_home_section, release_label,
@@ -16,8 +18,7 @@ from ui.components.album_panel import AlbumPanel
 from ui.components.artist_panel import ArtistPanel
 from ui.components.search_panel import SearchPanel
 from ui.components.section_feed import CardsSection, SectionFeed
-from ui.components.track_actions import TrackActionsButton
-from ui.components.track_list import FIRST_BATCH, TrackList, TrackRow
+from ui.components.track_list import ROW_HEIGHT, TrackList, _cells
 
 ARTIST = "UC_artist"
 
@@ -203,29 +204,34 @@ def test_album_without_tracks_is_none(profiles, wait_until):
     assert ask(wait_until, lambda done: catalog.album("MPREb_e", done)) is None
 
 
-def test_track_list_builds_in_batches_and_numbers_rows(qapp):
-    tracks = [normalize_track(raw_song(n)) for n in range(1, 101)]
+def click_row(listing, row, x=200):
+    QApplication.processEvents()
+    listing.view.doItemsLayout()
+    QTest.mouseClick(listing.view.viewport(), Qt.LeftButton, pos=QPoint(x, row * ROW_HEIGHT + ROW_HEIGHT // 2))
+
+
+def test_track_list_holds_every_track_without_a_widget_per_row(qapp):
+    tracks = [normalize_track(raw_song(n)) for n in range(1, 1001)]
     listing = TrackList()
     listing.resize(900, 600)
     listing.show()
     listing.set_tracks(tracks, FakeThumbnails(), numbered=True, show_cover=False)
-    assert listing.row_count == FIRST_BATCH
-    QTest.qWait(1200)
-    assert listing.row_count == 100
-    rows = listing.findChildren(TrackRow)
-    assert len(rows) == 100
+    assert listing.row_count == 1000 and listing.view.height() == 1000 * ROW_HEIGHT
+    assert len(listing.findChildren(QWidget)) < 20
 
 
-def test_track_list_replacing_tracks_drops_the_old_batches(qapp):
+def test_track_list_append_keeps_rows_and_replacing_resets_them(qapp):
     listing = TrackList()
     listing.show()
-    listing.set_tracks([normalize_track(raw_song(n)) for n in range(100)], FakeThumbnails())
+    listing.set_tracks([normalize_track(raw_song(n)) for n in range(1, 4)], FakeThumbnails())
+    listing.show_loading_more()
+    listing.append_tracks([normalize_track(raw_song(9))], FakeThumbnails())
+    assert listing.row_count == 4 and listing.tracks[-1]["videoId"] == "v9" and listing._loading.isHidden()
     listing.set_tracks([normalize_track(raw_song(1))], FakeThumbnails())
-    QTest.qWait(400)
-    assert listing.row_count == 1
+    assert listing.row_count == 1 and listing.view.height() == ROW_HEIGHT
 
 
-def test_track_list_signals_carry_position_and_track(qapp):
+def test_track_list_signals_carry_position_and_track(qapp, monkeypatch):
     tracks = [normalize_track(raw_song(n)) for n in range(1, 4)]
     listing = TrackList()
     listing.resize(900, 300)
@@ -233,24 +239,33 @@ def test_track_list_signals_carry_position_and_track(qapp):
     listing.show()
     listing.set_tracks(tracks, FakeThumbnails(), numbered=True)
     chosen = QSignalSpy(listing.track_chosen)
-    third = listing.findChildren(TrackRow)[2]
-    QTest.mouseClick(third, Qt.LeftButton, pos=third.rect().center())
+    click_row(listing, 2)
     assert chosen.count() == 1 and chosen.at(0)[0] == 2 and chosen.at(0)[1]["videoId"] == "v3"
+
+    shown = []
+
+    def pick_playlist(_self, menu, _pos):
+        shown.append([a.text() for a in menu.actions()])
+        return menu.actions()[2]
+
+    monkeypatch.setattr(TrackList, "_show_menu", pick_playlist)
     queued = QSignalSpy(listing.add_playlist_clicked)
-    third.findChildren(TrackActionsButton)[0].add_playlist.emit()
-    assert queued.count() == 1 and queued.at(0)[0]["videoId"] == "v3"
+    actions = listing.actions_rect(2)
+    click_row(listing, 2, x=actions.center().x())
+    assert chosen.count() == 1 and queued.count() == 1 and queued.at(0)[0]["videoId"] == "v3"
+    QApplication.sendEvent(listing.view.viewport(), QContextMenuEvent(
+        QContextMenuEvent.Mouse, QPoint(100, ROW_HEIGHT // 2), listing.view.viewport().mapToGlobal(QPoint(100, 20))))
+    assert queued.count() == 2 and queued.at(1)[0]["videoId"] == "v1" and len(shown) == 2
 
 
 def test_track_row_shows_only_the_columns_asked_for(qapp):
-    from PySide6.QtWidgets import QLabel
+    from PySide6.QtCore import QRect
 
     track = normalize_track(raw_song(1, views="172K plays", duration="4:26"))
-    full = TrackRow(track, FakeThumbnails(), number=1)
-    texts = {label.text() for label in full.findChildren(QLabel)}
-    assert {"1", "Song 1", "Band", "172K reproducciones", "Album 1", "4:26"} <= texts
-    lean = TrackRow(track, FakeThumbnails(), show_cover=False, show_artist=False, show_album=False)
-    lean_texts = {label.text() for label in lean.findChildren(QLabel)}
-    assert "Band" not in lean_texts and "Album 1" not in lean_texts and "Song 1" in lean_texts
+    full = _cells(QRect(0, 0, 1200, ROW_HEIGHT), track, dict(numbered=True))
+    assert {"number", "cover", "title", "artist", "views", "album", "duration", "actions"} <= set(full)
+    lean = _cells(QRect(0, 0, 1200, ROW_HEIGHT), track, dict(show_cover=False, show_artist=False, show_album=False))
+    assert not {"number", "cover", "artist", "album"} & set(lean) and "title" in lean
 
 
 def test_feed_header_scrolls_with_the_sections_and_can_be_replaced(qapp):
@@ -316,11 +331,10 @@ def test_artist_panel_relays_song_and_shelf_clicks(qapp):
     panel.show()
     panel.show_profile(profile_data(), FakeThumbnails())
     chosen = QSignalSpy(panel.song_chosen)
-    first = panel.songs.findChildren(TrackRow)[0]
-    QTest.mouseClick(first, Qt.LeftButton, pos=first.rect().center())
+    click_row(panel.songs, 0)
     assert chosen.count() == 1 and chosen.at(0)[0]["videoId"] == "v1"
     playlist_signal = QSignalSpy(panel.add_playlist_clicked)
-    first.add_playlist.emit(first.track)
+    panel.songs.add_playlist_clicked.emit(panel.songs.tracks[0])
     assert playlist_signal.count() == 1
 
 
@@ -341,8 +355,6 @@ def test_artist_panel_full_song_list_page(qapp):
     panel.show()
     tracks = [normalize_track(raw_song(n)) for n in range(1, 41)]
     panel.show_all_songs("Band", tracks, FakeThumbnails())
-    assert panel.songs.row_count == FIRST_BATCH
-    QTest.qWait(600)
     assert panel.songs.row_count == 40
 
 
@@ -370,8 +382,7 @@ def test_album_panel_details_tracks_and_actions(qapp):
     next(b for b in panel.findChildren(QPushButton) if b.text() == "Band").click()
     assert artist.at(0)[0] == ARTIST
     chosen = QSignalSpy(panel.track_chosen)
-    second = panel.tracks.findChildren(TrackRow)[1]
-    QTest.mouseClick(second, Qt.LeftButton, pos=second.rect().center())
+    click_row(panel.tracks, 1)
     assert chosen.at(0)[0] == 1
 
 
@@ -389,8 +400,6 @@ def test_album_panel_without_related_releases_and_with_one_track(qapp):
 
 
 def test_album_panel_hides_the_artist_column_when_it_is_one_artist(qapp):
-    from PySide6.QtWidgets import QLabel
-
     panel = AlbumPanel()
     panel.resize(1200, 700)
     panel.show()
@@ -398,10 +407,10 @@ def test_album_panel_hides_the_artist_column_when_it_is_one_artist(qapp):
             "thumbnails": [], "track_count": 2, "duration": "", "more": []}
     solo = [normalize_track(raw_song(1)), normalize_track(raw_song(2))]
     panel.show_album({**base, "tracks": solo}, FakeThumbnails())
-    assert "Band" not in {l.text() for l in panel.tracks.findChildren(QLabel)}
+    assert panel.tracks.options["show_artist"] is False
     guest = normalize_track({**raw_song(3), "artists": [{"name": "Guest"}]})
     panel.show_album({**base, "tracks": [solo[0], guest]}, FakeThumbnails())
-    assert "Guest" in {l.text() for l in panel.tracks.findChildren(QLabel)}
+    assert panel.tracks.options["show_artist"] is True
 
 
 def test_search_artist_card_opens_the_profile_and_offers_shuffle_and_mix(qapp):

@@ -14,7 +14,6 @@ class LyricsSettings:
     better_lyrics_api_key: str = ""
 
 
-# letras config
 def load_lyrics_settings(path: str, environ: dict | None = None) -> LyricsSettings:
     environ = os.environ if environ is None else environ
     data = read_json(path, {})

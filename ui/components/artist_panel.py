@@ -3,7 +3,7 @@ from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPixmap
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QWidget
 
 from domain.models import thumbnail_url
-from ui import theme
+from ui import imaging, theme
 from ui.components.page_parts import MessagePage, back_button, heading, outline_button, pill_button
 from ui.components.section_feed import SectionFeed
 from ui.components.track_list import TrackList
@@ -13,13 +13,12 @@ BANNER_REQUEST_PX = 1600
 SIDE_MARGIN = 48
 
 
-# banner artista
 class _Banner(QWidget):
     def __init__(self, profile, thumbnails, on_back, on_shuffle, on_mix, parent=None):
         super().__init__(parent)
         self.setFixedHeight(BANNER_HEIGHT)
         self._thumbnails = thumbnails
-        self._url = thumbnail_url({"thumbnails": profile.get("banner")}, BANNER_REQUEST_PX)
+        self._url = thumbnail_url({"thumbnails": profile.get("banner")}, imaging.thumb_px(BANNER_REQUEST_PX))
         self._pixmap = None
         self._scaled = None
         self._requested = False
@@ -94,7 +93,6 @@ class _Banner(QWidget):
         painter.end()
 
 
-# pagina artista
 class ArtistPanel(QWidget):
     back_requested = Signal()
     shuffle_requested = Signal()
@@ -119,6 +117,11 @@ class ArtistPanel(QWidget):
             getattr(self.feed, name).connect(getattr(self, name))
         outer.addWidget(self.feed)
         self.songs = None
+
+    def release(self):
+        self.songs = None
+        self.feed.clear()
+        self.feed.set_header(None)
 
     def set_loading(self):
         self.feed.clear()
@@ -145,7 +148,7 @@ class ArtistPanel(QWidget):
             inner = QVBoxLayout(block)
             inner.setContentsMargins(SIDE_MARGIN, 12, SIDE_MARGIN, 0)
             inner.setSpacing(8)
-            inner.addWidget(heading("Canciones más populares"))
+            inner.addWidget(heading(profile.get("songs_title") or "Canciones más populares"))
             self.songs = self._song_list(songs, thumbnails, show_album=True)
             inner.addWidget(self.songs)
             if profile.get("songs_browse_id"):
@@ -159,7 +162,7 @@ class ArtistPanel(QWidget):
         self.feed.set_sections(profile.get("sections") or [], thumbnails, empty_message="")
         self.feed.scroll_to_top()
 
-    def show_all_songs(self, name, tracks, thumbnails):
+    def show_all_songs(self, name, tracks, thumbnails, title="Canciones más populares"):
         page = QWidget()
         column = QVBoxLayout(page)
         column.setContentsMargins(SIDE_MARGIN, 24, SIDE_MARGIN, 24)
@@ -167,7 +170,7 @@ class ArtistPanel(QWidget):
         button = back_button()
         button.clicked.connect(self.back_requested)
         column.addWidget(button, alignment=Qt.AlignLeft)
-        column.addWidget(heading("Canciones más populares", 34))
+        column.addWidget(heading(title, 34))
         by = QLabel(name)
         by.setStyleSheet(f"font-size: 15px; color: {theme.TEXT_SECONDARY};")
         column.addWidget(by)

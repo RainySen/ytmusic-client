@@ -10,6 +10,7 @@ from core.config import (
     RADIO_EXHAUSTED_RATIO, RADIO_FETCH, RADIO_STAGE_START,
 )
 from domain.models import Track
+from domain.volume import gain
 from domain.play_queue import LOOP_QUEUE, LOOP_SONG, PlayQueue
 from domain.stream_cache import StreamInfo
 from services.catalog_service import CatalogService
@@ -38,7 +39,6 @@ class AudioBackend(Protocol):
     def set_volume(self, volume: int) -> None: ...
 
 
-# reproduccion cola radio
 class PlaybackService(QObject):
     track_loading = Signal(dict)
     track_started = Signal(dict)
@@ -51,9 +51,10 @@ class PlaybackService(QObject):
 
     def __init__(self, queue: PlayQueue, streams: StreamService, audio: AudioBackend,
                  catalog: CatalogService, notifier: Notifier, parent: QObject | None = None,
-                 radio_size: Callable[[], int] | None = None):
+                 radio_size: Callable[[], int] | None = None, auto_queue: Callable[[], bool] | None = None):
         super().__init__(parent)
         self._radio_size = radio_size
+        self._auto_queue = auto_queue
         self._queue = queue
         self._streams = streams
         self._audio = audio
@@ -88,7 +89,6 @@ class PlaybackService(QObject):
     def is_playing(self) -> bool:
         return self._audio.is_playing
 
-    # reproducir detener anterior
     def play_track(self, song: Track | None) -> None:
         video_id = song.get("videoId") if song else None
         if not song or not video_id:
@@ -115,7 +115,6 @@ class PlaybackService(QObject):
         if song:
             self.play_track(song)
 
-    # radio recomendaciones
     def start_radio(self, seed: Track) -> None:
         video_id = seed.get("videoId")
         if not video_id:
@@ -123,9 +122,15 @@ class PlaybackService(QObject):
         size = self._radio_size() if self._radio_size else None
         if self._radio_size:
             self._queue.radio_limit = size or None
+        if not self._auto_enabled():
+            self.play_track(self._queue.start_radio(seed))
+            return
         self._radio_pending = True
         self.play_track(self._queue.start_radio(seed))
         self._request_radio(video_id, min(size, RADIO_FETCH) if size else RADIO_FETCH)
+
+    def _auto_enabled(self) -> bool:
+        return self._auto_queue is None or self._auto_queue()
 
     def _request_radio(self, video_id: str, limit: int) -> None:
         self._catalog.recommendations(
@@ -135,7 +140,6 @@ class PlaybackService(QObject):
             key="radio",
         )
 
-    # cola radio por etapas
     def _next_radio_limit(self, limit_used: int, loaded: int) -> int | None:
         if not self._radio_size:
             return None
@@ -153,7 +157,7 @@ class PlaybackService(QObject):
 
     def _on_radio_ready(self, seed_video_id: str, recommendations: list[Track], limit: int = RADIO_FETCH) -> None:
         self._radio_pending = False
-        if self._queue.radio_seed != seed_video_id:
+        if self._queue.radio_seed != seed_video_id or not self._auto_enabled():
             return
         added = self._queue.add_radio_tail(seed_video_id, recommendations)
         self._prefetch_upcoming()
@@ -191,7 +195,7 @@ class PlaybackService(QObject):
         self._audio.seek(fraction)
 
     def set_volume(self, volume: int) -> None:
-        self._audio.set_volume(volume)
+        self._audio.set_volume(gain(volume))
 
     def enqueue_next(self, song: Track) -> None:
         if not song.get("videoId"):
@@ -231,7 +235,6 @@ class PlaybackService(QObject):
         self._queue.shuffle_upcoming()
         self._prefetch_upcoming()
 
-    # prefetch hover
     def preload(self, song: Track) -> None:
         if song.get("videoId"):
             self._streams.prefetch([song["videoId"]])
@@ -276,7 +279,6 @@ class PlaybackService(QObject):
         self._notifier.error(f"No se pudo reproducir «{song.get('title', video_id)}»: {message}")
         self._skip_after_failure()
 
-    # reintento fallos
     def _on_audio_failed(self) -> None:
         video_id, self._current_video = self._current_video, None
         song = self._queue.current
@@ -321,10 +323,9 @@ class PlaybackService(QObject):
         ids = [s["videoId"] for s in self._queue.upcoming(PREFETCH_AHEAD) if s.get("videoId")]
         self._streams.prefetch(ids)
 
-    # extender cola
     def _maybe_extend(self) -> None:
         queue = self._queue
-        if (self._extending or self._radio_pending or queue.loop_mode == LOOP_QUEUE
+        if (not self._auto_enabled() or self._extending or self._radio_pending or queue.loop_mode == LOOP_QUEUE
                 or queue.remaining_after_current() > 1):
             return
         seed = queue.last
@@ -339,11 +340,39 @@ class PlaybackService(QObject):
     def _extend_batch(self) -> int:
         return EXTEND_BATCH_UNLIMITED if self._radio_size and not self._radio_size() else EXTEND_BATCH
 
+    # autoplay switch: off drops suggestions, on refills from the last song
+    def set_auto_queue(self, enabled: bool) -> None:
+        if not enabled:
+            self._radio_pending = False
+            self._wait_for_extension = False
+            self._queue.drop_auto_upcoming()
+            return
+        seed = self._queue.last or self._queue.current
+        if not seed or not seed.get("videoId") or self._extending:
+            return
+        size = self._radio_size() if self._radio_size else 0
+        batch = size or RADIO_FETCH
+        self._extending = True
+        self._catalog.recommendations(seed["videoId"], batch + 4, lambda recs: self._on_refill_ready(recs, batch),
+                                      self._on_extension_failed, key="extend")
+
+    def _on_refill_ready(self, recommendations: list[Track], batch: int) -> None:
+        self._extending = False
+        if not self._auto_enabled():
+            return
+        queued = self._queue.video_ids()
+        fresh = [r for r in recommendations if r.get("videoId") not in queued][:batch]
+        self._queue.extend_unique(fresh, auto=True)
+        self._prefetch_upcoming()
+
     def _on_extension_ready(self, recommendations: list[Track]) -> None:
         self._extending = False
+        if not self._auto_enabled():
+            self._wait_for_extension = False
+            return
         queued = self._queue.video_ids()
         fresh = [r for r in recommendations if r.get("videoId") not in queued][:self._extend_batch()]
-        self._queue.extend_unique(fresh)
+        self._queue.extend_unique(fresh, auto=True)
         self._queue.trim_played(QUEUE_HISTORY_LIMIT)
         self._prefetch_upcoming()
         if self._wait_for_extension:

@@ -1,12 +1,15 @@
 import qtawesome as qta
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFrame
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFrame
+
+from ui.components.search_history_popup import SearchHistoryPopup
 
 
 class TopBar(QWidget):
     search_requested = Signal()
     login_requested = Signal()
     settings_requested = Signal()
+    menu_toggled = Signal(bool)
 
     def __init__(self, icon_search, icon_login, icon_login_active, parent=None):
         super().__init__(parent)
@@ -21,10 +24,24 @@ class TopBar(QWidget):
         top_layout.setSpacing(8)
 
         logo_row = QWidget()
-        logo_row.setFixedWidth(160)
+        logo_row.setFixedWidth(196)
         logo_l = QHBoxLayout(logo_row)
         logo_l.setContentsMargins(0, 0, 0, 0)
         logo_l.setSpacing(6)
+
+        self.menu_button = QPushButton()
+        self.menu_button.setIcon(qta.icon("fa5s.bars", color="white"))
+        self.menu_button.setToolTip("Mostrar tus playlists")
+        self.menu_button.setCheckable(True)
+        self.menu_button.setFixedSize(36, 36)
+        self.menu_button.setCursor(Qt.PointingHandCursor)
+        self.menu_button.setStyleSheet("""
+            QPushButton { background: transparent; border: none; border-radius: 18px; }
+            QPushButton:hover { background: rgba(255,255,255,0.10); }
+            QPushButton:pressed { background: rgba(255,255,255,0.10); }
+        """)
+        self.menu_button.toggled.connect(self.menu_toggled)
+        logo_l.addWidget(self.menu_button)
 
         yt_icon = QLabel()
         yt_icon.setPixmap(qta.icon('fa5b.youtube', color='#FF0000').pixmap(24, 24))
@@ -79,8 +96,12 @@ class TopBar(QWidget):
         """)
         self.search_button.clicked.connect(self.search_requested.emit)
 
+        self.history = SearchHistoryPopup(self.search_box, search_wrapper)
         sw_layout.addWidget(self.search_box, stretch=1)
         sw_layout.addWidget(self.search_button)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
         self.login_button = QPushButton()
         self.login_button.setIcon(self.icon_login)
@@ -114,6 +135,15 @@ class TopBar(QWidget):
 
         top_layout.addWidget(self.settings_button)
         top_layout.addWidget(self.login_button)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonPress and self.search_box.hasFocus():
+            pos = event.globalPosition().toPoint()
+            inside_box = self.search_box.rect().contains(self.search_box.mapFromGlobal(pos))
+            inside_popup = self.history.isVisible() and self.history.rect().contains(self.history.mapFromGlobal(pos))
+            if not inside_box and not inside_popup:
+                self.search_box.clearFocus()
+        return False
 
     def set_login_state(self, is_logged_in):
         self.login_button.setIcon(self.icon_login_active if is_logged_in else self.icon_login)

@@ -13,7 +13,6 @@ class StreamResolveError(Exception):
     pass
 
 
-# yt-dlp url audio
 class YtDlpStreamResolver:
     def __init__(self, cache_dir: str, socket_timeout: int = 10):
         self._cache_dir = cache_dir

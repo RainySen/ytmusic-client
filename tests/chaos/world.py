@@ -152,6 +152,11 @@ class ChaosLyrics:
         return Lyrics(tuple(lines), synced=True, source=self.name)
 
 
+class ChaosRomanizer:
+    def enrich(self, lyrics):
+        return lyrics
+
+
 class World:
     def __init__(self, tmp_dir: str, seed: int, *, failure_rate: float = 0.08, mutation_rate: float = 0.06,
                  authenticated: bool = True, latency: float = 0.01, wild: bool = False):
@@ -174,7 +179,6 @@ class World:
         self.services = None
         self.ui = None
 
-    # llamadas red simuladas
     def _call_rng(self, name: str) -> random.Random:
         with self._call_lock:
             self._calls += 1
@@ -242,6 +246,7 @@ class World:
         stack.enter_context(mock.patch.object(YtDlpStreamResolver, "resolve", lambda _resolver, video_id: self._resolve(video_id)))
         stack.enter_context(mock.patch.object(ThumbnailCache, "request", lambda _cache, url, callback: self._thumbnail(url, callback)))
         stack.enter_context(mock.patch.object(bootstrap, "build_lyrics_providers", lambda *_args, **_kwargs: [ChaosLyrics(self)]))
+        stack.enter_context(mock.patch.object(bootstrap, "build_romanizer", lambda: ChaosRomanizer()))
         import ui.login_window as login_window
         stack.enter_context(mock.patch.object(login_window, "WEB_LOGIN_AVAILABLE", False))
 

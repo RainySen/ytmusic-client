@@ -14,7 +14,6 @@ log = logging.getLogger(__name__)
 WEB_ROOT = "https://music.youtube.com"
 
 
-# acciones playlist album
 class CollectionActions:
     def __init__(self, catalog: CatalogService, playback: PlaybackService, notifier: Notifier):
         self._catalog = catalog

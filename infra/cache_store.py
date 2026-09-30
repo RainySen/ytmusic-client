@@ -33,7 +33,6 @@ def _empty_directory(path: str) -> None:
             log.debug("Could not remove %s", entry.path)
 
 
-# cache regenerable miniaturas y descargas
 class CacheStore:
     def __init__(self, thumbnails, directories: list[str] | None = None, files: list[str] | None = None):
         self._thumbnails = thumbnails

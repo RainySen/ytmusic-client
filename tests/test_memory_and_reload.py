@@ -259,3 +259,36 @@ def test_prefetch_is_not_repeated_while_one_is_pending_or_when_the_pool_is_empty
     assert len(rig.catalog.pool_calls) == calls
     rig.catalog.pool_calls[-1]["on_done"]([])
     assert home._pool_ready is None
+
+
+
+def test_visible_window_is_cleaned_only_while_idle_or_in_the_background(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    from infra.settings_repository import SettingsRepository
+    from services.settings_service import SettingsService
+
+    rig = Rig()
+    try:
+        settings = SettingsService(SettingsRepository(str(tmp_path / "s.json")))
+        settings.update(free_memory=True, free_memory_seconds=60)
+        home = rig.keep(HomePresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier))
+        explore = rig.keep(ExplorePresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier))
+        presenter = rig.keep(MemoryPresenter(rig.window, home, explore, settings=settings))
+        assert presenter._idle_timer.isActive() and presenter._idle_timer.interval() == 60_000
+        freed = []
+        monkeypatch.setattr(presenter, "free_now", lambda: freed.append(1))
+        monkeypatch.setattr(QApplication, "activeWindow", staticmethod(lambda: rig.window))
+        monkeypatch.setattr(memory, "idle_seconds", lambda: 5.0)
+        presenter._on_idle_tick()
+        assert freed == []
+        monkeypatch.setattr(memory, "idle_seconds", lambda: 61.0)
+        presenter._on_idle_tick()
+        monkeypatch.setattr(memory, "idle_seconds", lambda: 0.0)
+        monkeypatch.setattr(QApplication, "activeWindow", staticmethod(lambda: None))
+        presenter._on_idle_tick()
+        assert freed == [1, 1]
+        settings.update(free_memory=False)
+        assert not presenter._idle_timer.isActive()
+    finally:
+        rig.dispose()

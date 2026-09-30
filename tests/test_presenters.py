@@ -4,6 +4,7 @@ from PySide6.QtCore import QEvent, QObject, Signal
 from PySide6.QtTest import QSignalSpy
 from PySide6.QtWidgets import QApplication
 
+from domain.volume import gain
 from domain.models import LyricLine, Lyrics
 from domain.play_queue import PlayQueue
 from presenters.auth_presenter import AuthPresenter
@@ -14,6 +15,7 @@ from presenters.player_presenter import PlayerPresenter
 from presenters.playlist_presenter import PlaylistPresenter
 from presenters.search_presenter import SearchPresenter
 from presenters.similar_presenter import SimilarPresenter
+from services.navigation import Navigator
 from services.playback_service import PlaybackService
 from tests.fakes import FakeAudio, FakeCatalog, FakeNotifier, FakeStreams
 from ui.components.section_feed import CompactSection
@@ -69,6 +71,7 @@ class ScriptedCatalog(FakeCatalog):
 class FakeAuth(QObject):
     auth_changed = Signal(bool)
     session_expired = Signal()
+    logged_out = Signal()
 
     def __init__(self):
         super().__init__()
@@ -83,6 +86,7 @@ class FakeAuth(QObject):
         self.logouts += 1
         self.is_authenticated = False
         self.auth_changed.emit(False)
+        self.logged_out.emit()
         return True
 
 
@@ -91,19 +95,38 @@ class FakeLibrary:
         self.playlist_requests = []
         self.song_requests = []
         self.saved = []
-        self.imported = []
         self.target_requests = []
         self.added = []
         self.artist_list = [{"name": "X", "count": 2}]
+        self.liked_requests = []
+        self.pinned = []
+        self.deleted = []
+        self.limits = []
 
     def playlists(self, on_done):
         self.playlist_requests.append(on_done)
 
-    def songs(self, on_done):
+    def liked_songs(self, on_done, limit=50):
+        self.liked_requests.append(on_done)
+        self.limits.append(limit)
+
+    def toggle_pin(self, playlist_id):
+        self.pinned.append(playlist_id)
+        return True
+
+    def delete_local_playlist(self, playlist_id):
+        self.deleted.append(playlist_id)
+        return True
+
+    def songs(self, on_done, limit=50):
         self.song_requests.append(on_done)
+        self.limits.append(limit)
 
     def artists(self):
         return self.artist_list
+
+    def library_artists(self, on_done):
+        on_done(self.artist_list)
 
     def playlist_tracks(self, entry, on_done, on_error=None):
         on_done({"title": entry["title"], "tracks": [song(1), song(2)]})
@@ -121,9 +144,6 @@ class FakeLibrary:
 
     add_outcome = "added"
 
-    def save_imported(self, title, tracks, *, cloud, on_done):
-        self.imported.append((title, cloud))
-        on_done(("YouTube Music" if cloud else "local", True))
 
 
 class Rig:
@@ -141,6 +161,7 @@ class Rig:
         self.opener = type("Opener", (), {"open": lambda _self, item: self.opened.append(item)})()
         self.library = FakeLibrary()
         self.auth = FakeAuth()
+        self.navigator = Navigator()
         self._alive = []
 
     def dispose(self):
@@ -322,7 +343,7 @@ def test_search_flow_and_error(rig):
 
 
 def test_library_ignores_stale_tab_results(rig):
-    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier))
+    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier, rig.navigator))
     rig.window.library_requested.emit()
     assert rig.window.library_browser.isVisible()
     playlists_answer = rig.library.playlist_requests[-1]
@@ -334,13 +355,13 @@ def test_library_ignores_stale_tab_results(rig):
 
 
 def test_library_artists_are_synchronous(rig):
-    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier))
+    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier, rig.navigator))
     rig.window.library_browser.chip_selected.emit("Artistas")
     assert rig.window.library_browser._chips["Artistas"].isChecked()
 
 
 def test_library_playlist_activation_plays_it(rig):
-    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier))
+    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier, rig.navigator))
     rig.window.library_browser.playlist_activated.emit({"playlistId": "p", "title": "Mine", "source": "local"})
     assert [s["videoId"] for s in rig.queue.snapshot()] == ["v1", "v2"]
     assert rig.streams.requests == ["v1"]
@@ -373,7 +394,7 @@ def test_player_controls_drive_playback(rig):
     assert rig.streams.requests[-1] == "v2"
     rig.window.seek_requested.emit(0.25)
     rig.window.volume_changed.emit(30)
-    assert rig.audio.seeks == [0.25] and rig.audio.volume == 30
+    assert rig.audio.seeks == [0.25] and rig.audio.volume == gain(30)
     rig.window.side_panel.queue_item_activated.emit(0)
     assert rig.streams.requests[-1] == "v1"
 
@@ -383,7 +404,7 @@ def test_player_start_shows_restored_song_without_playing(rig):
     rig.queue.restore([song(1), song(2)], 1)
     presenter.start()
     assert rig.window.player_panel.song_label.text() == "T2"
-    assert rig.streams.requests == [] and rig.audio.volume == rig.window.volume
+    assert rig.streams.requests == [] and rig.audio.volume == gain(rig.window.volume)
 
 
 def test_loop_mode_icon_follows_queue(rig):
@@ -465,42 +486,6 @@ def test_similar_item_click_goes_to_opener(rig):
 
 def make_playlists(rig):
     return rig.keep(PlaylistPresenter(rig.window, rig.catalog, rig.library, rig.playback, rig.auth, rig.notifier))
-
-
-def test_import_rejects_invalid_url(rig):
-    make_playlists(rig)
-    rig.window.import_url_submitted.emit("https://example.com/nothing")
-    assert rig.notifier.messages[-1][0] == "error" and rig.catalog.playlist_calls == []
-
-
-def test_import_plays_and_saves_locally(rig, monkeypatch):
-    make_playlists(rig)
-    monkeypatch.setattr(rig.window, "ask_save_target", lambda title, auth: "local")
-    rig.window.import_url_submitted.emit("https://music.youtube.com/playlist?list=PLabc")
-    call = rig.catalog.playlist_calls[-1]
-    assert call["id"] == "PLabc"
-    call["on_done"]({"title": "Mix", "tracks": [song(1), song(2)]})
-    assert rig.streams.requests == ["v1"]
-    assert rig.library.imported == [("Mix", False)]
-    assert rig.notifier.messages[-1] == ("info", "«Mix» guardada en local.")
-
-
-def test_import_can_be_declined(rig, monkeypatch):
-    make_playlists(rig)
-    monkeypatch.setattr(rig.window, "ask_save_target", lambda title, auth: None)
-    rig.window.import_url_submitted.emit("https://music.youtube.com/playlist?list=PLabc")
-    rig.catalog.playlist_calls[-1]["on_done"]({"title": "Mix", "tracks": [song(1)]})
-    assert rig.library.imported == []
-
-
-def test_import_empty_or_failed(rig):
-    make_playlists(rig)
-    rig.window.import_url_submitted.emit("https://music.youtube.com/playlist?list=PLabc")
-    rig.catalog.playlist_calls[-1]["on_done"](None)
-    assert rig.notifier.messages[-1][0] == "error"
-    rig.window.import_url_submitted.emit("https://music.youtube.com/playlist?list=PLxyz")
-    rig.catalog.playlist_calls[-1]["on_error"](RuntimeError("x"))
-    assert rig.notifier.messages[-1][0] == "error"
 
 
 def test_save_queue_as_playlist(rig):
@@ -587,7 +572,7 @@ def test_hovering_a_song_preloads_its_stream(rig):
 
 def test_hover_preload_from_search_and_library(rig):
     rig.keep(SearchPresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier))
-    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier))
+    rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier, rig.navigator))
     rig.window.search_panel.item_hovered.emit(song(1))
     rig.window.library_browser.song_hovered.emit(song(2))
     assert rig.streams.prefetched == ["v1", "v2"]

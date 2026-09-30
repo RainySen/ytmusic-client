@@ -21,7 +21,7 @@ from ui.components.section_feed import CardsSection, CompactSongItem, HomeCard, 
 from ui.components.track_actions import (
     COLLECTION_ACTIONS, SONG_ACTIONS, ActionsButton, CollectionActionsButton, TrackActionsButton,
 )
-from ui.components.track_list import TrackRow
+from ui.components.track_list import TrackList
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ class PlaylistGateway(ProfileGateway):
                      "duration": "4 horas", "tracks": [raw_song(i) for i in (1, 2, 3)]}
         self.page_error = None
 
-    def get_playlist_page(self, playlist_id):
+    def get_playlist_page(self, playlist_id, limit=None):
         self.page_calls += 1
         if self.page_error:
             raise self.page_error
@@ -146,6 +146,19 @@ def test_playlist_page_errors_when_nothing_at_all_answers(pages, wait_until):
     errors = []
     catalog.playlist_details("PLz", lambda page: errors.append("done"), errors.append)
     assert wait_until(lambda: errors) and isinstance(errors[0], RuntimeError)
+
+
+def test_playlist_page_with_a_limit_reports_more_and_skips_the_cache(pages, wait_until):
+    catalog, gateway = pages
+    gateway.page = dict(gateway.page, trackCount=10, tracks=[raw_song(i) for i in (1, 2, 3)])
+    page = ask(wait_until, lambda done: catalog.playlist_details("PL1", done, limit=3))
+    assert page["has_more"] is True and page["track_count"] == 10 and len(page["tracks"]) == 3
+    ask(wait_until, lambda done: catalog.playlist_details("PL1", done, limit=3))
+    assert gateway.page_calls == 2
+
+    gateway.page = dict(gateway.page, trackCount=3, tracks=[raw_song(i) for i in (1, 2, 3)])
+    full = ask(wait_until, lambda done: catalog.playlist_details("PL1", done, limit=50))
+    assert full["has_more"] is False
 
 
 def test_library_adds_many_songs_at_once(qapp, tmp_path, wait_until):
@@ -409,29 +422,40 @@ def test_context_request_signal_carries_the_global_position(qapp):
     assert spy.count() == 1 and spy.at(0)[0] == QPoint(405, 405)
 
 
-@pytest.mark.parametrize("make", [
-    lambda: CompactSongItem(song(1), FakeThumbnails()),
-    lambda: TrackRow(normalize_track(raw_song(1)), FakeThumbnails()),
-])
-def test_song_rows_open_their_menu_on_right_click(qapp, make):
-    row = make()
+def test_song_rows_open_their_menu_on_right_click(qapp):
+    row = CompactSongItem(song(1), FakeThumbnails())
     row.resize(600, 60)
     row.move(400, 400)
     row.show()
     texts = open_menu_texts(lambda: row.context_requested.emit(row.mapToGlobal(QPoint(30, 30))))
-    assert texts == [label for _, label, _ in SONG_ACTIONS]
+    assert texts[:3] == [label for _, label, _ in SONG_ACTIONS] and "Fijar en volver a escuchar" in texts
 
 
-def test_search_and_library_rows_open_their_menu_on_right_click(qapp):
-    from ui.components.library_browser import SongRow
+def test_track_list_right_click_offers_the_song_actions(qapp, monkeypatch):
+    shown = []
+    monkeypatch.setattr(TrackList, "_show_menu",
+                        lambda _self, menu, _pos: shown.append([a.text() for a in menu.actions()]))
+    listing = TrackList()
+    listing.resize(600, 200)
+    listing.show()
+    listing.set_tracks([normalize_track(raw_song(1))], FakeThumbnails())
+    QApplication.processEvents()
+    listing.view.doItemsLayout()
+    viewport = listing.view.viewport()
+    QApplication.sendEvent(viewport, QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(30, 28),
+                                                       viewport.mapToGlobal(QPoint(30, 28))))
+    assert len(shown) == 1 and shown[0][:3] == [label for _, label, _ in SONG_ACTIONS]
+
+
+def test_search_rows_open_their_menu_on_right_click(qapp):
     from ui.components.search_panel import _ResultRow
 
-    for row in (SongRow(song(1), FakeThumbnails()), _ResultRow(dict(song(1), resultType="song"), FakeThumbnails())):
-        row.resize(600, 60)
-        row.move(400, 400)
-        row.show()
-        texts = open_menu_texts(lambda: row.context_requested.emit(row.mapToGlobal(QPoint(30, 30))))
-        assert texts == [label for _, label, _ in SONG_ACTIONS]
+    row = _ResultRow(dict(song(1), resultType="song"), FakeThumbnails())
+    row.resize(600, 60)
+    row.move(400, 400)
+    row.show()
+    texts = open_menu_texts(lambda: row.context_requested.emit(row.mapToGlobal(QPoint(30, 30))))
+    assert texts[:3] == [label for _, label, _ in SONG_ACTIONS] and "Fijar en volver a escuchar" in texts
 
 
 def test_rows_of_things_that_cannot_be_queued_ignore_right_click(qapp):
@@ -506,10 +530,8 @@ def test_playlist_panel_details_rows_and_menu(qapp):
     description = next(t for t in texts if t.startswith("Disfruta"))
     assert description.endswith("…") and len(description) <= 224
     assert "YouTube Music" in [b.text() for b in panel.findChildren(QPushButton)]
-    rows = panel.tracks.findChildren(TrackRow)
-    assert len(rows) == 3
-    row_texts = {label.text() for label in rows[0].findChildren(QLabel)}
-    assert "1" not in row_texts and "Song 1" in row_texts and "Band" in row_texts
+    assert panel.tracks.row_count == 3 and panel.tracks.tracks[0]["title"] == "Song 1"
+    assert panel.tracks.options["numbered"] is False and panel.tracks.options["show_artist"] is True
     spy = QSignalSpy(panel.collection_action_requested)
     choose_from_open_menu(4)
     panel.menu_button.click()
@@ -572,8 +594,8 @@ class PageCatalog(ProfileCatalog):
         super().__init__()
         self.details = []
 
-    def playlist_details(self, playlist_id, on_done, on_error=None):
-        self.details.append((playlist_id, on_done, on_error))
+    def playlist_details(self, playlist_id, on_done, on_error=None, limit=None):
+        self.details.append((playlist_id, on_done, on_error, limit))
 
 
 @pytest.fixture
@@ -623,3 +645,51 @@ def test_a_late_playlist_answer_is_ignored(nav):
     assert rig.window.album_panel.tracks is None
     catalog.details[1][1](page_data(title="Second"))
     assert rig.window.album_panel.tracks.row_count == 3
+
+
+def test_opening_a_playlist_asks_for_a_bounded_first_page(nav):
+    from services.catalog_service import PLAYLIST_PAGE_SIZE, PLAYLIST_PAGE_STEP
+
+    rig, presenter, catalog, navigator = nav
+    navigator.playlist_requested.emit("PL1")
+    assert catalog.details[-1][3] == PLAYLIST_PAGE_SIZE
+    catalog.details[-1][1](page_data(has_more=True, track_count=5))
+    assert rig.window.album_panel._can_load_more is True
+    assert catalog.details[-1][3] == 3 + PLAYLIST_PAGE_STEP
+
+    rig.window.album_panel.load_more_requested.emit()
+    assert len(catalog.details) == 2
+    catalog.details[-1][1](page_data(tracks=tracks(5), track_count=5))
+    assert rig.window.album_panel.tracks.row_count == 5 and rig.window.album_panel._can_load_more is False
+    assert [t["videoId"] for t in presenter._collection["tracks"]] == [f"v{n}" for n in range(1, 6)]
+
+
+def test_prefetched_playlist_page_is_shown_instantly_on_scroll(nav):
+    rig, _, catalog, navigator = nav
+    navigator.playlist_requested.emit("PL1")
+    catalog.details[-1][1](page_data(has_more=True, track_count=9))
+    catalog.details[-1][1](page_data(tracks=tracks(6), track_count=9))
+    assert rig.window.album_panel.tracks.row_count == 3
+    rig.window.album_panel.load_more_requested.emit()
+    assert rig.window.album_panel.tracks.row_count == 6 and rig.window.album_panel._can_load_more is True
+    assert catalog.details[-1][3] == 6 + 100
+
+
+def test_leaving_the_playlist_drops_its_pending_page(nav):
+    rig, _, catalog, navigator = nav
+    navigator.playlist_requested.emit("PL1")
+    catalog.details[-1][1](page_data(has_more=True, track_count=9))
+    late = catalog.details[-1][1]
+    rig.window.show_view("home")
+    late(page_data(tracks=tracks(6), track_count=9))
+    rig.window.album_panel.load_more_requested.emit()
+    assert rig.window.album_panel.tracks.row_count == 3
+
+
+def test_load_more_failure_lets_scrolling_retry(nav):
+    rig, _, catalog, navigator = nav
+    navigator.playlist_requested.emit("PL1")
+    catalog.details[-1][1](page_data(has_more=True))
+    rig.window.album_panel.load_more_requested.emit()
+    catalog.details[-1][2](RuntimeError("offline"))
+    assert rig.window.album_panel._loading_more is False

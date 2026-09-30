@@ -6,7 +6,6 @@ from typing import Any, Callable
 _MISSING = object()
 
 
-# cache ttl
 class TTLCache:
     def __init__(self, clock: Callable[[], float] = time.monotonic, max_items: int = 256):
         self._clock = clock

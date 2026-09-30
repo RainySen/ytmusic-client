@@ -2,18 +2,25 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from domain.settings import CONTENT_LANGUAGES, FREE_MEMORY_OPTIONS, LYRICS_PROVIDER_NAMES, RADIO_SIZE_OPTIONS, Settings
+from domain.settings import (
+    CONTENT_LANGUAGES, FREE_MEMORY_OPTIONS, LYRICS_PROVIDER_NAMES, RADIO_SIZE_OPTIONS, Settings,
+    THUMBNAIL_CACHE_OPTIONS, THUMBNAIL_QUALITY_OPTIONS,
+)
 from ui import theme
 from ui.components.dialogs import Modal
 from ui.components.icon_button import icon_button
+from ui.components.no_scroll_combo import NoScrollComboBox
 from ui.components.switch import Switch
 
 RADIO_LABELS = {size: f"{size} canciones" for size in RADIO_SIZE_OPTIONS}
 RADIO_LABELS[0] = "Ilimitada (se extiende sola)"
 MEMORY_LABELS = {10: "10 segundos", 20: "20 segundos", 60: "1 minuto", 180: "3 minutos"}
+QUALITY_LABELS = {"low": "Baja (ahorra memoria y datos)", "auto": "Automática (recomendada)",
+                  "high": "Alta (pantallas grandes o 4K)"}
+CACHE_LIMIT_LABELS = {100: "100 (menos RAM)", 200: "200", 400: "400 (recomendado)", 800: "800 (menos recargas)"}
 PROVIDER_LABELS = {"betterlyrics": "Better Lyrics", "lrclib": "LRCLIB", "youtube": "YouTube Music"}
 PROVIDER_HINTS = {"betterlyrics": "Sincronizada por palabra", "lrclib": "Sincronizada por línea",
                   "youtube": "Suele ser texto sin sincronizar"}
@@ -87,8 +94,8 @@ def _row(title: str, hint: str, control: QWidget, enabled: bool = True) -> QWidg
     return holder
 
 
-def _combo(options, labels, current) -> QComboBox:
-    box = QComboBox()
+def _combo(options, labels, current) -> NoScrollComboBox:
+    box = NoScrollComboBox()
     box.setStyleSheet(_COMBO_QSS)
     for option in options:
         box.addItem(labels[option], option)
@@ -103,7 +110,6 @@ def _separator() -> QFrame:
     return line
 
 
-# configuracion ajustes modal
 class SettingsDialog(Modal):
     def __init__(self, parent, settings: Settings, tray_available: bool, on_change, on_free=None, *,
                  cache_size=None, clear_cache=None, logged_in: bool = False, on_account=None,
@@ -125,6 +131,7 @@ class SettingsDialog(Modal):
         self._build_memory(body, settings)
         self._build_playback(body, settings)
         self._build_language(body, settings)
+        self._build_thumbnails(body, settings)
         self._build_lyrics(body, settings)
         self._build_cache(body)
         self._build_account(body, logged_in)
@@ -165,13 +172,19 @@ class SettingsDialog(Modal):
         self.autostart.toggled.connect(lambda v: self._on_change(start_with_windows=v))
 
     def _build_radio(self, body, settings: Settings) -> None:
-        body.addWidget(_title("Cola de radio"))
+        body.addWidget(_title("Cola automática"))
+        self.auto_queue = Switch(settings.auto_queue)
+        body.addWidget(_row("Cola automática", "Al elegir una canción, la cola se llena sola con recomendaciones y "
+                            "se sigue extendiendo al llegar al final. Apagada, solo suena lo que elijas.",
+                            self.auto_queue))
         self.radio = _combo(RADIO_SIZE_OPTIONS, RADIO_LABELS, settings.radio_size)
+        self.radio.setEnabled(settings.auto_queue)
         body.addWidget(_row("Canciones al elegir una canción",
                             "La primera tanda llega junto con la canción y el resto se carga en segundo plano hasta "
                             "completar el tamaño elegido. Una cola grande no consume memoria de forma apreciable.",
                             self.radio))
         body.addWidget(_separator())
+        self.auto_queue.toggled.connect(self._on_auto_queue)
         self.radio.currentIndexChanged.connect(lambda _i: self._on_change(radio_size=self.radio.currentData()))
 
     def _build_memory(self, body, settings: Settings) -> None:
@@ -187,7 +200,7 @@ class SettingsDialog(Modal):
         self.free_button.setStyleSheet(theme.button_qss("tonal", height=34))
         self.free_button.setEnabled(self._on_free is not None)
         self.free_button.clicked.connect(self._free_now)
-        body.addWidget(_row("Liberar memoria ahora", "Devuelve al sistema la memoria que la app no está usando, como hace RAMMap. Crece de nuevo solo lo que necesite.", self.free_button))
+        body.addWidget(_row("Liberar memoria ahora", "Devuelve al sistema la memoria que la app no está usando. Crece de nuevo solo lo que necesite.", self.free_button))
         body.addWidget(self.free_result)
         body.addWidget(_separator())
         self.free_memory.toggled.connect(lambda v: self._on_change(free_memory=v))
@@ -221,6 +234,22 @@ class SettingsDialog(Modal):
         body.addWidget(_separator())
         self.language.currentIndexChanged.connect(lambda _i: self._on_change(content_language=self.language.currentData()))
 
+    def _build_thumbnails(self, body, settings: Settings) -> None:
+        body.addWidget(_title("Miniaturas"))
+        self.thumbnail_quality = _combo(THUMBNAIL_QUALITY_OPTIONS, QUALITY_LABELS, settings.thumbnail_quality)
+        body.addWidget(_row("Calidad de las miniaturas y la portada", "«Automática» ya se ajusta a la resolución de "
+                            "tu pantalla. «Alta» pide imágenes más grandes en monitores grandes o 4K; «Baja» las "
+                            "reduce para ahorrar memoria y datos.", self.thumbnail_quality))
+        self.thumbnail_cache_limit = _combo(THUMBNAIL_CACHE_OPTIONS, CACHE_LIMIT_LABELS, settings.thumbnail_cache_limit)
+        body.addWidget(_row("Miniaturas en memoria", "Cuántas se guardan listas para no volver a descargarlas al "
+                            "hacer scroll. Un número más bajo usa menos RAM pero recarga más seguido.",
+                            self.thumbnail_cache_limit))
+        body.addWidget(_separator())
+        self.thumbnail_quality.currentIndexChanged.connect(
+            lambda _i: self._on_change(thumbnail_quality=self.thumbnail_quality.currentData()))
+        self.thumbnail_cache_limit.currentIndexChanged.connect(
+            lambda _i: self._on_change(thumbnail_cache_limit=self.thumbnail_cache_limit.currentData()))
+
     def _build_lyrics(self, body, settings: Settings) -> None:
         body.addWidget(_title("Letras"))
         body.addWidget(_note("Se prueban en este orden y se usa la primera letra sincronizada; si ninguna lo está, la "
@@ -242,7 +271,12 @@ class SettingsDialog(Modal):
         self.lyrics_key.editingFinished.connect(self._commit_key)
         body.addWidget(_row("Clave de Better Lyrics", "Sin clave solo responde lo que ya tiene guardado. La entregan "
                             "sus autores por proyecto.", self.lyrics_key))
+        self.romanized_lyrics = Switch(settings.romanized_lyrics)
+        body.addWidget(_row("Romanización (romaji, etc.)", "Muestra una segunda línea con la letra transcrita a "
+                            "alfabeto latino cuando el idioma original no lo usa, vía la API de Unison "
+                            "(unison.boidu.dev). Se aplica a la siguiente letra que se pida.", self.romanized_lyrics))
         body.addWidget(_separator())
+        self.romanized_lyrics.toggled.connect(lambda v: self._on_change(romanized_lyrics=v))
 
     def _build_cache(self, body) -> None:
         body.addWidget(_title("Caché"))
@@ -278,6 +312,10 @@ class SettingsDialog(Modal):
         self._mini_label.findChild(QLabel).setStyleSheet(
             f"color: {theme.TEXT if enabled else theme.TEXT_MUTED}; font-size: 14px; font-weight: 600; background: transparent;")
 
+    def _on_auto_queue(self, enabled: bool) -> None:
+        self.radio.setEnabled(enabled)
+        self._on_change(auto_queue=enabled)
+
     def _on_mini(self, enabled: bool) -> None:
         self._mini_choice = enabled
         self._on_change(mini_player=enabled)
@@ -287,7 +325,6 @@ class SettingsDialog(Modal):
         freed = max(0, before - after)
         self.free_result.setText(f"Liberados {freed} MB (de {before} MB a {after} MB)." if before else "Memoria liberada.")
 
-    # letras orden y activos
     def provider_order(self) -> list[str]:
         return list(self._provider_order)
 

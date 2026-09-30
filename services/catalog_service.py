@@ -31,6 +31,9 @@ ARTIST_TTL = 600
 ARTIST_TOP_SONGS = 5
 ALBUM_TTL = 600
 PLAYLIST_PAGE_FALLBACK_TRACKS = 50
+PLAYLIST_PAGE_SIZE = 50
+PLAYLIST_PAGE_STEP = 100
+PLAYLIST_PAGE_CAP = 1000
 
 FEED_KEY = "feed"
 DISCOVERY_KEY = "home-discovery"
@@ -40,12 +43,9 @@ EXPLORE_TTL = 900
 NEW_RELEASES_TITLE = "Álbumes y sencillos nuevos"
 TRENDING_TITLE = "Tendencias"
 MOODS_TITLE = "Estados de ánimo y géneros"
-NEW_VIDEOS_TITLE = "Videos musicales nuevos"
-POPULAR_ARTISTS_TITLE = "Artistas populares"
 CHART_LISTS_TITLE = "Listas de éxitos"
 
 
-# catalogo cache busqueda
 class CatalogService:
     def __init__(self, gateway: YTMusicGateway, runner: TaskRunner, home_cache_file: str | None = None):
         self._gateway = gateway
@@ -56,7 +56,6 @@ class CatalogService:
     def clear_cache(self) -> None:
         self._cache.clear()
 
-    # idioma contenido cambiar
     def change_language(self, language: str) -> None:
         self._gateway.set_language(language)
         self._cache.clear()
@@ -81,7 +80,6 @@ class CatalogService:
                 sections.append((entry[0], items))
         return sections or None
 
-    # home cache disco
     def load_home(self, on_done: Done, on_error: Fail | None = None, force: bool = False) -> None:
         fresh = None if force else self._cache.get("home")
         if fresh is not None:
@@ -107,7 +105,6 @@ class CatalogService:
 
         self._runner.gather([lambda: self._fetch_home(HOME_SECTIONS), self._fetch_extras], finish, key=FEED_KEY)
 
-    # recomendaciones de canciones recientes
     def discovery_pool(self, seed_ids: list[str], on_done: Done) -> None:
         if not seed_ids:
             on_done([])
@@ -143,10 +140,6 @@ class CatalogService:
         extras: list[Section] = []
         try:
             charts = self._gateway.get_charts()
-            artists = [{"type": "artist", "browseId": a["browseId"], "title": a.get("title", ""),
-                        "thumbnails": a.get("thumbnails", [])}
-                       for a in charts.get("artists") or [] if a.get("browseId", "").startswith("UC")]
-            extras.append((POPULAR_ARTISTS_TITLE, artists[:20]))
             lists = [{"type": "playlist", "playlistId": v["playlistId"], "title": v.get("title", ""),
                       "thumbnails": v.get("thumbnails", [])}
                      for v in charts.get("videos") or [] if v.get("playlistId")]
@@ -155,7 +148,7 @@ class CatalogService:
             log.info("Charts unavailable for the home extras", exc_info=True)
         try:
             for title, items in self._fetch_explore_sections():
-                if title in (TRENDING_TITLE, NEW_VIDEOS_TITLE):
+                if title == TRENDING_TITLE:
                     extras.append((title, items))
         except Exception:
             log.info("Explore unavailable for the home extras", exc_info=True)
@@ -191,7 +184,6 @@ class CatalogService:
 
         self._runner.gather([songs, mixes, playlists], finish, key=FEED_KEY)
 
-    # explorar estantes
     def load_explore(self, on_done: Done, on_error: Fail | None = None) -> None:
         cached = self._cache.get("explore")
         if cached is not None:
@@ -214,9 +206,7 @@ class CatalogService:
             track["type"] = "song"
         moods = [{"type": "mood", "title": m.get("title", ""), "params": m.get("params", "")}
                  for m in data.get("moods_and_genres") or [] if m.get("params")]
-        videos = [{**v, "type": "video"} for v in data.get("new_videos") or [] if v.get("videoId")]
-        sections = [(NEW_RELEASES_TITLE, releases), (TRENDING_TITLE, trending),
-                    (MOODS_TITLE, moods), (NEW_VIDEOS_TITLE, videos)]
+        sections = [(NEW_RELEASES_TITLE, releases), (TRENDING_TITLE, trending), (MOODS_TITLE, moods)]
         return [sec for sec in sections if sec[1]]
 
     def mood_playlists(self, params: str, on_done: Done, on_error: Fail | None = None) -> None:
@@ -270,7 +260,6 @@ class CatalogService:
 
         return self._runner.submit(work, ok, on_error, key=key)
 
-    # similares
     def related(self, video_id: str, on_done: Done, on_error: Fail | None = None) -> None:
         def work() -> dict:
             shelves = [sh.get("contents") for sh in self._gateway.get_related(video_id)
@@ -315,7 +304,6 @@ class CatalogService:
 
         self._runner.submit(work, ok, on_error, key="playlist")
 
-    # perfil artista cache
     def artist_profile(self, browse_id: str, on_done: Done, on_error: Fail | None = None) -> None:
         cached = self._cache.get(("artist", browse_id))
         if cached is not None:
@@ -371,9 +359,11 @@ class CatalogService:
 
         self._runner.submit(work, on_done, on_error, key="collection")
 
-    # playlist pagina
-    def playlist_details(self, playlist_id: str, on_done: Done, on_error: Fail | None = None) -> None:
-        cached = self._cache.get(("playlist_page", playlist_id))
+    # limit=None fetches everything (play/shuffle need the full list)
+    def playlist_details(self, playlist_id: str, on_done: Done, on_error: Fail | None = None,
+                         limit: int | None = None) -> None:
+        cache_key = ("playlist_page", playlist_id, limit)
+        cached = self._cache.get(cache_key)
         if cached is not None:
             on_done(cached)
             return
@@ -381,12 +371,12 @@ class CatalogService:
         def work() -> dict | None:
             raw: dict = {}
             try:
-                raw = self._gateway.get_playlist_page(playlist_id) or {}
+                raw = self._gateway.get_playlist_page(playlist_id, limit=limit) or {}
             except Exception:
                 log.info("Playlist page unavailable for %s, trying its queue", playlist_id, exc_info=True)
             tracks = normalize_tracks(raw.get("tracks") or [])
             if not tracks:
-                queue = self._gateway.get_watch_playlist_for(playlist_id, PLAYLIST_PAGE_FALLBACK_TRACKS)
+                queue = self._gateway.get_watch_playlist_for(playlist_id, limit or PLAYLIST_PAGE_FALLBACK_TRACKS)
                 tracks = normalize_tracks(queue.get("tracks") or [])
             if not tracks:
                 return None
@@ -394,6 +384,7 @@ class CatalogService:
             if isinstance(author, list):
                 author = author[0] if author else None
             author = author if isinstance(author, dict) else {"name": author or ""}
+            total = raw.get("trackCount") or len(tracks)
             return {
                 "id": playlist_id,
                 "title": raw.get("title") or "Mix",
@@ -403,19 +394,20 @@ class CatalogService:
                 "author_id": author.get("id") or "",
                 "description": raw.get("description") or "",
                 "thumbnails": raw.get("thumbnails") or tracks[0].get("thumbnails") or [],
-                "track_count": raw.get("trackCount") or len(tracks),
+                "track_count": total,
                 "duration": raw.get("duration") or "",
                 "tracks": tracks,
+                "has_more": bool(limit) and len(tracks) >= limit and len(tracks) < total,
             }
 
         def ok(page: dict | None) -> None:
-            if page:
-                self._cache.set(("playlist_page", playlist_id), page, PLAYLIST_TTL)
+            if page and not page.get("has_more"):
+                self._cache.set(cache_key, page, PLAYLIST_TTL)
             on_done(page)
 
-        self._runner.submit(work, ok, on_error, key="playlist_page")
+        # own key so other playlist actions don't cancel paging
+        self._runner.submit(work, ok, on_error, key="playlist_page" if limit is None else "playlist_paged")
 
-    # album pagina
     def album(self, browse_id: str, on_done: Done, on_error: Fail | None = None) -> None:
         cached = self._cache.get(("album", browse_id))
         if cached is not None:

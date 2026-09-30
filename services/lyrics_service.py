@@ -8,6 +8,7 @@ from typing import Callable
 from domain.models import Lyrics, lyrics_query
 from infra.concurrency import TaskRunner
 from infra.lyrics_providers import LyricsProvider
+from infra.romanization import UnisonRomanizer
 from infra.ttl_cache import TTLCache
 
 log = logging.getLogger(__name__)
@@ -17,23 +18,29 @@ PROVIDER_COOLDOWN_S = 60
 _NOT_FOUND = object()
 
 
-# letras proveedores cooldown
 class LyricsService:
     def __init__(self, providers: list[LyricsProvider], runner: TaskRunner,
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic, romanizer: UnisonRomanizer | None = None,
+                 romanize: bool = True):
         self._providers = list(providers)
         self._runner = runner
         self._clock = clock
+        self._romanizer = romanizer
+        self._romanize = romanize
         self._cache = TTLCache()
         self._cooldown: dict[str, float] = {}
         self._lock = threading.Lock()
 
-    # letras cambiar proveedores en caliente
     def set_providers(self, providers: list[LyricsProvider]) -> None:
         with self._lock:
             self._providers = list(providers)
             self._cooldown.clear()
         self._cache.clear()
+
+    def set_romanize(self, enabled: bool) -> None:
+        if enabled != self._romanize:
+            self._romanize = enabled
+            self._cache.clear()
 
     def fetch(self, song: dict, on_done: Callable[[Lyrics | None], None],
               on_error: Callable[[Exception], None] | None = None) -> None:
@@ -51,8 +58,7 @@ class LyricsService:
 
         self._runner.submit(lambda: self._search(query), ok, on_error, key="lyrics")
 
-    # letras primer sincronizado
-    # completo false si algun proveedor fallo y no se guarda el resultado
+    # incomplete if a provider failed; not cached
     def _search(self, query) -> tuple[Lyrics | None, bool]:
         fallback: Lyrics | None = None
         complete = True
@@ -71,9 +77,18 @@ class LyricsService:
             if found is None:
                 continue
             if found.synced:
-                return found, True
+                return self._romanized(found), True
             fallback = fallback or found
-        return fallback, complete
+        return self._romanized(fallback) if fallback else fallback, complete
+
+    def _romanized(self, lyrics: Lyrics) -> Lyrics:
+        if not self._romanize or self._romanizer is None:
+            return lyrics
+        try:
+            return self._romanizer.enrich(lyrics)
+        except Exception:
+            log.warning("Romanization failed", exc_info=True)
+            return lyrics
 
     def _cooling_down(self, name: str) -> bool:
         with self._lock:

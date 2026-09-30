@@ -15,7 +15,6 @@ _QT_LEVELS = {
 }
 
 
-# log archivo
 def setup_logging(paths: AppPaths, level: int = logging.INFO) -> None:
     handlers: list[logging.Handler] = []
     try:

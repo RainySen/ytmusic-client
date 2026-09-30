@@ -68,7 +68,6 @@ class Monkey:
         import traceback
         self.recorder.report("driver exception", f"{action.__name__}: {''.join(traceback.format_exception(exc))}")
 
-    # dialogos menus modales
     def _resolve_modal(self) -> None:
         widget = QApplication.activePopupWidget()
         if isinstance(widget, QMenu):

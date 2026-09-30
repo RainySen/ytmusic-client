@@ -6,10 +6,13 @@ QWidget {
     font-size: 13px;
 }
 QLabel { background: transparent; }
+QLabel#card_title { font-size: 13px; font-weight: 600; color: #fff; }
+QLabel#card_subtitle { font-size: 11px; color: #aaa; }
+QLabel#compact_title { font-size: 13px; font-weight: 600; color: #e0e0e0; }
+QLabel#compact_subtitle { font-size: 11px; color: #888; }
 
 #top_bar {
     background: #212121;
-    border-bottom: 1px solid #333;
 }
 #logo_label {
     color: white;
@@ -34,11 +37,9 @@ QLineEdit::placeholder { color: #717171; }
 
 #sidebar {
     background: #212121;
-    border-right: 1px solid #333;
 }
 #right_panel {
     background: #212121;
-    border-left: 1px solid #333;
 }
 
 #player_widget {
@@ -153,5 +154,5 @@ QMenu::separator {
     margin: 4px 8px;
 }
 
-QSplitter::handle { background: #333; width: 1px; height: 1px; }
+QSplitter::handle { background: transparent; width: 1px; height: 1px; }
 """

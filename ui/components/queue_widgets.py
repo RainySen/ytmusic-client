@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QSizePolicy, QL
 import qtawesome as qta
 
 from domain.models import artist_names, thumbnail_url
+from ui import imaging
 from ui.components.lazy_thumbnail import LazyThumbnail
 
 
@@ -17,8 +18,10 @@ class ImprovedQueueItem(QWidget):
         self.song = song
         self.is_current = is_current
         self.drag_start_position = None
+        self._click_pending = False
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setCursor(Qt.PointingHandCursor)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
@@ -30,7 +33,7 @@ class ImprovedQueueItem(QWidget):
         self.play_indicator.setCursor(Qt.OpenHandCursor)
 
         self.thumb = LazyThumbnail(40, radius=4, background="#1e1e1e")
-        self.thumb.set_source(thumbnail_url(song, 80), thumbnails)
+        self.thumb.set_source(thumbnail_url(song, imaging.thumb_px(40)), thumbnails)
         self.thumb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         info_layout = QVBoxLayout()
@@ -139,6 +142,8 @@ class ImprovedQueueItem(QWidget):
             if self.play_indicator.geometry().contains(event.pos()):
                 self.drag_start_position = event.pos()
                 self.play_indicator.setCursor(Qt.ClosedHandCursor)
+            else:
+                self._click_pending = True
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -165,7 +170,11 @@ class ImprovedQueueItem(QWidget):
     def mouseReleaseEvent(self, event):
         self.play_indicator.setCursor(Qt.OpenHandCursor)
         self.drag_start_position = None
+        clicked = self._click_pending and event.button() == Qt.LeftButton and self.rect().contains(event.pos())
+        self._click_pending = False
         super().mouseReleaseEvent(event)
+        if clicked:
+            self.play_clicked.emit(self.index)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

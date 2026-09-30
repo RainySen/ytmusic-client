@@ -46,7 +46,8 @@ def test_garbage_settings_fall_back_to_defaults(raw):
 
 
 def test_valid_values_are_kept_and_roundtrip():
-    original = Settings(False, False, 10, -4, 500, False, 60, False, 35, False)
+    original = Settings(background_on_close=False, mini_player=False, mini_x=10, mini_y=-4, auto_queue=False, radio_size=500,
+                        free_memory=False, free_memory_seconds=60, remember_volume=False, volume=35, restore_queue=False)
     assert Settings.from_dict(original.to_dict()) == original
     assert all(Settings.from_dict({"radio_size": size}).radio_size == size for size in RADIO_SIZE_OPTIONS)
     assert all(Settings.from_dict({"free_memory_seconds": s}).free_memory_seconds == s for s in FREE_MEMORY_OPTIONS)

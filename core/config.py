@@ -25,7 +25,6 @@ QUEUE_HISTORY_LIMIT = 50
 MAX_CONSECUTIVE_PLAY_FAILURES = 3
 
 
-# rutas archivos cache
 @dataclass(frozen=True)
 class AppPaths:
     base_dir: str
@@ -64,6 +63,10 @@ class AppPaths:
         return self._join("lyrics_settings.json")
 
     @property
+    def search_history_file(self) -> str:
+        return self._join("search_history.json")
+
+    @property
     def cache_dir(self) -> str:
         return self._join("cache")
 
@@ -80,6 +83,14 @@ class AppPaths:
         return os.path.join(self.cache_dir, "recent_playlists.json")
 
     @property
+    def pinned_playlists_file(self) -> str:
+        return self._join("pinned_playlists.json")
+
+    @property
+    def listen_again_file(self) -> str:
+        return self._join("listen_again_pins.json")
+
+    @property
     def ytdlp_cache_dir(self) -> str:
         return self._join(".yt-dlp-cache")
 
@@ -87,7 +98,6 @@ class AppPaths:
     def log_file(self) -> str:
         return self._join("ytmusic-client.log")
 
-    # datos usuario carpeta data migrar
     def ensure_dirs(self) -> None:
         os.makedirs(self.data_dir, exist_ok=True)
         self._migrate_legacy()

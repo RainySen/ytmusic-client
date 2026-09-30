@@ -17,7 +17,6 @@ def _fraction_ms(digits: str | None) -> int:
     return int(digits.ljust(3, "0")[:3])
 
 
-# letra lrc lineas tiempos
 def parse_lrc(text: str | None, source: str = "") -> Lyrics | None:
     if not text:
         return None
@@ -85,7 +84,6 @@ def _collect_words(node: ET.Element, words: list[list], line_start: int) -> None
             words[-1][0] += " "
 
 
-# letra ttml silabas palabras
 def parse_ttml(document: str | None, source: str = "") -> Lyrics | None:
     if not document or "<!DOCTYPE" in document or "<!ENTITY" in document:
         return None

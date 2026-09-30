@@ -6,7 +6,6 @@ from domain.settings import Settings
 from infra.settings_repository import SettingsRepository
 
 
-# ajustes cambios
 class SettingsService(QObject):
     changed = Signal(object)
 

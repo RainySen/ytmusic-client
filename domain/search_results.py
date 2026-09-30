@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 
-# busqueda agrupar
 def group_search_results(raw: list[dict]) -> dict[str, Any]:
     top_result = None
     songs: list[dict] = []

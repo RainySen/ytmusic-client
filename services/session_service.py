@@ -14,7 +14,6 @@ log = logging.getLogger(__name__)
 SAVE_DEBOUNCE_MS = 2000
 
 
-# sesion cola guardar restaurar
 class SessionService(QObject):
     def __init__(self, path: str, queue: PlayQueue, streams: StreamService, parent: QObject | None = None,
                  runner: TaskRunner | None = None):
@@ -50,7 +49,6 @@ class SessionService(QObject):
             self._autosave = True
             self._queue.changed.connect(self._timer.start)
 
-    # guardar en segundo plano las colas grandes
     def save(self, wait: bool = False) -> None:
         if not self._restored:
             return

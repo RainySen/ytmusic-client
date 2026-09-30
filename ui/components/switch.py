@@ -10,7 +10,6 @@ WIDTH = 42
 HEIGHT = 24
 
 
-# interruptor on off
 class Switch(QAbstractButton):
     def __init__(self, checked: bool = False):
         super().__init__()

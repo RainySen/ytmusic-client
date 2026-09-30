@@ -240,6 +240,10 @@ def test_volume_and_seek_delegate(rig):
     rig.service.set_volume(40)
     rig.service.seek(0.5)
     assert rig.audio.volume == 40 and rig.audio.seeks == [0.5]
+    rig.service.set_volume(100)
+    assert rig.audio.volume == 100
+    rig.service.set_volume(0)
+    assert rig.audio.volume == 0
 
 
 def test_radio_history_stays_bounded(rig):

@@ -7,23 +7,25 @@ from PySide6.QtWidgets import QSystemTrayIcon
 
 from domain.settings import Settings
 from services.settings_service import SettingsService
+from ui import imaging
 from ui.main_window import MainWindow
 from ui.settings_dialog import SettingsDialog
 
 VOLUME_SAVE_MS = 600
 
 
-# configuracion abrir aplicar volumen
 class SettingsPresenter:
     def __init__(self, window: MainWindow, settings: SettingsService,
                  free_now: Callable[[], tuple[int, int]] | None = None, cache=None,
-                 on_language: Callable[[str], None] | None = None, autostart_available: bool = True):
+                 on_language: Callable[[str], None] | None = None, autostart_available: bool = True,
+                 thumbnails=None):
         self._window = window
         self._free_now = free_now
         self._cache = cache
         self._on_language = on_language
         self._language = settings.settings.content_language
         self._autostart_available = autostart_available
+        self._thumbnails = thumbnails
         self._settings = settings
         self._restoring = False
         self._volume_timer = QTimer(window)
@@ -56,6 +58,9 @@ class SettingsPresenter:
 
     def _apply(self, settings: Settings) -> None:
         self._window.set_close_to_tray(settings.background_on_close)
+        imaging.set_thumbnail_quality(settings.thumbnail_quality)
+        if self._thumbnails is not None:
+            self._thumbnails.set_max_items(settings.thumbnail_cache_limit)
         if settings.content_language != self._language:
             self._language = settings.content_language
             if self._on_language is not None:

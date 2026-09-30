@@ -4,8 +4,9 @@ import sys
 
 import pefile
 
+# qtpy optional modules, blocked at runtime (core/icons.py)
 KEEP_MODULES = {
-    "QtCore", "QtDataVisualization", "QtGui", "QtNetwork", "QtOpenGL", "QtOpenGLWidgets", "QtPrintSupport",
+    "QtCore", "QtGui", "QtNetwork", "QtPrintSupport",
     "QtSvg", "QtWebChannel", "QtWebEngineCore", "QtWebEngineWidgets", "QtWidgets",
 }
 KEEP_LOCALES = {"en-US", "es", "es-419"}
@@ -31,7 +32,6 @@ def _imports(path: str) -> set:
     return names
 
 
-# recortar bundle qt sin usar
 def prune(root: str) -> int:
     qt = os.path.join(root, "PySide6")
     freed = [0]

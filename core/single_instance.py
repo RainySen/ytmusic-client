@@ -8,7 +8,6 @@ WRITE_TIMEOUT_MS = 400
 WAKE_MESSAGE = b"show"
 
 
-# una sola instancia despertar la abierta
 class SingleInstance(QObject):
     activated = Signal()
 

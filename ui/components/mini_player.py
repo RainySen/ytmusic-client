@@ -11,7 +11,6 @@ from ui.components.icon_button import icon_button
 PROGRESS_STEPS = 1000
 
 
-# mini reproductor flotante
 class MiniPlayer(QWidget):
     toggle_requested = Signal()
     next_requested = Signal()
@@ -80,6 +79,10 @@ class MiniPlayer(QWidget):
         self._title.setText(title or "Nada en reproducción")
         self._artist.setText(artist)
         self._progress.setValue(0)
+
+    def set_neighbors(self, previous: str, following: str) -> None:
+        self._previous.setToolTip(f"Anterior: {previous}" if previous else "Anterior")
+        self._next.setToolTip(f"Siguiente: {following}" if following else "Siguiente")
 
     def set_playing(self, playing: bool) -> None:
         self._toggle.setIcon(qta.icon("fa5s.pause" if playing else "fa5s.play", color=theme.TEXT))

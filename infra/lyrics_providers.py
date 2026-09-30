@@ -27,7 +27,7 @@ class LyricsProvider(Protocol):
     def fetch(self, query: LyricsQuery) -> Lyrics | None: ...
 
 
-# reintenta una vez ante error del servidor o corte de conexion
+# retry once on server error or dropped connection
 def _http_get(url: str, params: dict | None = None, headers: dict | None = None):
     for attempt in range(RETRIES + 1):
         last = attempt == RETRIES
@@ -43,7 +43,6 @@ def _http_get(url: str, params: dict | None = None, headers: dict | None = None)
         time.sleep(RETRY_DELAY_S)
 
 
-# letras better lyrics ttml
 class BetterLyricsProvider:
     name = "Better Lyrics"
     URL = "https://api.betterlyrics.org/getLyrics"
@@ -64,7 +63,6 @@ class BetterLyricsProvider:
         return parse_ttml((response.json() or {}).get("ttml"), self.name)
 
 
-# letras lrclib lrc
 class LrcLibProvider:
     name = "LRCLIB"
     BASE = "https://lrclib.net/api"
@@ -110,7 +108,6 @@ class LrcLibProvider:
         return parse_lrc(data.get("syncedLyrics"), self.name) or plain_lyrics(data.get("plainLyrics"), self.name)
 
 
-# letras youtube
 class YouTubeMusicProvider:
     name = "YouTube Music"
 
