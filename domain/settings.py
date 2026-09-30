@@ -13,6 +13,10 @@ CONTENT_LANGUAGES = {
 }
 DEFAULT_CONTENT_LANGUAGE = "es"
 LYRICS_PROVIDER_NAMES = ("betterlyrics", "lrclib", "youtube")
+THUMBNAIL_QUALITY_OPTIONS = ("low", "auto", "high")
+DEFAULT_THUMBNAIL_QUALITY = "auto"
+THUMBNAIL_CACHE_OPTIONS = (100, 200, 400, 800)
+DEFAULT_THUMBNAIL_CACHE = 400
 
 
 def _flag(data: dict, name: str, default: bool) -> bool:
@@ -48,13 +52,18 @@ def _text(data: dict, name: str) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-# ajustes usuario
+def _quality(data: dict) -> str:
+    value = data.get("thumbnail_quality")
+    return value if value in THUMBNAIL_QUALITY_OPTIONS else DEFAULT_THUMBNAIL_QUALITY
+
+
 @dataclass(frozen=True)
 class Settings:
     background_on_close: bool = True
     mini_player: bool = True
     mini_x: int | None = None
     mini_y: int | None = None
+    auto_queue: bool = True
     radio_size: int = DEFAULT_RADIO_SIZE
     free_memory: bool = True
     free_memory_seconds: int = DEFAULT_FREE_MEMORY_S
@@ -67,6 +76,9 @@ class Settings:
     better_lyrics_key: str = ""
     media_keys: bool = True
     notifications: bool = True
+    thumbnail_quality: str = DEFAULT_THUMBNAIL_QUALITY
+    thumbnail_cache_limit: int = DEFAULT_THUMBNAIL_CACHE
+    romanized_lyrics: bool = True
 
     def with_changes(self, **changes) -> "Settings":
         unknown = set(changes) - set(self.__dataclass_fields__)
@@ -88,6 +100,7 @@ class Settings:
             mini_player=_flag(data, "mini_player", True),
             mini_x=_coordinate(data, "mini_x"),
             mini_y=_coordinate(data, "mini_y"),
+            auto_queue=_flag(data, "auto_queue", True),
             radio_size=_choice(data, "radio_size", RADIO_SIZE_OPTIONS, DEFAULT_RADIO_SIZE),
             free_memory=_flag(data, "free_memory", True),
             free_memory_seconds=_choice(data, "free_memory_seconds", FREE_MEMORY_OPTIONS, DEFAULT_FREE_MEMORY_S),
@@ -100,4 +113,7 @@ class Settings:
             better_lyrics_key=_text(data, "better_lyrics_key"),
             media_keys=_flag(data, "media_keys", True),
             notifications=_flag(data, "notifications", True),
+            thumbnail_quality=_quality(data),
+            thumbnail_cache_limit=_choice(data, "thumbnail_cache_limit", THUMBNAIL_CACHE_OPTIONS, DEFAULT_THUMBNAIL_CACHE),
+            romanized_lyrics=_flag(data, "romanized_lyrics", True),
         )

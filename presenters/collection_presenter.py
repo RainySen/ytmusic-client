@@ -4,7 +4,6 @@ from services.notifier import Notifier
 from ui.main_window import MainWindow
 
 
-# acciones colecciones
 class CollectionPresenter:
     def __init__(self, window: MainWindow, actions: CollectionActions, playlists: PlaylistPresenter,
                  notifier: Notifier):

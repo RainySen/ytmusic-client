@@ -14,10 +14,11 @@ log = logging.getLogger(__name__)
 LoginDone = Callable[[bool, str], None]
 
 
-# login sesion
 class AuthService(QObject):
     auth_changed = Signal(bool)
     session_expired = Signal()
+    # explicit logout only, not on expiry
+    logged_out = Signal()
 
     def __init__(self, gateway: YTMusicGateway, runner: TaskRunner, parent: QObject | None = None):
         super().__init__(parent)
@@ -28,7 +29,6 @@ class AuthService(QObject):
     def is_authenticated(self) -> bool:
         return self._gateway.is_authenticated
 
-    # login sesion caducada aviso
     def verify_session(self) -> None:
         if not self._gateway.is_authenticated:
             return
@@ -43,7 +43,6 @@ class AuthService(QObject):
 
         self._runner.submit(self._gateway.verify_session, None, rejected, key="auth:verify")
 
-    # login pegar curl cookies
     def login_with_text(self, pasted: str, on_done: LoginDone) -> None:
         self._authenticate(lambda: session_headers(pasted), on_done)
 
@@ -71,4 +70,5 @@ class AuthService(QObject):
             log.warning("Logout failed", exc_info=True)
             return False
         self.auth_changed.emit(False)
+        self.logged_out.emit()
         return True

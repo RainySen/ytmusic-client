@@ -3,8 +3,10 @@ import logging
 import os
 import sys
 
-import qtawesome as qta
-from PySide6.QtCore import QCoreApplication, Qt
+from core.icons import import_qtawesome, load_used_fonts
+
+qta = import_qtawesome()
+from PySide6.QtCore import QCoreApplication, Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
 from core.bootstrap import build_services, build_ui
@@ -18,7 +20,6 @@ from ui.login_window import LoginWindow
 log = logging.getLogger("app")
 
 
-# entrada app arranque login ui
 def main() -> int:
     paths = AppPaths.detect()
     paths.ensure_dirs()
@@ -28,6 +29,7 @@ def main() -> int:
     QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    load_used_fonts()
     icon = qta.icon("fa5s.music", color="#03adb7")
     app.setWindowIcon(icon)
 

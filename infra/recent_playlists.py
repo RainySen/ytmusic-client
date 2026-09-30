@@ -5,7 +5,6 @@ import threading
 from infra.json_store import read_json, write_json_atomic
 
 
-# playlists recientes
 class RecentPlaylists:
     def __init__(self, path: str, limit: int = 8):
         self._path = path

@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from domain.models import artist_list, thumbnail_url
-from ui import theme
+from ui import imaging, theme
 from ui.components.lazy_thumbnail import LazyThumbnail
 from ui.components.page_parts import MessagePage, back_button
 from ui.components.section_feed import CardsSection
@@ -13,6 +13,7 @@ from ui.components.track_list import TrackList
 COVER_SIZE = 300
 INFO_WIDTH = 340
 DESCRIPTION_CHARS = 220
+LOAD_MORE_MARGIN = 200
 
 _PLAY_QSS = """
     QPushButton { background: white; border: none; border-radius: 28px; }
@@ -40,7 +41,6 @@ def _round_button(icon, size, style, tooltip):
     return button
 
 
-# pagina album playlist
 class AlbumPanel(QWidget):
     back_requested = Signal()
     play_requested = Signal()
@@ -53,6 +53,7 @@ class AlbumPanel(QWidget):
     artist_clicked = Signal(str)
     item_clicked = Signal(dict)
     collection_action_requested = Signal(str, dict)
+    load_more_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -64,9 +65,18 @@ class AlbumPanel(QWidget):
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         outer.addWidget(self._scroll)
         self.tracks = None
+        self._can_load_more = False
+        self._loading_more = False
+        self._scroll.verticalScrollBar().valueChanged.connect(self._maybe_load_more)
 
     def set_loading(self):
         self._scroll.setWidget(MessagePage("Cargando…", self.back_requested.emit))
+
+    def release(self):
+        self.tracks = None
+        self._can_load_more = False
+        self._loading_more = False
+        self._scroll.setWidget(QWidget())
 
     def show_message(self, text):
         self._scroll.setWidget(MessagePage(text, self.back_requested.emit))
@@ -86,7 +96,29 @@ class AlbumPanel(QWidget):
         self._show(playlist, thumbnails, item, owner,
                    dict(numbered=False, show_cover=True, show_artist=True, show_album=True))
 
+    def _maybe_load_more(self, value):
+        bar = self._scroll.verticalScrollBar()
+        if (self._can_load_more and not self._loading_more and self.tracks is not None
+                and not self.tracks.building and value >= bar.maximum() - LOAD_MORE_MARGIN):
+            self._loading_more = True
+            self.tracks.show_loading_more()
+            self.load_more_requested.emit()
+
+    def update_tracks(self, new_tracks, has_more, thumbnails):
+        self._loading_more = False
+        self._can_load_more = has_more
+        self.tracks.hide_loading_more()
+        if new_tracks:
+            self.tracks.append_tracks(new_tracks, thumbnails)
+
+    def load_more_failed(self):
+        self._loading_more = False
+        self._can_load_more = False
+        if self.tracks is not None:
+            self.tracks.hide_loading_more()
+
     def _show(self, data, thumbnails, item, byline, row_options):
+        self._loading_more = False
         page = QWidget()
         column = QVBoxLayout(page)
         column.setContentsMargins(48, 24, 48, 32)
@@ -115,6 +147,7 @@ class AlbumPanel(QWidget):
             more.collection_action_requested.connect(self.collection_action_requested)
             column.addWidget(more)
         column.addStretch()
+        self._can_load_more = bool(data.get("has_more"))
         self._scroll.setWidget(page)
 
     def _artist_links(self, artists):
@@ -139,7 +172,7 @@ class AlbumPanel(QWidget):
         layout.setSpacing(8)
 
         cover = LazyThumbnail(COVER_SIZE, radius=10, background="#1e1e1e")
-        cover.set_source(thumbnail_url(data, COVER_SIZE * 2), thumbnails)
+        cover.set_source(thumbnail_url(data, imaging.thumb_px(COVER_SIZE)), thumbnails)
         layout.addWidget(cover, alignment=Qt.AlignHCenter)
         layout.addSpacing(10)
 

@@ -1,11 +1,20 @@
 import sys
+from datetime import date
 
 from infra.auth_headers import session_id
 
 ENGINE_FLAGS_VAR = "QTWEBENGINE_CHROMIUM_FLAGS"
 NO_CLIENT_HINTS = "--disable-features=UserAgentClientHint"
 
-_FIREFOX_VERSION = "139.0"
+# firefox ships every 4 weeks; outdated user agents get flagged insecure
+_FIREFOX_ANCHOR = (139, date(2025, 5, 27))
+_FIREFOX_CYCLE_DAYS = 28
+
+
+def firefox_version(today: date | None = None) -> str:
+    anchor_version, anchor_day = _FIREFOX_ANCHOR
+    elapsed = ((today or date.today()) - anchor_day).days
+    return f"{anchor_version + max(0, elapsed) // _FIREFOX_CYCLE_DAYS}.0"
 _PLATFORMS = {
     "win32": ("Windows NT 10.0; Win64; x64", "Windows NT 10.0; Win64; x64", "Win32"),
     "darwin": ("Macintosh; Intel Mac OS X 10.15", "Intel Mac OS X 10.15", "MacIntel"),
@@ -13,7 +22,6 @@ _PLATFORMS = {
 }
 
 
-# login cookies chromium embebido
 class WebSessionCookies:
     def __init__(self):
         self._youtube: dict[str, str] = {}
@@ -56,13 +64,13 @@ def _platform(platform: str) -> tuple[str, str, str]:
     return _PLATFORMS.get(key, _PLATFORMS["win32"])
 
 
-# login google user agent firefox
 def google_login_user_agent(platform: str = sys.platform) -> str:
     system = _platform(platform)[0]
-    return f"Mozilla/5.0 ({system}; rv:{_FIREFOX_VERSION}) Gecko/20100101 Firefox/{_FIREFOX_VERSION}"
+    version = firefox_version()
+    return f"Mozilla/5.0 ({system}; rv:{version}) Gecko/20100101 Firefox/{version}"
 
 
-# login google ocultar huella chromium
+# hide chromium fingerprint from google login
 def firefox_disguise_script(platform: str = sys.platform) -> str:
     _, oscpu, navigator_platform = _platform(platform)
     return f"""
@@ -83,7 +91,7 @@ def firefox_disguise_script(platform: str = sys.platform) -> str:
 """
 
 
-# login google flags chromium
+# client hints would reveal chromium
 def configure_web_engine_environment(environ: dict) -> None:
     flags = environ.get(ENGINE_FLAGS_VAR, "")
     if NO_CLIENT_HINTS not in flags.split():

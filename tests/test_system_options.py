@@ -485,6 +485,8 @@ def test_window_account_action_asks_to_log_in_or_confirms_the_logout(rig, monkey
     rig.window.account_action()
     rig.window.set_auth_state(True)
     assert rig.window.logged_in
+    pick_logout = lambda _self, menu: next(a for a in menu.actions() if a.text() == "Cerrar sesión").trigger()
+    monkeypatch.setattr(type(rig.window), "_show_account_menu", pick_logout)
     monkeypatch.setattr(main_window.dialogs, "confirm", lambda *a, **k: False)
     rig.window.account_action()
     monkeypatch.setattr(main_window.dialogs, "confirm", lambda *a, **k: True)

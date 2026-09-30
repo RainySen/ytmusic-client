@@ -12,7 +12,6 @@ from ui.main_window import MainWindow
 MINI_MARGIN = 24
 
 
-# mini reproductor ventana oculta
 class MiniPlayerPresenter:
     def __init__(self, window: MainWindow, playback: PlaybackService, settings: SettingsService,
                  mini: MiniPlayer | None = None):
@@ -30,6 +29,8 @@ class MiniPlayerPresenter:
         playback.track_started.connect(self._on_track)
         playback.playing_changed.connect(mini.set_playing)
         playback.progress.connect(mini.set_position)
+        playback.queue.changed.connect(self._update_neighbors)
+        playback.queue.loop_mode_changed.connect(lambda _mode: self._update_neighbors())
 
         mini.toggle_requested.connect(window.play_pause_clicked)
         mini.next_requested.connect(window.next_clicked)
@@ -45,9 +46,20 @@ class MiniPlayerPresenter:
     def _on_track(self, song: dict) -> None:
         title = song.get("title", "")
         self._mini.set_track(title, artist_names(song, limit=2) or primary_artist(song))
+        self._update_neighbors()
         self._refresh()
 
-    # cerrado hasta que vuelva la ventana
+    def _update_neighbors(self) -> None:
+        queue = self._playback.queue
+        self._mini.set_neighbors(self._describe(queue.peek_previous()), self._describe(queue.peek_next()))
+
+    @staticmethod
+    def _describe(song: dict | None) -> str:
+        if not song:
+            return ""
+        artist = artist_names(song, limit=2) or primary_artist(song)
+        return f"{song.get('title', '')} — {artist}" if artist else song.get("title", "")
+
     def _dismiss(self) -> None:
         self._dismissed = True
         self._refresh()

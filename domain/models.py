@@ -47,7 +47,6 @@ def _width(thumb: dict) -> int:
     return width if isinstance(width, (int, float)) and not isinstance(width, bool) else 0
 
 
-# miniaturas resolucion
 def thumbnail_url(item: dict, min_width: int = 0) -> str:
     raw = item.get("thumbnails")
     thumbs = [t for t in (raw if isinstance(raw, list) else []) if isinstance(t, dict) and isinstance(t.get("url"), str) and t["url"]]
@@ -68,7 +67,6 @@ def format_seconds(total: int) -> str:
     return f"{total // 60}:{total % 60:02d}"
 
 
-# track normalizar
 def normalize_track(raw: dict | None) -> Track | None:
     if not raw or not raw.get("videoId"):
         return None
@@ -85,6 +83,12 @@ def normalize_track(raw: dict | None) -> Track | None:
     album_name = album.get("name") if isinstance(album, dict) else album
     if album_name:
         track["album"] = album_name
+    album_id = album.get("id") if isinstance(album, dict) else None
+    if album_id:
+        track["albumId"] = album_id
+    like = raw.get("likeStatus")
+    if like:
+        track["likeStatus"] = like
     views = _play_count(raw.get("views"))
     if views:
         track["views"] = views
@@ -137,7 +141,6 @@ def release_label(kind: Any, default: str = "Álbum") -> str:
     return _RELEASE_LABELS.get(str(kind or "").strip().lower(), default)
 
 
-# album single ep
 def normalize_release(raw: dict, default_kind: str = "Álbum") -> dict | None:
     if not raw.get("browseId"):
         return None
@@ -187,7 +190,6 @@ def normalize_artist_card(raw: dict) -> dict | None:
     }
 
 
-# home secciones
 def parse_home_section(section: dict) -> list[dict]:
     items = []
     for item in section.get("contents") or []:
@@ -195,13 +197,16 @@ def parse_home_section(section: dict) -> list[dict]:
             continue
         thumbs = item.get("thumbnails", [])
         if "videoId" in item:
-            items.append({
+            song = {
                 "type": "song",
                 "videoId": item.get("videoId"),
                 "title": item.get("title", "Sin título"),
                 "artists": item.get("artists", []),
                 "thumbnails": thumbs,
-            })
+            }
+            if item.get("likeStatus"):
+                song["likeStatus"] = item["likeStatus"]
+            items.append(song)
         elif "playlistId" in item:
             items.append({
                 "type": "playlist",
@@ -232,9 +237,9 @@ class LyricLine:
     time_ms: int = 0
     end_ms: int = 0
     words: tuple[LyricWord, ...] = ()
+    romanization: str = ""
 
 
-# letra modelo sync
 @dataclass(frozen=True)
 class Lyrics:
     lines: tuple[LyricLine, ...]
@@ -262,13 +267,11 @@ class LyricsQuery:
 _TITLE_NOISE = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]|\s+-\s+(topic|official.*|lyrics?|audio|video)$", re.IGNORECASE)
 
 
-# titulo limpiar
 def clean_title(title: str) -> str:
     cleaned = _TITLE_NOISE.sub("", title or "").strip()
     return cleaned or (title or "").strip()
 
 
-# letra consulta
 def lyrics_query(song: dict) -> LyricsQuery:
     duration = song.get("duration")
     seconds = round(parse_time_ms(duration) / 1000) if isinstance(duration, str) else int(song.get("duration_seconds") or 0)
@@ -298,7 +301,6 @@ def parse_time_ms(value: Any) -> int:
         return 0
 
 
-# letra youtube
 def parse_lyrics(data: dict | None) -> Lyrics | None:
     if not data:
         return None

@@ -1,5 +1,6 @@
 import random
 
+from infra.listen_again_pins import ListenAgainPins
 from ui.main_window import MainWindow
 from services.catalog_service import CatalogService
 from services.item_opener import ItemOpener
@@ -7,16 +8,20 @@ from services.notifier import Notifier
 from services.playback_service import PlaybackService
 
 ALL_MOODS = "Todos"
+LISTEN_AGAIN_TITLE = "Volver a escucharlo"
+LISTEN_AGAIN_KEYS = ("volver a escuchar", "listen again")
 SEED_COUNT = 2
 SWAP_FRACTION = 0.4
 MIN_SHELF_SONGS = 4
+REORDER_CHANCE = 0.35
 
 
-# home moods
 class HomePresenter:
     def __init__(self, window: MainWindow, catalog: CatalogService, playback: PlaybackService,
-                 opener: ItemOpener, notifier: Notifier, rng: random.Random | None = None):
+                 opener: ItemOpener, notifier: Notifier, rng: random.Random | None = None,
+                 pins: ListenAgainPins | None = None):
         self._rng = rng or random.Random()
+        self._pins = pins
         self._sections: list = []
         self._swaps: dict[str, dict[str, dict]] = {}
         self._pool_ready: list | None = None
@@ -55,7 +60,6 @@ class HomePresenter:
         elif not self._has_content:
             self.refresh(force=False)
 
-    # boton inicio recarga el feed
     def reload(self) -> None:
         self._window.show_view("home")
         self._released = False
@@ -63,6 +67,7 @@ class HomePresenter:
         self._panel.reset_mood()
         self._swaps = {}
         if self._sections:
+            self._sections = self._maybe_reorder(self._sections)
             self._render(self._sections, reset_scroll=True)
             ready, self._pool_ready = self._pool_ready, None
             if ready:
@@ -76,7 +81,6 @@ class HomePresenter:
             self._panel.set_loading()
         self.refresh(force=True)
 
-    # liberar ram segundo plano
     def release(self) -> None:
         self._panel.feed.clear()
         self._has_content = False
@@ -125,11 +129,33 @@ class HomePresenter:
         self._scroll_top = False
         sections = self._with_swaps(sections)
         self._sections = sections
-        self._panel.set_sections(sections, self._window.thumbnails, reset_scroll=reset_scroll)
+        self._panel.set_sections(self._with_pins(sections), self._window.thumbnails, reset_scroll=reset_scroll)
         if self._pool_ready is None:
             self._prefetch_pool()
 
-    # recargar cambia canciones por recomendaciones nuevas
+    def refresh_pins(self) -> None:
+        if self._has_content and not self._released and self._sections:
+            self._panel.set_sections(self._with_pins(self._sections), self._window.thumbnails, reset_scroll=False)
+
+    # local pins first in listen again; shelf created if missing; not in moods
+    def _with_pins(self, sections):
+        pinned = self._pins.songs() if self._pins is not None and self._mood == ALL_MOODS else []
+        if not pinned:
+            return sections
+        pinned_ids = {s["videoId"] for s in pinned}
+        for position, (title, items) in enumerate(sections):
+            if any(key in title.lower() for key in LISTEN_AGAIN_KEYS):
+                rest = [i for i in items if i.get("videoId") not in pinned_ids]
+                return [*sections[:position], (title, pinned + rest), *sections[position + 1:]]
+        return [(LISTEN_AGAIN_TITLE, pinned), *sections]
+
+    # randomly swap the first shelves, like ytmusic
+    def _maybe_reorder(self, sections):
+        if len(sections) < 2 or self._rng.random() >= REORDER_CHANCE:
+            return sections
+        first, second, *rest = sections
+        return [second, first, *rest]
+
     def _seed_ids(self) -> list[str]:
         for _title, items in self._sections:
             songs = [i["videoId"] for i in items if i.get("type") == "song" and i.get("videoId")]
@@ -137,7 +163,6 @@ class HomePresenter:
                 return self._rng.sample(songs, min(SEED_COUNT, len(songs)))
         return []
 
-    # recomendaciones listas para el proximo clic
     def _prefetch_pool(self) -> None:
         if self._pool_pending or self._mood != ALL_MOODS:
             return

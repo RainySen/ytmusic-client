@@ -8,7 +8,6 @@ DETAIL_CHUNK = 15
 DETAIL_MAX_SECTIONS = 4
 
 
-# explorar
 class ExplorePresenter:
     def __init__(self, window: MainWindow, catalog: CatalogService, playback: PlaybackService,
                  opener: ItemOpener, notifier: Notifier):
@@ -37,12 +36,10 @@ class ExplorePresenter:
             return
         self.show_shelves()
 
-    # liberar ram segundo plano
     def release(self) -> None:
         self._panel.feed.clear()
         self._released = True
 
-    # idioma cambiado descartar estantes
     def invalidate(self) -> None:
         self._sections = []
         if self._window.current_view == "explore":

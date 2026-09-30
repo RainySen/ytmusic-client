@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any, Callable
 
-from domain.models import LOCAL_SOURCES, Track, normalize_tracks
+from domain.models import LOCAL_SOURCES, Track, normalize_artist_card, normalize_tracks
 from infra.concurrency import TaskRunner
 from infra.playlist_repository import LocalPlaylistRepository
+from infra.pinned_playlists import PinnedPlaylists
 from infra.recent_playlists import RecentPlaylists
 from infra.ytmusic_gateway import YTMusicGateway
 from services.catalog_service import CatalogService
@@ -14,17 +14,17 @@ from services.catalog_service import CatalogService
 log = logging.getLogger(__name__)
 
 RECENT_SHOWN = 4
+SONGS_PAGE = 50
+LIKED_PAGE = 50
+PAGE_STEP = 100
+PAGE_CAP = 1000
+LIBRARY_ARTISTS = 100
+CHANNEL_ID = "__self__"
+CHANNEL_HISTORY_SONGS = 10
+CHANNEL_ARTISTS = 8
 
 Done = Callable[[Any], None]
 Fail = Callable[[Exception], None]
-
-_PLAYLIST_URL_RE = re.compile(r"(?:list=)([a-zA-Z0-9\-_]+)")
-
-
-def extract_playlist_id(url: str) -> str | None:
-    match = _PLAYLIST_URL_RE.search(url or "")
-    return match.group(1) if match else None
-
 
 def _summary(playlist: dict) -> dict:
     tracks = playlist.get("tracks", [])
@@ -34,26 +34,37 @@ def _summary(playlist: dict) -> dict:
         "source": playlist.get("source", "local"),
         "track_count": playlist.get("track_count", len(tracks)),
         "thumbnails": tracks[0].get("thumbnails", []) if tracks else [],
+        "updated_at": playlist.get("updated_at") or playlist.get("created_at", ""),
     }
 
 
-# biblioteca playlists
 class LibraryService:
     def __init__(self, gateway: YTMusicGateway, repository: LocalPlaylistRepository,
-                 catalog: CatalogService, runner: TaskRunner, recents: RecentPlaylists | None = None):
+                 catalog: CatalogService, runner: TaskRunner, recents: RecentPlaylists | None = None,
+                 pins: PinnedPlaylists | None = None):
         self._gateway = gateway
         self._repo = repository
         self._catalog = catalog
         self._runner = runner
         self._recents = recents
+        self._pins = pins
+        self._remote: list[dict] | None = None
+        self._waiters: list[tuple[Done, bool]] = []
 
     def local_summaries(self) -> list[dict]:
         return [_summary(p) for p in self._repo.all()]
 
+    # one shared request for grid and rail; cache served first, re-notify only on change
     def playlists(self, on_done: Done) -> None:
-        local = self.local_summaries()
         if not self._gateway.is_authenticated:
-            on_done(local)
+            self._remote = None
+            on_done(self._sorted(self.local_summaries()))
+            return
+        cached = self._remote is not None
+        if cached:
+            on_done(self._sorted(self.local_summaries() + self._remote))
+        self._waiters.append((on_done, cached))
+        if len(self._waiters) > 1:
             return
 
         def work() -> list[dict]:
@@ -66,11 +77,53 @@ class LibraryService:
                 "thumbnails": p.get("thumbnails", []),
             } for p in remote]
 
+        def finish(remote: list[dict] | None) -> None:
+            changed = remote is not None and remote != self._remote
+            if remote is not None:
+                self._remote = remote
+            waiters, self._waiters = self._waiters, []
+            result = self._sorted(self.local_summaries() + (self._remote or []))
+            for callback, served in waiters:
+                if changed or not served:
+                    callback(result)
+
         def fallback(exc: Exception) -> None:
             log.warning("Library playlists failed: %s", exc)
-            on_done(local)
+            finish(None)
 
-        self._runner.submit(work, lambda remote: on_done(local + remote), fallback, key="library:playlists")
+        self._runner.submit(work, finish, fallback, key="library:playlists")
+
+    def library_artists(self, on_done: Done) -> None:
+        if not self._gateway.is_authenticated:
+            on_done(self.artists())
+            return
+
+        def work() -> list[dict]:
+            raw = self._gateway.get_library_artists(limit=LIBRARY_ARTISTS)
+            return [a for a in (normalize_artist_card(a) for a in raw) if a]
+
+        def fallback(exc: Exception) -> None:
+            log.warning("Library artists failed: %s", exc)
+            on_done(self.artists())
+
+        self._runner.submit(work, lambda found: on_done(found or self.artists()), fallback, key="library:artists")
+
+    def _sorted(self, playlists: list[dict]) -> list[dict]:
+        pins = self._pins.ids() if self._pins else []
+        by_id = {p["playlistId"]: p for p in playlists if p.get("playlistId")}
+        pinned = [{**by_id[i], "pinned": True} for i in pins if i in by_id]
+        rest = [p for p in playlists if p.get("playlistId") not in pins]
+        rest.sort(key=lambda p: p.get("updated_at", ""), reverse=True)
+        return pinned + [{**p, "pinned": False} for p in rest]
+
+    def toggle_pin(self, playlist_id: str) -> bool:
+        return self._pins.toggle(playlist_id) if self._pins else False
+
+    def delete_local_playlist(self, playlist_id: str) -> bool:
+        ok = self._repo.delete(playlist_id)
+        if ok and self._pins:
+            self._pins.discard(playlist_id)
+        return ok
 
     def playlist_tracks(self, entry: dict, on_done: Done, on_error: Fail | None = None) -> None:
         playlist_id = entry.get("playlistId", "")
@@ -81,7 +134,6 @@ class LibraryService:
             return
         self._catalog.playlist(playlist_id, on_done, on_error)
 
-    # playlist guardar cloud local
     def save_playlist(self, title: str, tracks: list[Track], *, cloud: bool, on_done: Done) -> None:
         local_ok = self._repo.add(title, tracks, "user_created") is not None
         if not (cloud and self._gateway.is_authenticated):
@@ -108,7 +160,6 @@ class LibraryService:
 
         self.playlists(ready)
 
-    # playlist agregar
     def add_to_playlist(self, entry: dict, tracks: Track | list[Track], on_done: Done) -> None:
         playlist_id = entry["playlistId"]
         tracks = [tracks] if isinstance(tracks, dict) else list(tracks)
@@ -132,34 +183,84 @@ class LibraryService:
 
         self._runner.submit(work, lambda ok: finish("added" if ok else "failed"), failed)
 
-    def save_imported(self, title: str, tracks: list[Track], *, cloud: bool, on_done: Done) -> None:
-        if cloud and self._gateway.is_authenticated:
-            def work() -> bool:
-                ids = [t["videoId"] for t in tracks if t.get("videoId")]
-                return bool(self._gateway.create_playlist(title, "Importada desde YTMusic Client", ids))
+    def like_status(self, video_id: str, on_done: Done) -> None:
+        self._runner.submit(lambda: self._gateway.get_like_status(video_id), on_done, lambda _exc: on_done(None),
+                            key="like-status")
 
-            def failed(exc: Exception) -> None:
-                log.warning("Cloud save failed: %s", exc)
-                on_done(("YouTube Music", False))
+    def set_like(self, video_id: str, liked: bool, on_done: Done) -> None:
+        def failed(exc: Exception) -> None:
+            log.warning("Rating %s failed: %s", video_id, exc)
+            on_done(False)
 
-            self._runner.submit(work, lambda ok: on_done(("YouTube Music", ok)), failed)
+        self._runner.submit(lambda: self._gateway.rate_song(video_id, "LIKE" if liked else "INDIFFERENT"),
+                            lambda _: on_done(True), failed)
+
+    # no cursor in ytmusicapi: each page asks again with a larger limit
+    def liked_songs(self, on_done: Done, limit: int = LIKED_PAGE) -> None:
+        if not self._gateway.is_authenticated:
+            on_done(None)
             return
-        on_done(("local", self._repo.add(title, tracks, "imported") is not None))
 
-    def songs(self, on_done: Done) -> None:
+        def failed(exc: Exception) -> None:
+            log.warning("Liked songs failed: %s", exc)
+            on_done(None)
+
+        self._runner.submit(lambda: normalize_tracks(self._gateway.get_liked_songs(limit=limit)),
+                            on_done, failed, key="library:liked")
+
+    def songs(self, on_done: Done, limit: int = SONGS_PAGE) -> None:
         local = self._local_songs()
         if not self._gateway.is_authenticated:
             on_done(local)
             return
 
         def work() -> list[Track]:
-            return normalize_tracks(self._gateway.get_library_songs(limit=50))
+            return normalize_tracks(self._gateway.get_library_songs(limit=limit))
 
         def fallback(exc: Exception) -> None:
             log.warning("Library songs failed: %s", exc)
             on_done(local)
 
         self._runner.submit(work, lambda songs: on_done(songs or local), fallback, key="library:songs")
+
+    def channel_profile(self, on_done: Done) -> None:
+        if not self._gateway.is_authenticated:
+            on_done(None)
+            return
+
+        def work() -> dict:
+            account = self._gateway.get_account_info()
+            try:
+                history = normalize_tracks(self._gateway.get_history())[:CHANNEL_HISTORY_SONGS]
+            except Exception:
+                log.info("History unavailable for the channel page", exc_info=True)
+                history = []
+            try:
+                raw_artists = self._gateway.get_library_artists(limit=CHANNEL_ARTISTS)
+                artists = [a for a in (normalize_artist_card(a) for a in raw_artists) if a]
+            except Exception:
+                log.info("Library artists unavailable for the channel page", exc_info=True)
+                artists = []
+            photo = account.get("accountPhotoUrl")
+            return {
+                "id": CHANNEL_ID,
+                "name": account.get("accountName") or "",
+                "subscribers": account.get("channelHandle") or "",
+                "description": "",
+                "banner": [{"url": photo}] if photo else [],
+                "top_songs": history,
+                "songs_title": "Escuchado recientemente",
+                "songs_browse_id": "",
+                "shuffle_id": "",
+                "radio_id": "",
+                "sections": [("Tus artistas favoritos", artists)] if artists else [],
+            }
+
+        def failed(exc: Exception) -> None:
+            log.warning("Channel profile failed: %s", exc)
+            on_done(None)
+
+        self._runner.submit(work, on_done, failed, key="library:channel")
 
     def artists(self) -> list[dict]:
         artist_map: dict[str, dict] = {}

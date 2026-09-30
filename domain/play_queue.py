@@ -11,7 +11,6 @@ LOOP_QUEUE = 1
 LOOP_SONG = 2
 
 
-# cola reproduccion
 class PlayQueue(QObject):
     changed = Signal()
     loop_mode_changed = Signal(int)
@@ -28,6 +27,7 @@ class PlayQueue(QObject):
         self._loop_mode = LOOP_OFF
         self._radio_limit = radio_limit
         self._radio_seed: str | None = None
+        self._auto_ids: set[str] = set()
 
     def __len__(self) -> int:
         return len(self._songs)
@@ -72,13 +72,23 @@ class PlayQueue(QObject):
         start = self._index + 1
         return self._songs[start:start + count]
 
+    def peek_next(self) -> Track | None:
+        if self._index < len(self._songs) - 1:
+            return self._songs[self._index + 1]
+        if self._loop_mode == LOOP_QUEUE and self._songs:
+            return self._songs[0]
+        return None
+
+    def peek_previous(self) -> Track | None:
+        target = self._index if self._detached else self._index - 1
+        return self._songs[target] if 0 <= target < len(self._songs) else None
+
     def contains(self, video_id: str) -> bool:
         return any(s.get("videoId") == video_id for s in self._songs)
 
     def video_ids(self) -> set[str]:
         return {s.get("videoId") for s in self._songs if s.get("videoId")}
 
-    # cola avanzar
     def next(self) -> Track | None:
         if self._index < len(self._songs) - 1:
             self._index += 1
@@ -107,10 +117,10 @@ class PlayQueue(QObject):
         self.changed.emit()
         return self._songs[index]
 
-    # cola reemplazar
     def replace(self, songs: list[Track], index: int = 0, radio_seed: str | None = None) -> Track | None:
         self._songs = list(songs)
         self._radio_seed = radio_seed
+        self._auto_ids = set()
         self._detached = False
         self._index = index if 0 <= index < len(self._songs) else (0 if self._songs else -1)
         self.changed.emit()
@@ -120,6 +130,7 @@ class PlayQueue(QObject):
         songs = [s for s in songs if isinstance(s, dict) and s.get("videoId")]
         self._songs = songs
         self._radio_seed = None
+        self._auto_ids = set()
         self._detached = False
         self._index = index if 0 <= index < len(songs) else -1
         self.changed.emit()
@@ -133,7 +144,6 @@ class PlayQueue(QObject):
         self.changed.emit()
         return became_current
 
-    # cola siguiente
     def insert_next(self, song: Track) -> bool:
         if self._index == -1 and not self._songs:
             return self.append(song)
@@ -207,7 +217,6 @@ class PlayQueue(QObject):
         self._detached = False
         self.changed.emit()
 
-    # cola aleatorio
     def shuffle_upcoming(self, rng: random.Random | None = None) -> None:
         start = self._index + 1
         upcoming = self._songs[start:]
@@ -226,8 +235,7 @@ class PlayQueue(QObject):
         self.changed.emit()
         return excess
 
-    # cola extender
-    def extend_unique(self, songs: list[Track], limit: int | None = None) -> int:
+    def extend_unique(self, songs: list[Track], limit: int | None = None, auto: bool = False) -> int:
         seen = self.video_ids()
         added = 0
         for song in songs:
@@ -238,6 +246,8 @@ class PlayQueue(QObject):
                 break
             self._songs.append(song)
             seen.add(vid)
+            if auto:
+                self._auto_ids.add(vid)
             added += 1
         if added:
             if self._index == -1:
@@ -245,14 +255,26 @@ class PlayQueue(QObject):
             self.changed.emit()
         return added
 
-    # cola radio
     def start_radio(self, seed: Track) -> Track | None:
         return self.replace([seed], 0, radio_seed=seed.get("videoId"))
 
     def add_radio_tail(self, seed_video_id: str, recommendations: list[Track]) -> int:
         if self._radio_seed != seed_video_id:
             return 0
-        return self.extend_unique(recommendations, limit=self._radio_limit)
+        return self.extend_unique(recommendations, limit=self._radio_limit, auto=True)
+
+    # autoplay off: drop pending suggestions, keep user picks
+    def drop_auto_upcoming(self) -> int:
+        self._radio_seed = None
+        start = self._index + 1
+        upcoming = self._songs[start:]
+        kept = [s for s in upcoming if s.get("videoId") not in self._auto_ids]
+        removed = len(upcoming) - len(kept)
+        if removed:
+            self._songs = self._songs[:start] + kept
+            self._auto_ids &= {s.get("videoId") for s in self._songs[:start]}
+            self.changed.emit()
+        return removed
 
     def toggle_loop(self) -> int:
         self._loop_mode = (self._loop_mode + 1) % 3

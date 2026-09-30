@@ -11,7 +11,6 @@ VALUE_NAME = "YTMusicClient"
 BACKGROUND_FLAG = "--background"
 
 
-# comando de arranque en segundo plano
 def launch_command(frozen: bool | None = None, executable: str | None = None, script: str | None = None) -> str:
     frozen = getattr(sys, "frozen", False) if frozen is None else frozen
     executable = executable or sys.executable
@@ -23,7 +22,6 @@ def launch_command(frozen: bool | None = None, executable: str | None = None, sc
     return f'"{interpreter}" "{script}" {BACKGROUND_FLAG}'
 
 
-# inicio con windows registro
 class Autostart:
     def __init__(self, key: str = RUN_KEY, name: str = VALUE_NAME):
         self._key = key

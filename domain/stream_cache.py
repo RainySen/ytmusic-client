@@ -37,7 +37,6 @@ def expiry_from_url(url: str, default_ttl: float = DEFAULT_TTL_S, now: float | N
     return now + default_ttl
 
 
-# cache streams expiracion
 class StreamCache:
     def __init__(self, margin: float = 0.0, max_size: int = 256):
         self._items: "OrderedDict[str, StreamInfo]" = OrderedDict()

@@ -18,7 +18,6 @@ class _ProcessMemoryCounters(ctypes.Structure):
     ]
 
 
-# ram fisica del proceso en mb
 def working_set_mb() -> int:
     if sys.platform != "win32":
         return 0
@@ -36,7 +35,25 @@ def working_set_mb() -> int:
     return 0
 
 
-# devolver ram al sistema
+class _LastInputInfo(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+
+# system-wide idle seconds, 0 if unknown
+def idle_seconds() -> float:
+    if sys.platform != "win32":
+        return 0.0
+    try:
+        info = _LastInputInfo()
+        info.cbSize = ctypes.sizeof(info)
+        if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info)):
+            return 0.0
+        now = ctypes.windll.kernel32.GetTickCount() & 0xFFFFFFFF
+        return ((now - info.dwTime) & 0xFFFFFFFF) / 1000.0
+    except (AttributeError, OSError):
+        return 0.0
+
+
 def trim() -> None:
     gc.collect()
     if sys.platform != "win32":

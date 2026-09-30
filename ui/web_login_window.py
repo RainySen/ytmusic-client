@@ -26,9 +26,14 @@ MAX_HANDOFFS = 2
 DISGUISE_SCRIPT_NAME = "firefox-disguise"
 WAITING_HINT = "Terminando de iniciar sesión…"
 NO_SESSION_HINT = "Todavía no se detecta tu sesión de Google. Termina de iniciar sesión primero."
+REJECTED_PATH = "/signin/rejected"
+MAX_REJECT_RETRIES = 2
+RETRY_DELAY_MS = 1500
+RETRYING_HINT = "Google rechazó este intento (pasa a veces). Reintentando…"
+GAVE_UP_HINT = ("Google sigue rechazando el inicio desde esta ventana. Cierra y vuelve a intentar en unos minutos, "
+                "o usa «Pegar cURL o cookies».")
 
 
-# ventanas nuevas en la misma pagina
 class LoginPage(QWebEnginePage):
     def createWindow(self, _window_type):
         child = QWebEnginePage(self.profile(), self)
@@ -42,7 +47,6 @@ class LoginPage(QWebEnginePage):
         child.deleteLater()
 
 
-# login google chromium embebido
 class WebLoginWindow(QWidget):
     session_captured = Signal(dict, str)
     closed = Signal()
@@ -54,6 +58,7 @@ class WebLoginWindow(QWidget):
         self._disposed = False
         self._on_music = False
         self._handoffs = 0
+        self._rejections = 0
 
         self.setWindowTitle("Iniciar sesión con Google")
         self.resize(520, 720)
@@ -127,10 +132,21 @@ class WebLoginWindow(QWidget):
                  self._cookies.has_google_session(), self._cookies.has_session())
         if self._on_music:
             self._settle.start()
+        elif url.host() == AUTH_HOST and REJECTED_PATH in url.path():
+            self._on_rejected()
         else:
             self._handoff_timer.start()
 
-    # google salio de accounts y no llego a music
+    # google randomly rejects embedded browsers; a retry usually works
+    def _on_rejected(self) -> None:
+        if self._rejections >= MAX_REJECT_RETRIES:
+            self._status.setText(GAVE_UP_HINT)
+            return
+        self._rejections += 1
+        self._status.setText(RETRYING_HINT)
+        QTimer.singleShot(RETRY_DELAY_MS, self, lambda: self._page.load(QUrl(LOGIN_URL)))
+
+    # signed in but stuck outside music: hand off
     def _handoff_if_needed(self) -> None:
         if self._done or self._on_music:
             return

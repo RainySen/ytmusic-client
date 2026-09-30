@@ -11,7 +11,6 @@ log = logging.getLogger(__name__)
 _write_lock = threading.Lock()
 
 
-# leer json
 def read_json(path: str, default: Any = None) -> Any:
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -23,7 +22,6 @@ def read_json(path: str, default: Any = None) -> Any:
         return default
 
 
-# guardar json atomico
 def write_json_atomic(path: str, data: Any, indent: int | None = 2) -> bool:
     directory = os.path.dirname(path) or "."
     tmp_path = None

@@ -28,12 +28,19 @@ Inspirado en [ytmdesktop](https://github.com/ytmdesktop/ytmdesktop). No está af
 
 - **Explorar y buscar:** inicio con estantes y estados de ánimo, Explorar (lanzamientos, tendencias, géneros) y búsqueda de canciones, artistas, álbumes y playlists.
 - **Páginas propias:** perfil de artista (Aleatorio, Mix, canciones populares, discografía), álbumes, sencillos y EP, y playlists, con botón de volver.
-- **Reproductor:** cola con arrastrar y soltar, radio automática, aleatorio, repetición y pestañas *A continuación*, *Letra* y *Similares*.
+- **Reproductor:** cola con arrastrar y soltar, radio automática, aleatorio, repetición, Me gusta, silencio y pestañas *A continuación*, *Letra* y *Similares*. La barra de progreso va delgada arriba de todo, de borde a borde, dejando el resto para los controles, como en YouTube Music. Un clic en la barra abre el reproductor y el clic derecho muestra un menú con los controles; el nombre del artista y del álbum llevan a su página. Un clic en la barra de progreso o de volumen salta directo a ese punto. El corazón de Me gusta aparece de una vez cuando la canción ya trae ese dato (radio, discografía de un artista); si no, se consulta aparte. En la discografía de un artista, las canciones que ya tienen Me gusta muestran un corazón junto a la duración.
+- **Reproducción automática:** un switch arriba de la cola (además del ajuste en Configuración) la llena sola con recomendaciones cuando eliges una canción, igual que el de YouTube Music.
+- **Tu canal:** haz clic en tu foto de cuenta y elige "Tu canal" para ver tu nombre, tu foto, lo que escuchaste hace poco y tus artistas favoritos de tu biblioteca, con "Aleatorio" y "Mix" para reproducirlo. La API de YouTube Music no expone un conteo real de reproducciones para esto, así que la lista de canciones es tu historial reciente, no un ranking.
+- **Ir al artista:** en el menú de cualquier canción (clic derecho o botón ⋮, en listas, Inicio y búsqueda) y en el clic derecho de la barra del reproductor. Abre la página del artista principal de la canción.
+- **Fijar en volver a escuchar:** desde esos mismos menús puedes fijar una canción para que aparezca primero en el estante "Volver a escucharlo" del Inicio (si YouTube Music no manda ese estante, se crea). Se quita con "Quitar de volver a escuchar". **El fijado es solo local:** se guarda en `data/listen_again_pins.json` (hasta 30 canciones), se borra al cerrar sesión (no si la sesión solo caduca) y no se sincroniza con tu cuenta de YouTube Music ni con otros dispositivos, porque la librería que usamos para hablar con YouTube Music (ytmusicapi) no expone la función de fijar de la app oficial.
+- **Tus playlists:** el botón de las tres líneas, junto al logo, despliega un panel con tus playlists ordenadas por modificación reciente; las fijadas van primero. Cada una tiene sus tres puntos con las mismas opciones que el clic derecho: fijar, reproducir a continuación, agregar a la cola o eliminar (las locales).
 - **Menús contextuales:** el botón de tres puntos y el clic derecho permiten reproducir a continuación, agregar a la cola y guardar en una playlist, ya sea local o de tu cuenta.
 - **Letras sincronizadas** por línea o por palabra (ver [Letras](#letras)).
+- **Biblioteca:** tus playlists, canciones guardadas, canciones con Me gusta y artistas más escuchados. Las canciones se cargan por tandas: al llegar al final de la lista se piden más solas, en vez de traerlas todas de golpe.
+- **Búsqueda:** guarda tus últimas búsquedas y las sugiere al volver a escribir; el mejor resultado se destaca arriba.
 - **Sesión:** inicio con Google o pegando cURL o cookies, con aviso cuando la sesión caduca.
 - **Rendimiento:** arranque rápido desde la última sesión, miniaturas y secciones que se cargan al verlas y precarga de las próximas canciones.
-- **Bandeja del sistema:** al minimizar sigue sonando.
+- **Bandeja del sistema:** al minimizar sigue sonando. Un clic en el icono de la bandeja abre la ventana y recarga el inicio, igual que el botón Inicio.
 
 Solo se ha probado en Windows 10 y 11.
 
@@ -43,14 +50,17 @@ El engranaje de la barra superior abre la configuración; los cambios se aplican
 
 - **Seguir en segundo plano al cerrar:** al cerrar la ventana la música sigue y la app queda en la bandeja. Si se apaga, cerrar la ventana cierra la app.
 - **Mini reproductor:** ventana pequeña siempre visible con los controles cuando minimizas o cierras a la bandeja. Se puede mover y recuerda su posición.
+- **Cola automática:** al elegir una canción, la cola se llena sola con recomendaciones y se sigue extendiendo al llegar al final. Apagada, solo suena lo que elijas.
 - **Cola de radio:** cuántas canciones se cargan al elegir una canción (de 5 hasta 1000 o ilimitada). Las primeras 50 llegan junto con la canción (~2 s) y el resto se carga en segundo plano por etapas; con "ilimitada" la cola se sigue extendiendo sola. El tamaño casi no afecta a la memoria: cada canción ocupa unos 230 bytes.
-- **Liberar memoria en segundo plano:** con la ventana cerrada o minimizada se descartan miniaturas y listas tras 10 s, 20 s, 1 min o 3 min, y se recargan al volver. El botón **Liberar RAM ahora** hace lo mismo al instante, sin cerrar la ventana, y muestra cuántos MB devolvió al sistema (equivale a "Empty Working Set" de RAMMap).
+- **Liberar memoria en segundo plano:** con la ventana cerrada, minimizada o en modo mini reproductor se descartan miniaturas y listas tras 10 s, 20 s, 1 min o 3 min, se recargan al volver y, mientras siga oculta, la RAM se vuelve a recortar cada minuto. Con la ventana abierta también se limpia cada ese tiempo lo que no estás viendo, pero solo si no estás usando la app (está detrás de otra ventana, por ejemplo un juego, o no tocaste mouse ni teclado en ese tiempo), para no trabar el scroll. El botón **Liberar RAM ahora** hace lo mismo al instante y muestra cuántos MB devolvió al sistema. Windows vuelve a cargar en RAM lo que la app usa, así que la cifra sube un poco después de limpiar; eso es normal.
 - **Iniciar con Windows:** la app arranca al encender el equipo, minimizada en la bandeja y sin abrir la ventana. Se registra en la clave `Run` del usuario y se quita al apagar el ajuste.
 - **Recordar el volumen** y **restaurar la cola al abrir.**
 - **Teclas multimedia:** pausa, siguiente y anterior desde el teclado, incluso con la app en segundo plano. Si otra aplicación ya tiene registrada alguna de esas teclas, esa tecla queda para ella.
 - **Aviso al cambiar de canción:** notificación de la bandeja cuando la ventana está oculta o minimizada.
 - **Idioma del contenido:** idioma de los textos que entrega YouTube Music (secciones del inicio, Explorar, búsquedas). Al cambiarlo se recarga el inicio. Los menús de la app siguen en español.
-- **Letras:** orden y activación de cada proveedor, y la clave de Better Lyrics (ver [Letras](#letras)).
+- **Calidad de las miniaturas:** "Automática" ya pide las imágenes al tamaño real de tu pantalla (antes se pedían más chicas de lo debido y se veían borrosas en monitores grandes o 4K). "Alta" pide un poco más de nitidez todavía; "Baja" las reduce para ahorrar memoria y datos. Al primer arranque se elige sola según tu pantalla.
+- **Miniaturas en memoria:** cuántas se guardan listas para no volver a descargarlas al hacer scroll (100 a 800). Menos usa menos RAM pero recarga más seguido.
+- **Letras:** orden y activación de cada proveedor, la clave de Better Lyrics y la romanización (ver [Letras](#letras)).
 - **Caché:** muestra cuánto ocupan las miniaturas y los datos temporales, y permite vaciarlos. No toca la sesión, las playlists ni la cola.
 - **Cuenta:** iniciar o cerrar sesión desde la misma ventana.
 
@@ -86,6 +96,8 @@ Se consultan varios proveedores en orden y gana la primera respuesta sincronizad
 3. **YouTube Music:** la letra de YouTube, normalmente sin tiempos.
 
 El orden, qué proveedores usar y la clave de Better Lyrics se cambian en la configuración y se aplican a la siguiente letra que se pida. También puedes definir la clave con la variable de entorno `BETTER_LYRICS_API_KEY`, que tiene prioridad. Si tenías un `data/lyrics_settings.json` de versiones anteriores, se importa solo la primera vez y se renombra a `lyrics_settings.json.migrated`.
+
+**Romanización (romaji y similares):** cuando el idioma original no usa alfabeto latino, se pide una transcripción a [Unison](https://unison.boidu.dev) (el mismo servicio que usa Better Lyrics para esto) y se muestra en una segunda línea, más pequeña, debajo de cada verso. Se puede apagar en la configuración. Unison detecta solo si hace falta romanizar; no hay una manera de pedir solo un idioma en particular.
 
 Si un proveedor falla (por ejemplo LRCLIB con un error 503), se reintenta una vez y, si sigue fallando, se omite durante 1 minuto; mientras tanto la letra que se muestre no se guarda, así que se vuelve a buscar en cuanto el proveedor responda. Con letra por palabra se ilumina cada palabra al cantarse.
 

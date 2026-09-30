@@ -7,7 +7,6 @@ from services.settings_service import SettingsService
 from ui.main_window import MainWindow
 
 
-# windows teclas multimedia avisos inicio
 class SystemPresenter:
     def __init__(self, window: MainWindow, playback: PlaybackService, settings: SettingsService,
                  media_keys, autostart):

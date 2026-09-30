@@ -18,7 +18,6 @@ HOTKEY_BASE_ID = 0x5A10
 KEYS = {"next": VK_MEDIA_NEXT_TRACK, "previous": VK_MEDIA_PREV_TRACK, "play_pause": VK_MEDIA_PLAY_PAUSE}
 
 
-# atajos globales de windows
 class WindowsHotkeys:
     def register(self, hotkey_id: int, virtual_key: int) -> bool:
         return bool(ctypes.windll.user32.RegisterHotKey(None, hotkey_id, MOD_NOREPEAT, virtual_key))
@@ -40,7 +39,6 @@ class _HotkeyFilter(QAbstractNativeEventFilter):
         return False, 0
 
 
-# teclas multimedia globales
 class MediaKeys(QObject):
     play_pause = Signal()
     next_track = Signal()
