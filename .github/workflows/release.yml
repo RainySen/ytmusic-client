@@ -22,6 +22,9 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
+      - if: startsWith(github.ref, 'refs/tags/v')
+        run: ./bump-version.ps1 "${{ github.ref_name }}"
+        shell: pwsh
       - run: ./build-release.ps1
         shell: pwsh
       - uses: actions/upload-artifact@v4
@@ -29,7 +32,16 @@ jobs:
           name: installer
           path: release/YTMusicClient-Setup-*.exe
       - if: startsWith(github.ref, 'refs/tags/v')
-        run: gh release create "${{ github.ref_name }}" (Get-ChildItem release/YTMusicClient-Setup-*.exe).FullName --generate-notes
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $files = (Get-ChildItem release/YTMusicClient-Setup-*.exe).FullName
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $files --clobber
+          } else {
+            gh release create $tag $files --generate-notes
+          }
+          exit $LASTEXITCODE
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

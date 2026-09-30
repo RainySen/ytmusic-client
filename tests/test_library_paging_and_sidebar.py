@@ -196,52 +196,65 @@ def test_explore_extras_no_longer_include_popular_artists(qapp, wait_until):
 
 
 
+class FixedRandom:
+    def __init__(self, value):
+        self.value = value
+
+    def random(self):
+        return self.value
+
+    def sample(self, seq, k):
+        return list(seq)[:k]
+
+    def shuffle(self, seq):
+        pass
+
+
 def test_reload_sometimes_swaps_the_first_two_shelves():
-    from presenters.home_presenter import HomePresenter
+    from presenters.home_presenter import ALL_MOODS, HomePresenter
 
-    class FixedRandom:
-        def __init__(self, value):
-            self.value = value
-
-        def random(self):
-            return self.value
-
-        def sample(self, seq, k):
-            return list(seq)[:k]
-
-        def shuffle(self, seq):
-            pass
-
-    always = HomePresenter.__new__(HomePresenter)
-    always._rng = FixedRandom(0.0)
     sections = [("Vuelve a escucharlo", [1]), ("Selecciones rápidas", [2]), ("Otro", [3])]
-    assert always._maybe_reorder(sections) == [("Selecciones rápidas", [2]), ("Vuelve a escucharlo", [1]), ("Otro", [3])]
+    home = HomePresenter.__new__(HomePresenter)
+    home._mood = ALL_MOODS
+    home._rng = FixedRandom(0.0)
+    home._first_swapped = home._should_reorder()
+    assert home._ordered(sections) == [("Selecciones rápidas", [2]), ("Vuelve a escucharlo", [1]), ("Otro", [3])]
+    assert home._ordered([("Solo", [1])]) == [("Solo", [1])]
+    home._mood = "Fiesta"
+    assert home._ordered(sections) == sections
 
-    never = HomePresenter.__new__(HomePresenter)
-    never._rng = FixedRandom(0.99)
-    assert never._maybe_reorder(sections) == sections
+    home._rng = FixedRandom(0.99)
+    home._mood = ALL_MOODS
+    home._first_swapped = home._should_reorder()
+    assert home._ordered(sections) == sections
 
-    single = HomePresenter.__new__(HomePresenter)
-    single._rng = FixedRandom(0.0)
-    assert single._maybe_reorder([("Solo", [1])]) == [("Solo", [1])]
+
+def rendered_titles(rig, presenter):
+    shown = []
+    presenter._panel.set_sections = lambda sections, *_a, **_k: shown.append([t for t, _ in sections])
+    return shown
 
 
 def test_reload_reorders_before_rendering(rig):
     from presenters.home_presenter import HomePresenter
 
-    class AlwaysSwap:
-        def random(self):
-            return 0.0
-
-        def sample(self, seq, k):
-            return list(seq)[:k]
-
-        def shuffle(self, seq):
-            pass
-
     presenter = rig.keep(HomePresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier,
-                                       rng=AlwaysSwap()))
+                                       rng=FixedRandom(0.0)))
+    shown = rendered_titles(rig, presenter)
     presenter._sections = [("A", [song(1)]), ("B", [song(2)])]
     presenter._has_content = True
     presenter.reload()
-    assert presenter._sections[0][0] == "B"
+    assert shown[0] == ["B", "A"]
+
+
+def test_fresh_feed_after_reload_keeps_the_new_order(rig):
+    from presenters.home_presenter import HomePresenter
+
+    presenter = rig.keep(HomePresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier,
+                                       rng=FixedRandom(0.0)))
+    shown = rendered_titles(rig, presenter)
+    presenter._sections = [("A", [song(1)]), ("B", [song(2)])]
+    presenter._has_content = True
+    presenter.reload()
+    rig.catalog.home_calls[-1]["on_done"]([("A", [song(1)]), ("B", [song(2)]), ("C", [song(3)])])
+    assert shown[-1] == ["B", "A", "C"]
