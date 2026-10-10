@@ -4,7 +4,7 @@ import shutil
 import sys
 from dataclasses import dataclass
 
-APP_NAME = "YTMusic Client"
+APP_NAME = "PyMusic Client"
 DATA_DIR_NAME = "data"
 LEGACY_DATA = ("oauth.json", "local_playlists.json", "queue_and_cache.json", "lyrics_settings.json",
                "ytmusic-client.log*", "cache", ".yt-dlp-cache")
@@ -23,6 +23,7 @@ CONTENT_LANGUAGE = "es"
 HOME_SECTIONS = 20
 QUEUE_HISTORY_LIMIT = 50
 MAX_CONSECUTIVE_PLAY_FAILURES = 3
+STREAM_RETRIES = 2
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,10 @@ class AppPaths:
     @property
     def ytdlp_cache_dir(self) -> str:
         return self._join(".yt-dlp-cache")
+
+    @property
+    def account_only_file(self) -> str:
+        return os.path.join(self.cache_dir, "account_only_tracks.json")
 
     @property
     def log_file(self) -> str:

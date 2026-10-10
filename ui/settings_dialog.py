@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 
 from domain.settings import (
-    CONTENT_LANGUAGES, FREE_MEMORY_OPTIONS, LYRICS_PROVIDER_NAMES, RADIO_SIZE_OPTIONS, Settings,
+    CONTENT_LANGUAGES, FREE_MEMORY_OPTIONS, LYRICS_PROVIDER_NAMES, RADIO_SIZE_OPTIONS, REWIND_OPTIONS, Settings,
     THUMBNAIL_CACHE_OPTIONS, THUMBNAIL_QUALITY_OPTIONS,
 )
 from ui import theme
@@ -17,6 +17,7 @@ from ui.components.switch import Switch
 
 RADIO_LABELS = {size: f"{size} canciones" for size in RADIO_SIZE_OPTIONS}
 RADIO_LABELS[0] = "Ilimitada (se extiende sola)"
+REWIND_LABELS = {seconds: f"{seconds} segundos" for seconds in REWIND_OPTIONS}
 MEMORY_LABELS = {10: "10 segundos", 20: "20 segundos", 60: "1 minuto", 180: "3 minutos"}
 QUALITY_LABELS = {"low": "Baja (ahorra memoria y datos)", "auto": "Automática (recomendada)",
                   "high": "Alta (pantallas grandes o 4K)"}
@@ -161,6 +162,12 @@ class SettingsDialog(Modal):
         self._mini_label = _row("Mini reproductor", "Ventana pequeña con los controles cuando minimizas o cierras la app. "
                                 "Requiere seguir en segundo plano.", self.mini, self.background.isChecked())
         body.addWidget(self._mini_label)
+        self.rewind = _combo(REWIND_OPTIONS, REWIND_LABELS, settings.mini_rewind_seconds)
+        self.rewind.setEnabled(self.mini.isChecked())
+        body.addWidget(_row("Retroceder en el mini reproductor", "Cuánto vuelve atrás el botón de retroceso.",
+                            self.rewind))
+        self.rewind.currentIndexChanged.connect(
+            lambda _i: self._on_change(mini_rewind_seconds=self.rewind.currentData()))
         self.autostart = Switch(settings.start_with_windows and autostart_available)
         self.autostart.setEnabled(autostart_available)
         body.addWidget(_row("Iniciar con Windows", "Se abre al encender el equipo, minimizada en la bandeja y sin "
@@ -309,6 +316,7 @@ class SettingsDialog(Modal):
         self.mini.setChecked(self._mini_choice and enabled)
         self.mini.blockSignals(False)
         self.mini.setEnabled(enabled)
+        self.rewind.setEnabled(self.mini.isChecked())
         self._mini_label.findChild(QLabel).setStyleSheet(
             f"color: {theme.TEXT if enabled else theme.TEXT_MUTED}; font-size: 14px; font-weight: 600; background: transparent;")
 
@@ -318,6 +326,7 @@ class SettingsDialog(Modal):
 
     def _on_mini(self, enabled: bool) -> None:
         self._mini_choice = enabled
+        self.rewind.setEnabled(enabled)
         self._on_change(mini_player=enabled)
 
     def _free_now(self) -> None:

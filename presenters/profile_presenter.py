@@ -171,13 +171,16 @@ class ProfilePresenter:
         panel.show_message(text)
 
     def _is_channel(self) -> bool:
-        return bool(self._profile) and self._profile.get("id") == CHANNEL_ID
+        return bool(self._profile) and (self._profile.get("id") == CHANNEL_ID or bool(self._profile.get("uploader")))
+
+    def _channel_songs(self) -> list:
+        return self._profile.get("all_songs") or self._profile.get("top_songs") or []
 
     def _shuffle_artist(self) -> None:
         if not self._profile:
             return
         if self._is_channel():
-            songs = self._profile.get("top_songs") or []
+            songs = self._channel_songs()
             if songs:
                 self._playback.play_collection(random.sample(songs, len(songs)))
             else:
@@ -189,7 +192,7 @@ class ProfilePresenter:
         if not self._profile:
             return
         if self._is_channel():
-            songs = self._profile.get("top_songs") or []
+            songs = self._channel_songs()
             if songs:
                 self._playback.start_radio(random.choice(songs))
             else:
@@ -202,7 +205,7 @@ class ProfilePresenter:
             return
         if self._is_channel():
             self._window.artist_panel.show_all_songs(
-                self._profile["name"], self._profile.get("top_songs") or [], self._window.thumbnails,
+                self._profile["name"], self._channel_songs(), self._window.thumbnails,
                 title=self._profile.get("songs_title") or "Canciones más populares")
             return
         self._go(("songs", self._profile["id"]))

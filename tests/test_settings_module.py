@@ -181,6 +181,30 @@ def test_mini_player_needs_a_song_and_can_be_disabled(rig, tmp_path):
     presenter.mini.hide()
 
 
+def test_progress_polling_follows_what_is_on_screen(rig, tmp_path):
+    presenter, service = make_mini(rig, tmp_path)
+    rig.queue.replace([song(1)], 0)
+    rig.playback.track_started.emit(song(1))
+    rig.window.show()
+    assert rig.audio.poll_ms == 100
+    rig.window.hide()
+    assert presenter.mini.isVisible() and rig.audio.poll_ms == 1000
+    service.update(mini_player=False)
+    assert rig.audio.poll_ms == 0
+    rig.window.show()
+    assert rig.audio.poll_ms == 100
+
+
+def test_mini_player_rewinds_by_the_configured_seconds(rig, tmp_path):
+    presenter, service = make_mini(rig, tmp_path)
+    presenter.mini.rewind.click()
+    service.update(mini_rewind_seconds=20)
+    presenter.mini.rewind.click()
+    assert rig.audio.seeks == [("by", -10000), ("by", -20000)]
+    assert presenter.mini.rewind.toolTip() == "Retroceder 20 segundos"
+    assert Settings.from_dict({"mini_rewind_seconds": 7}).mini_rewind_seconds == 10
+
+
 def test_mini_player_buttons_use_the_normal_player_controls(rig, tmp_path):
     presenter, _ = make_mini(rig, tmp_path)
     spies = {name: QSignalSpy(getattr(rig.window, name)) for name in ("play_pause_clicked", "next_clicked", "previous_clicked")}

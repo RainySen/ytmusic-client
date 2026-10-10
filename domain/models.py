@@ -309,6 +309,11 @@ def parse_lyrics(data: dict | None) -> Lyrics | None:
         lines = tuple(LyricLine(l.get("text", ""), parse_time_ms(l.get("time"))) for l in raw_lines)
         return Lyrics(lines, synced=any(l.time_ms > 0 for l in lines))
     text = data.get("lyrics")
+    if isinstance(text, list):
+        # ytmusicapi timed lines: objects with text, start_time, end_time (ms)
+        lines = tuple(LyricLine(getattr(l, "text", "") or "", int(getattr(l, "start_time", 0) or 0),
+                                int(getattr(l, "end_time", 0) or 0)) for l in text)
+        return Lyrics(lines, synced=any(l.time_ms > 0 for l in lines)) if lines else None
     if text:
         return Lyrics(tuple(LyricLine(t) for t in text.split("\n")), synced=False)
     return None

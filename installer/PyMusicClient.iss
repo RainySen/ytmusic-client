@@ -1,7 +1,7 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
-#define AppName "YTMusic Client"
+#define AppName "PyMusic Client"
 #define AppExe "YTMusicClient.exe"
 #define VlcUrl "https://get.videolan.org/vlc/3.0.21/win64/vlc-3.0.21-win64.exe"
 #define VlcSha256 "9742689a50e96ddc04d80ceff046b28da2beefd617be18166f8c5e715ec60c59"
@@ -23,7 +23,7 @@ RestartApplications=no
 SetupIconFile=..\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=..\release
-OutputBaseFilename=YTMusicClient-Setup-{#AppVersion}
+OutputBaseFilename=PyMusicClient-Setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

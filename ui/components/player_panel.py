@@ -4,10 +4,12 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu, 
 
 from ui.components.jump_slider import JumpSlider
 from ui.components.link_label import LinkLabel
+from ui.components.marquee_label import MarqueeLabel
 from ui.components.track_actions import MENU_QSS, song_entries, song_hub
 
 VOLUME_STEP_ICONS = ((1, "fa5s.volume-mute"), (34, "fa5s.volume-off"), (67, "fa5s.volume-down"), (101, "fa5s.volume-up"))
 DEFAULT_UNMUTE = 50
+INFO_WIDTH = 380
 
 _SLIM_SLIDER_QSS = """
     QSlider::groove:horizontal { height: 3px; background: rgba(255,255,255,0.16); border-radius: 1px; }
@@ -46,7 +48,7 @@ class PlayerPanel(QWidget):
         outer.addLayout(row, stretch=1)
 
         info_area = QWidget()
-        info_area.setFixedWidth(280)
+        info_area.setFixedWidth(INFO_WIDTH)
 
         info_l = QHBoxLayout(info_area)
         info_l.setContentsMargins(16, 0, 16, 0)
@@ -62,7 +64,7 @@ class PlayerPanel(QWidget):
         text_l.setContentsMargins(0, 0, 0, 0)
         text_l.setSpacing(2)
 
-        self.song_label = QLabel("Sin reproducción")
+        self.song_label = MarqueeLabel("Sin reproducción")
         self.song_label.setObjectName("song_label")
 
         self.artist_label = LinkLabel("")

@@ -32,15 +32,16 @@ def test_hidden_panel_builds_nothing_until_it_is_shown(qapp):
     assert items(panel)[5].is_current
 
 
-def test_long_queue_is_built_in_batches_and_grows_on_scroll(qapp):
+def test_long_queue_is_built_in_batches_and_grows_on_scroll(qapp, wait_until):
     panel = shown_panel(qapp)
     panel.set_queue(songs(500), 0, FakeThumbnails())
     QTest.qWait(150)
     first = len(items(panel))
     assert QUEUE_BATCH <= first < 100
     bar = panel._queue_scroll.verticalScrollBar()
+    assert wait_until(lambda: bar.maximum() > 0)
     bar.setValue(bar.maximum())
-    assert len(items(panel)) > first
+    assert wait_until(lambda: len(items(panel)) > first)
     panel.close()
 
 

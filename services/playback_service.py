@@ -6,7 +6,7 @@ from typing import Callable, Protocol
 from PySide6.QtCore import QObject, Signal
 
 from core.config import (
-    EXTEND_BATCH, EXTEND_BATCH_UNLIMITED, MAX_CONSECUTIVE_PLAY_FAILURES, PREFETCH_AHEAD, QUEUE_HISTORY_LIMIT,
+    EXTEND_BATCH, EXTEND_BATCH_UNLIMITED, MAX_CONSECUTIVE_PLAY_FAILURES, PREFETCH_AHEAD, QUEUE_HISTORY_LIMIT, STREAM_RETRIES,
     RADIO_EXHAUSTED_RATIO, RADIO_FETCH, RADIO_STAGE_START,
 )
 from domain.models import Track
@@ -36,6 +36,8 @@ class AudioBackend(Protocol):
     def resume(self) -> None: ...
     def stop(self) -> None: ...
     def seek(self, fraction: float) -> None: ...
+    def seek_by(self, delta_ms: int) -> None: ...
+    def set_poll_interval(self, ms: int) -> None: ...
     def set_volume(self, volume: int) -> None: ...
 
 
@@ -64,6 +66,7 @@ class PlaybackService(QObject):
         self._pending: Track | None = None
         self._current_video: str | None = None
         self._retry_video: str | None = None
+        self._retries = 0
         self._failures = 0
         self._extending = False
         self._radio_pending = False
@@ -96,6 +99,7 @@ class PlaybackService(QObject):
             return
         if video_id != self._retry_video:
             self._retry_video = None
+            self._retries = 0
         self._audio.stop()
         self._current_video = None
         self._pending = song
@@ -194,6 +198,12 @@ class PlaybackService(QObject):
     def seek(self, fraction: float) -> None:
         self._audio.seek(fraction)
 
+    def rewind(self, seconds: int) -> None:
+        self._audio.seek_by(-seconds * 1000)
+
+    def set_progress_interval(self, ms: int) -> None:
+        self._audio.set_poll_interval(ms)
+
     def set_volume(self, volume: int) -> None:
         self._audio.set_volume(gain(volume))
 
@@ -284,12 +294,15 @@ class PlaybackService(QObject):
         song = self._queue.current
         if video_id is None or not song or song.get("videoId") != video_id:
             return
-        if video_id != self._retry_video:
+        # googlevideo returns a sporadic 403; a fresh url usually works
+        if self._retries < STREAM_RETRIES:
+            self._retries += 1
             self._retry_video = video_id
             self._streams.invalidate(video_id)
             self.play_track(song)
             return
         self._retry_video = None
+        self._retries = 0
         self.playing_changed.emit(False)
         self._notifier.error(f"Error de audio en «{song.get('title', video_id)}».")
         self._skip_after_failure()

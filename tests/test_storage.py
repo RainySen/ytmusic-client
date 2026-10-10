@@ -194,7 +194,8 @@ def test_gateway_keeps_credentials_when_the_first_connection_fails(tmp_path, mon
     assert gateway.is_authenticated is True
     client = gateway._client()
     assert client.authenticated is True and gateway.is_authenticated is True
-    assert attempts == [str(path), str(path)]
+    # the headers are read and decrypted here, so ytmusicapi never sees the file
+    assert attempts == [{"cookie": "SAPISID=1"}, {"cookie": "SAPISID=1"}]
 
 
 def test_gateway_still_falls_back_when_credentials_are_rejected(tmp_path, monkeypatch):

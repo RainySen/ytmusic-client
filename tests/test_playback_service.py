@@ -1,5 +1,6 @@
 import pytest
 
+from core.config import STREAM_RETRIES
 from domain.play_queue import PlayQueue
 from services.playback_service import PlaybackService
 from tests.fakes import FakeAudio, FakeCatalog, FakeNotifier, FakeStreams
@@ -176,8 +177,10 @@ def test_audio_error_twice_skips_to_next_without_looping(rig):
     rig.queue.replace([song(0), song(1)], 0)
     rig.service.play_track(rig.queue.current)
     rig.streams.resolve("v0")
-    rig.audio.failed.emit()
-    rig.streams.resolve("v0", url="fresh")
+    for attempt in range(STREAM_RETRIES):
+        rig.audio.failed.emit()
+        rig.streams.resolve("v0", url=f"fresh{attempt}")
+    assert rig.streams.requests.count("v0") == STREAM_RETRIES + 1
     rig.audio.failed.emit()
     assert rig.streams.requests[-1] == "v1"
     assert any(kind == "error" for kind, _ in rig.notifier.messages)
@@ -237,9 +240,11 @@ def test_next_at_end_waits_for_extension(rig):
 
 
 def test_volume_and_seek_delegate(rig):
+    from domain.volume import gain
+
     rig.service.set_volume(40)
     rig.service.seek(0.5)
-    assert rig.audio.volume == 40 and rig.audio.seeks == [0.5]
+    assert rig.audio.volume == gain(40) and rig.audio.seeks == [0.5]
     rig.service.set_volume(100)
     assert rig.audio.volume == 100
     rig.service.set_volume(0)

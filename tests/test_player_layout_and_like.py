@@ -16,8 +16,8 @@ def song(n=1, **extra):
     return {"videoId": f"v{n}", "title": f"T{n}", "artists": [{"name": "A"}], **extra}
 
 
-def test_volume_is_no_longer_curved(qapp):
-    assert [gain(v) for v in (0, 10, 30, 50, 70, 100)] == [0, 10, 30, 50, 70, 100]
+def test_volume_compensates_vlc_cubing_like_the_windows_mixer(qapp):
+    assert [gain(v) for v in (0, 10, 20, 50, 70, 100)] == [0, 32, 45, 71, 84, 100]
 
 
 def test_home_section_keeps_the_like_status_when_the_api_sends_it():
@@ -32,12 +32,27 @@ def test_home_section_keeps_the_like_status_when_the_api_sends_it():
     assert "likeStatus" not in items[2]
 
 
-def test_track_row_shows_a_heart_only_for_liked_songs(qapp):
-    def has_heart(track):
-        return "heart" in _cells(QRect(0, 0, 1000, 56), track, {})
+def test_liked_and_unliked_rows_keep_the_same_columns(qapp):
+    def layout(track):
+        return _cells(QRect(0, 0, 1000, 56), track, {"views": False})
 
-    assert has_heart(song(1, likeStatus="LIKE"))
-    assert not has_heart(song(2, likeStatus="INDIFFERENT")) and not has_heart(song(3))
+    liked = layout(song(1, likeStatus="LIKE", album="A"))
+    assert liked == layout(song(2, likeStatus="INDIFFERENT")) == layout(song(3, views="1 M"))
+    assert "heart" in liked
+
+
+def test_track_list_decides_the_views_column_for_the_whole_list(qapp):
+    from ui.components.track_list import TrackList
+
+    listing = TrackList()
+    listing.set_tracks([song(1), song(2, likeStatus="LIKE")], Thumbs())
+    assert listing.options["views"] is False
+    listing.append_tracks([song(3, views="2 M")], Thumbs())
+    rows = [_cells(QRect(0, 0, 1000, 56), t, listing.options) for t in listing.tracks]
+    assert listing.options["views"] and rows[0] == rows[1] == rows[2] and "views" in rows[0]
+    listing.set_tracks([song(4)], Thumbs(), views=False)
+    listing.append_tracks([song(5, views="1 M")], Thumbs())
+    assert listing.options["views"] is False
 
 
 def test_player_bar_progress_spans_the_top_full_width_above_the_buttons(rig_window):

@@ -15,6 +15,7 @@ class MiniPlayer(QWidget):
     toggle_requested = Signal()
     next_requested = Signal()
     previous_requested = Signal()
+    rewind_requested = Signal()
     expand_requested = Signal()
     close_requested = Signal()
     moved = Signal(int, int)
@@ -51,17 +52,19 @@ class MiniPlayer(QWidget):
         texts.addStretch(1)
         row.addLayout(texts, 1)
 
+        self.rewind = icon_button("fa5s.undo-alt", 32, "Retroceder")
         self._previous = icon_button("fa5s.step-backward", 32, "Anterior")
         self._toggle = icon_button("fa5s.play", 38, "Reproducir o pausar")
         self._next = icon_button("fa5s.step-forward", 32, "Siguiente")
         self._expand = icon_button("fa5s.expand-alt", 32, "Abrir la ventana principal")
         self._close = icon_button("fa5s.times", 28, "Cerrar el mini reproductor")
+        self.rewind.clicked.connect(self.rewind_requested)
         self._previous.clicked.connect(self.previous_requested)
         self._toggle.clicked.connect(self.toggle_requested)
         self._next.clicked.connect(self.next_requested)
         self._expand.clicked.connect(self.expand_requested)
         self._close.clicked.connect(self.close_requested)
-        for button in (self._previous, self._toggle, self._next, self._expand, self._close):
+        for button in (self.rewind, self._previous, self._toggle, self._next, self._expand, self._close):
             row.addWidget(button)
         column.addLayout(row, 1)
 
@@ -83,6 +86,9 @@ class MiniPlayer(QWidget):
     def set_neighbors(self, previous: str, following: str) -> None:
         self._previous.setToolTip(f"Anterior: {previous}" if previous else "Anterior")
         self._next.setToolTip(f"Siguiente: {following}" if following else "Siguiente")
+
+    def set_rewind_seconds(self, seconds: int) -> None:
+        self.rewind.setToolTip(f"Retroceder {seconds} segundos")
 
     def set_playing(self, playing: bool) -> None:
         self._toggle.setIcon(qta.icon("fa5s.pause" if playing else "fa5s.play", color=theme.TEXT))

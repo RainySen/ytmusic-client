@@ -222,6 +222,37 @@ def test_youtube_provider_wraps_the_gateway():
     assert provider.fetch(LyricsQuery("other", "T", "A")) is None
 
 
+def test_youtube_provider_prefers_musixmatch_timed_lines_and_falls_back_to_plain():
+    class Line:
+        def __init__(self, text, start, end):
+            self.text, self.start_time, self.end_time = text, start, end
+
+    class Gateway:
+        timed_fails = False
+
+        def get_lyrics_browse_id(self, video_id):
+            return "MPLY"
+
+        def get_timed_lyrics(self, browse_id):
+            if self.timed_fails:
+                raise RuntimeError("400")
+            return {"lyrics": [Line("Is this the real life?", 270, 7320), Line("Caught in a landslide", 7320, 14930)],
+                    "source": "Source: Musixmatch", "hasTimestamps": True}
+
+        def get_lyrics(self, browse_id):
+            return {"lyrics": "plain\ntext"}
+
+    gateway = Gateway()
+    provider = YouTubeMusicProvider(gateway)
+    lyrics = provider.fetch(QUERY)
+    assert lyrics.synced and lyrics.source == "Musixmatch (YouTube Music)"
+    assert [(l.text, l.time_ms, l.end_ms) for l in lyrics.lines] == [
+        ("Is this the real life?", 270, 7320), ("Caught in a landslide", 7320, 14930)]
+    gateway.timed_fails = True
+    plain = provider.fetch(QUERY)
+    assert plain.texts == ["plain", "text"] and not plain.synced and plain.source == "YouTube Music"
+
+
 def test_settings_defaults_order_and_key(tmp_path):
     missing = load_lyrics_settings(str(tmp_path / "none.json"), {})
     assert missing.providers == DEFAULT_PROVIDERS == ("betterlyrics", "lrclib", "youtube") and missing.better_lyrics_api_key == ""
