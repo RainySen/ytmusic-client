@@ -293,3 +293,36 @@ def test_visible_window_is_cleaned_only_while_idle_or_in_the_background(qapp, tm
         assert not presenter._idle_timer.isActive()
     finally:
         rig.dispose()
+
+
+def test_trimming_stops_while_memory_does_not_grow(qapp, tmp_path, monkeypatch):
+    from infra.settings_repository import SettingsRepository
+    from presenters.memory_presenter import RETRIM_MARGIN_MB
+    from services.settings_service import SettingsService
+
+    rig = Rig()
+    try:
+        settings = SettingsService(SettingsRepository(str(tmp_path / "s.json")))
+        home = rig.keep(HomePresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier))
+        explore = rig.keep(ExplorePresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier))
+        presenter = rig.keep(MemoryPresenter(rig.window, home, explore, settings=settings))
+        freed, trims, usage = [], [], [300]
+        monkeypatch.setattr(memory, "working_set_mb", lambda: usage[0])
+        monkeypatch.setattr(memory, "trim", lambda: trims.append(1))
+        monkeypatch.setattr(presenter, "free_now", lambda: freed.append(1))
+        monkeypatch.setattr(memory, "idle_seconds", lambda: 999.0)
+
+        presenter._trimmed_to = usage[0]  # nothing grew since the last trim
+        presenter._trim_if_it_grew()
+        presenter._on_idle_tick()
+        assert trims == [] and freed == []
+
+        usage[0] += RETRIM_MARGIN_MB
+        presenter._trim_if_it_grew()
+        assert trims == [1] and presenter._trimmed_to == usage[0]
+
+        usage[0] += RETRIM_MARGIN_MB
+        presenter._on_idle_tick()
+        assert freed == [1]
+    finally:
+        rig.dispose()
