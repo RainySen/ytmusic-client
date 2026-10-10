@@ -7,6 +7,8 @@ from PySide6.QtCore import QObject, QTimer, Qt, Signal, Slot
 
 log = logging.getLogger(__name__)
 
+POLL_MS = 100
+
 
 class VlcAudioBackend(QObject):
     position_changed = Signal(float)
@@ -28,8 +30,9 @@ class VlcAudioBackend(QObject):
         self._has_media = False
         self._volume = 100
 
+        self._poll_ms = POLL_MS
         self._timer = QTimer(self)
-        self._timer.setInterval(100)
+        self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self._poll)
 
         self._vlc_end.connect(self._handle_end, Qt.QueuedConnection)
@@ -76,30 +79,51 @@ class VlcAudioBackend(QObject):
         player.audio_set_volume(self._volume)
         self._has_media = True
         self._playing = True
-        self._timer.start()
+        self._sync_timer()
 
     def pause(self) -> None:
         if self._player is not None and self._has_media:
             self._player.set_pause(1)
             self._playing = False
-            self._timer.stop()
+            self._sync_timer()
 
     def resume(self) -> None:
         if self._player is not None and self._has_media:
             self._player.set_pause(0)
             self._playing = True
-            self._timer.start()
+            self._sync_timer()
 
     def stop(self) -> None:
         if self._player is not None:
             self._player.stop()
         self._playing = False
         self._has_media = False
-        self._timer.stop()
+        self._sync_timer()
 
     def seek(self, fraction: float) -> None:
         if self._player is not None and self._has_media:
             self._player.set_position(max(0.0, min(1.0, fraction)))
+
+    def seek_by(self, delta_ms: int) -> None:
+        if self._player is not None and self._has_media:
+            self._player.set_time(max(0, self._player.get_time() + delta_ms))
+            self._poll()
+
+    # 0 = nothing on screen shows progress: no polling at all
+    def set_poll_interval(self, ms: int) -> None:
+        if ms == self._poll_ms:
+            return
+        self._poll_ms = ms
+        if ms:
+            self._timer.setInterval(ms)
+            self._poll()
+        self._sync_timer()
+
+    def _sync_timer(self) -> None:
+        if self._playing and self._poll_ms:
+            self._timer.start()
+        else:
+            self._timer.stop()
 
     def set_volume(self, volume: int) -> None:
         self._volume = max(0, min(100, int(volume)))
@@ -110,14 +134,14 @@ class VlcAudioBackend(QObject):
     def _handle_end(self) -> None:
         self._playing = False
         self._has_media = False
-        self._timer.stop()
+        self._sync_timer()
         self.finished.emit()
 
     @Slot()
     def _handle_error(self) -> None:
         self._playing = False
         self._has_media = False
-        self._timer.stop()
+        self._sync_timer()
         self.failed.emit()
 
     def _poll(self) -> None:

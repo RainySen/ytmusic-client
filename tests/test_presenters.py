@@ -38,6 +38,7 @@ class ScriptedCatalog(FakeCatalog):
         self.home_calls = []
         self.mood_calls = []
         self.search_calls = []
+        self.suggest_calls = []
         self.related_calls = []
         self.playlist_calls = []
         self.pool_calls = []
@@ -54,6 +55,9 @@ class ScriptedCatalog(FakeCatalog):
 
     def search(self, query, on_done, on_error=None):
         self.search_calls.append({"query": query, "on_done": on_done, "on_error": on_error})
+
+    def suggestions(self, query, on_done, on_error=None):
+        self.suggest_calls.append((query, on_done))
 
     def related(self, video_id, on_done, on_error=None):
         self.related_calls.append({"video_id": video_id, "on_done": on_done, "on_error": on_error})

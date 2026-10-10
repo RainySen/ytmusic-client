@@ -34,7 +34,7 @@ class LoginWindow(QWidget):
         self._build()
 
     def _build(self):
-        self.setWindowTitle("Bienvenido a YTMusic Client")
+        self.setWindowTitle("Bienvenido a PyMusic Client")
         self.setWindowIcon(self._app_icon)
         self.setFixedSize(400, WINDOW_HEIGHT)
         self.setStyleSheet(f"QWidget {{ background-color: {theme.BG}; }} QLabel {{ background: transparent; }}")
@@ -49,7 +49,7 @@ class LoginWindow(QWidget):
         icon.setAlignment(Qt.AlignCenter)
         self._layout.addWidget(icon)
 
-        title = QLabel("YTMusic Minimal Client")
+        title = QLabel("PyMusic Client")
         title.setAlignment(Qt.AlignCenter)
         title.setWordWrap(True)
         title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {theme.TEXT};")

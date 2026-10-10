@@ -123,6 +123,12 @@ class ChaosAudio(QObject):
     def seek(self, fraction):
         pass
 
+    def seek_by(self, delta_ms):
+        pass
+
+    def set_poll_interval(self, ms):
+        pass
+
     def set_volume(self, volume):
         pass
 
@@ -203,6 +209,7 @@ class World:
             "get_playlist_page": lambda f: f.playlist(), "get_related": lambda f: f.related(),
             "get_mood_playlists": lambda f: [f.playlist_card() for _ in range(6)], "get_artist": lambda f: f.artist(),
             "get_album": lambda f: f.album(), "get_lyrics": lambda f: f.lyrics(),
+            "get_timed_lyrics": lambda f: f.lyrics(),
             "get_lyrics_browse_id": lambda f: f._id("MPLY"), "get_library_playlists": lambda f: f.library_playlists(),
             "get_library_songs": lambda f: f.library_songs(), "get_library_artists": lambda f: f.library_artists(),
             "add_playlist_items": lambda f: f.rng.random() < 0.7, "create_playlist": lambda f: f._id("PL"),

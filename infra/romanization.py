@@ -9,7 +9,7 @@ from domain.models import Lyrics
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "YTMusicClient/1.0 (https://github.com/RainySen/ytmusic-client)"
+USER_AGENT = "PyMusicClient/1.0 (https://github.com/RainySen/ytmusic-client)"
 TIMEOUT_S = 8
 MAX_LINES = 200
 MAX_LINE_CHARS = 500

@@ -6,6 +6,8 @@ RADIO_SIZE_OPTIONS = (5, 10, 15, 25, 50, 75, 100, 150, 200, 300, 500, 1000, 0)
 DEFAULT_RADIO_SIZE = 50
 FREE_MEMORY_OPTIONS = (10, 20, 60, 180)
 DEFAULT_FREE_MEMORY_S = 20
+REWIND_OPTIONS = (5, 10, 15, 20)
+DEFAULT_REWIND_S = 10
 CONTENT_LANGUAGES = {
     "es": "Español", "en": "English", "pt": "Português", "fr": "Français", "de": "Deutsch", "it": "Italiano",
     "nl": "Nederlands", "cs": "Čeština", "tr": "Türkçe", "ru": "Русский", "ar": "العربية", "hi": "हिन्दी",
@@ -63,6 +65,7 @@ class Settings:
     mini_player: bool = True
     mini_x: int | None = None
     mini_y: int | None = None
+    mini_rewind_seconds: int = DEFAULT_REWIND_S
     auto_queue: bool = True
     radio_size: int = DEFAULT_RADIO_SIZE
     free_memory: bool = True
@@ -100,6 +103,7 @@ class Settings:
             mini_player=_flag(data, "mini_player", True),
             mini_x=_coordinate(data, "mini_x"),
             mini_y=_coordinate(data, "mini_y"),
+            mini_rewind_seconds=_choice(data, "mini_rewind_seconds", REWIND_OPTIONS, DEFAULT_REWIND_S),
             auto_queue=_flag(data, "auto_queue", True),
             radio_size=_choice(data, "radio_size", RADIO_SIZE_OPTIONS, DEFAULT_RADIO_SIZE),
             free_memory=_flag(data, "free_memory", True),

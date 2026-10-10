@@ -29,6 +29,7 @@ RELATED_SONGS = 20
 RELATED_CARDS = 6
 ARTIST_TTL = 600
 ARTIST_TOP_SONGS = 5
+UPLOADER_SHOWN_VIDEOS = 10
 ALBUM_TTL = 600
 PLAYLIST_PAGE_FALLBACK_TRACKS = 50
 PLAYLIST_PAGE_SIZE = 50
@@ -241,6 +242,22 @@ class CatalogService:
 
         self._runner.submit(work, ok, on_error, key="search")
 
+    def suggestions(self, query: str, on_done: Done, on_error: Fail | None = None) -> None:
+        cache_key = ("suggest", query.strip().lower())
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            on_done(cached)
+            return
+
+        def work() -> list[str]:
+            return [s for s in self._gateway.search_suggestions(query) if isinstance(s, str)]
+
+        def ok(items: list[str]) -> None:
+            self._cache.set(cache_key, items, SEARCH_TTL)
+            on_done(items)
+
+        self._runner.submit(work, ok, on_error, key="suggest")
+
     def recommendations(self, video_id: str, limit: int, on_done: Done, on_error: Fail | None = None,
                         key: str | None = None) -> TaskHandle | None:
         cache_key = ("recs", video_id, limit)
@@ -317,7 +334,14 @@ class CatalogService:
         self._runner.submit(lambda: self._build_artist_profile(browse_id), ok, on_error, key="artist")
 
     def _build_artist_profile(self, browse_id: str) -> dict:
-        raw = self._gateway.get_artist(browse_id)
+        try:
+            raw = self._gateway.get_artist(browse_id)
+        except Exception:
+            # plain youtube channels (uploaders) have no artist page
+            if not browse_id.startswith("UC"):
+                raise
+            log.info("No artist page for %s, loading it as a channel", browse_id)
+            return self._build_uploader_profile(browse_id)
 
         def results(key: str) -> list[dict]:
             return (raw.get(key) or {}).get("results") or []
@@ -342,6 +366,35 @@ class CatalogService:
             "sections": [(title, items) for title, items in shelves if items],
         }
 
+    def _build_uploader_profile(self, channel_id: str) -> dict:
+        raw = self._gateway.get_user(channel_id)
+        name = raw.get("name") or ""
+        shelf = raw.get("videos") or {}
+        videos = shelf.get("results") or []
+        if shelf.get("params"):
+            try:
+                videos = self._gateway.get_user_videos(channel_id, shelf["params"]) or videos
+            except Exception:
+                log.info("Full video list unavailable for %s", channel_id, exc_info=True)
+        owner = [{"name": name, "id": channel_id}]
+        tracks = normalize_tracks({**v, "artists": v.get("artists") or owner} for v in videos)
+        playlists = self._playlist_items((raw.get("playlists") or {}).get("results") or [])
+        return {
+            "id": channel_id,
+            "uploader": True,
+            "name": name,
+            "subscribers": "",
+            "description": "",
+            "banner": [],
+            "top_songs": tracks[:UPLOADER_SHOWN_VIDEOS],
+            "all_songs": tracks,
+            "songs_title": "Videos",
+            "songs_browse_id": "",
+            "shuffle_id": "",
+            "radio_id": "",
+            "sections": [("Playlists", playlists)] if playlists else [],
+        }
+
     def artist_tracks(self, browse_id: str, on_done: Done, on_error: Fail | None = None) -> None:
         cached = self._cache.get(("artist", browse_id))
 
@@ -354,7 +407,7 @@ class CatalogService:
                     tracks = normalize_tracks(self._gateway.get_watch_playlist_for(mix_id, 25).get("tracks") or [])
                 except Exception:
                     log.info("Artist mix unavailable for %s", browse_id, exc_info=True)
-            tracks = tracks or list(profile["top_songs"])
+            tracks = tracks or list(profile.get("all_songs") or profile["top_songs"])
             return {"title": profile["name"], "tracks": tracks} if tracks else None
 
         self._runner.submit(work, on_done, on_error, key="collection")

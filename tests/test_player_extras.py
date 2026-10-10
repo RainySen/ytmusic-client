@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QRect, Qt
@@ -46,10 +47,13 @@ def song(n=1, **extra):
     return {"videoId": f"v{n}", "title": f"Titulo {n}", "artists": [{"name": "Artista", "id": "UC1"}], **extra}
 
 
-def test_volume_maps_one_to_one_and_only_clamps_out_of_range_values():
-    assert gain(0) == 0 and gain(100) == 100 and gain(50) == 50 and gain(30) == 30
+def test_volume_is_monotonic_audible_when_low_and_clamps_out_of_range_values():
+    assert gain(0) == 0 and gain(100) == 100
     assert gain(-5) == 0 and gain(500) == 100
-    assert [gain(v) for v in range(0, 101, 10)] == list(range(0, 101, 10))
+    levels = [gain(v) for v in range(0, 101)]
+    assert levels == sorted(levels) and gain(1) > 0
+    loudness_db = 20 * math.log10((gain(20) / 100) ** 3)
+    assert -24 < loudness_db < -18
 
 
 def test_jump_slider_moves_to_the_clicked_point_and_reports_it(qapp):
@@ -541,6 +545,29 @@ def test_history_popup_rows_choose_remove_and_clear(rig, tmp_path):
     popup.refresh()
     next(b for b in popup.findChildren(QPushButton) if b.text() == "Borrar historial").click()
     assert cleared == [1]
+
+
+def test_typing_asks_once_for_suggestions_and_choosing_one_searches_it(rig, tmp_path, wait_until):
+    from ui.components.search_history_popup import _Row
+    make_search(rig, tmp_path)
+    rig.window.set_search_history(["kimi no na wa"])
+    popup = rig.window.top_bar.history
+    box = rig.window.top_bar.search_box
+    box.hasFocus = lambda: True
+    for text in ("k", "ki", "kimi"):
+        box.setText(text)
+        box.textEdited.emit(text)
+    assert wait_until(lambda: rig.catalog.suggest_calls)
+    assert [query for query, _ in rig.catalog.suggest_calls] == ["kimi"]
+    rig.catalog.suggest_calls[0][1](["kimi ha honnou", "kimi no na wa"])
+    assert popup.shown_items() == ["kimi no na wa"] and popup.shown_suggestions() == ["kimi ha honnou"]
+    popup.set_suggestions("old text", ["stale"])
+    assert popup.shown_suggestions() == ["kimi ha honnou"]
+    submitted = []
+    rig.window.search_submitted.connect(submitted.append)
+    row = next(r for r in popup.findChildren(_Row) if r.suggestion)
+    QTest.mouseClick(row, Qt.LeftButton, pos=QPoint(60, 10))
+    assert submitted == ["kimi ha honnou"]
 
 
 def test_choosing_a_history_entry_searches_it_and_leaves_the_box(rig, tmp_path):

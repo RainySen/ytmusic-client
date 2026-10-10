@@ -10,6 +10,8 @@ from ui.components.mini_player import MiniPlayer
 from ui.main_window import MainWindow
 
 MINI_MARGIN = 24
+WINDOW_POLL_MS = 100
+MINI_POLL_MS = 1000
 
 
 class MiniPlayerPresenter:
@@ -35,6 +37,7 @@ class MiniPlayerPresenter:
         mini.toggle_requested.connect(window.play_pause_clicked)
         mini.next_requested.connect(window.next_clicked)
         mini.previous_requested.connect(window.previous_clicked)
+        mini.rewind_requested.connect(lambda: playback.rewind(settings.settings.mini_rewind_seconds))
         mini.expand_requested.connect(window.bring_to_front)
         mini.close_requested.connect(self._dismiss)
         mini.moved.connect(lambda x, y: settings.update(mini_x=x, mini_y=y))
@@ -71,15 +74,23 @@ class MiniPlayerPresenter:
 
     def _refresh(self) -> None:
         settings = self._settings.settings
+        self._mini.set_rewind_seconds(settings.mini_rewind_seconds)
         background = settings.background_on_close and QSystemTrayIcon.isSystemTrayAvailable()
         wanted = (settings.mini_player and background and not self._dismissed and not self._window.is_presented
                   and self._playback.queue.current is not None)
+        self._playback.set_progress_interval(self._progress_interval(wanted))
         if not wanted:
             self._mini.hide()
             return
         if not self._mini.isVisible():
             self._place(settings)
         self._mini.show()
+
+    # progress polling only as fast as whatever shows it
+    def _progress_interval(self, mini_shown: bool) -> int:
+        if self._window.is_presented:
+            return WINDOW_POLL_MS
+        return MINI_POLL_MS if mini_shown else 0
 
     def _place(self, settings: Settings) -> None:
         if settings.mini_x is not None and settings.mini_y is not None:

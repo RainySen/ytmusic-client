@@ -4,6 +4,7 @@ import logging
 from typing import Any, Callable
 
 from domain.models import LOCAL_SOURCES, Track, normalize_artist_card, normalize_tracks
+from domain.search_results import group_library_results, matches_query
 from infra.concurrency import TaskRunner
 from infra.playlist_repository import LocalPlaylistRepository
 from infra.pinned_playlists import PinnedPlaylists
@@ -19,6 +20,7 @@ LIKED_PAGE = 50
 PAGE_STEP = 100
 PAGE_CAP = 1000
 LIBRARY_ARTISTS = 100
+LIBRARY_SEARCH = 40
 CHANNEL_ID = "__self__"
 CHANNEL_HISTORY_SONGS = 10
 CHANNEL_ARTISTS = 8
@@ -142,7 +144,7 @@ class LibraryService:
 
         def work() -> bool:
             ids = [t["videoId"] for t in tracks if t.get("videoId")]
-            return bool(self._gateway.create_playlist(title, "Creada desde YTMusic Client", ids))
+            return bool(self._gateway.create_playlist(title, "Creada desde PyMusic Client", ids))
 
         def failed(exc: Exception) -> None:
             log.warning("Cloud save failed: %s", exc)
@@ -261,6 +263,25 @@ class LibraryService:
             on_done(None)
 
         self._runner.submit(work, on_done, failed, key="library:channel")
+
+    # ytmusic library scope plus songs from local playlists; no session: local only
+    def search(self, query: str, on_done: Done, on_error: Fail | None = None) -> None:
+        local = [s for s in self._local_songs() if matches_query(s, query)]
+        if not self._gateway.is_authenticated:
+            on_done(group_library_results([], local))
+            return
+
+        def work() -> list:
+            return group_library_results(self._gateway.search(query, limit=LIBRARY_SEARCH, scope="library"), local)
+
+        def failed(exc: Exception) -> None:
+            log.warning("Library search failed: %s", exc)
+            if local:
+                on_done(group_library_results([], local))
+            elif on_error:
+                on_error(exc)
+
+        self._runner.submit(work, on_done, failed, key="library:search")
 
     def artists(self) -> list[dict]:
         artist_map: dict[str, dict] = {}

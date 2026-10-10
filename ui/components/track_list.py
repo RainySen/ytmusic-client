@@ -52,6 +52,7 @@ class _TrackModel(QAbstractListModel):
 
 
 # same geometry for painting and hit testing
+# columns depend on the list, not the row, so every row lines up
 def _cells(rect: QRect, track: dict, options: dict) -> dict:
     fixed = []
     if options.get("numbered"):
@@ -61,13 +62,12 @@ def _cells(rect: QRect, track: dict, options: dict) -> dict:
     fixed.append(("title", 0, 5))
     if options.get("show_artist", True):
         fixed.append(("artist", 0, 3))
-    if track.get("views"):
+    if options.get("views", bool(track.get("views"))):
         fixed.append(("views", 170, 0))
     if options.get("show_album", True):
         fixed.append(("album", 0, 3))
     fixed.append(("duration", 46, 0))
-    if track.get("likeStatus") == "LIKE":
-        fixed.append(("heart", 20, 0))
+    fixed.append(("heart", 20, 0))
     fixed.append(("actions", 28, 0))
     width = rect.width() - 2 * MARGIN - SPACING * (len(fixed) - 1)
     stretch = sum(s for _k, _w, s in fixed)
@@ -125,7 +125,7 @@ class _TrackDelegate(QStyledItemDelegate):
                                  ("duration", track.get("duration", ""), Qt.AlignRight | middle)):
             if key in cells:
                 self._label(painter, cells[key], text, self._muted_font, self._muted, align)
-        if "heart" in cells:
+        if track.get("likeStatus") == "LIKE":
             self._centered(painter, cells["heart"], self._heart)
         if hovered:
             actions = cells["actions"]
@@ -259,6 +259,7 @@ class TrackList(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         self.options: dict = {}
+        self._views_from_data = True
         self._thumbnails = None
         self._generation = 0
         self._covers: "OrderedDict[str, object]" = OrderedDict()
@@ -293,15 +294,24 @@ class TrackList(QWidget):
         self._requested.clear()
         self._thumbnails = thumbnails
         self.options = dict(row_options)
+        self._views_from_data = "views" not in row_options
         self._loading.hide()
         self._model.reset(tracks)
+        self._sync_views_column(tracks)
         self._fit()
 
     def append_tracks(self, tracks, thumbnails):
         self._thumbnails = thumbnails
         self._loading.hide()
         self._model.extend(tracks)
+        self._sync_views_column(tracks)
         self._fit()
+
+    def _sync_views_column(self, added) -> None:
+        if self._views_from_data and not self.options.get("views"):
+            self.options["views"] = any(t.get("views") for t in added)
+            if self.options["views"]:
+                self.view.viewport().update()
 
     def show_loading_more(self):
         self._loading.show()

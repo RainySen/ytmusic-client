@@ -12,13 +12,19 @@ from infra.ytmusic_gateway import YTMusicGateway
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "YTMusicClient/1.0 (https://github.com/RainySen/ytmusic-client)"
+USER_AGENT = "PyMusicClient/1.0 (https://github.com/RainySen/ytmusic-client)"
 TIMEOUT_S = 6
 DURATION_TOLERANCE_S = 3
 RETRIES = 1
 RETRY_DELAY_S = 0.6
 
 HttpGet = Callable[..., Any]
+
+
+# "Source: Musixmatch" -> "Musixmatch (YouTube Music)"
+def source_name(data: dict | None, fallback: str) -> str:
+    source = str((data or {}).get("source") or "").split(":", 1)[-1].strip()
+    return f"{source} ({fallback})" if source else fallback
 
 
 class LyricsProvider(Protocol):
@@ -118,7 +124,16 @@ class YouTubeMusicProvider:
         browse_id = self._gateway.get_lyrics_browse_id(query.video_id)
         if not browse_id:
             return None
-        found = parse_lyrics(self._gateway.get_lyrics(browse_id))
+        try:
+            timed = self._gateway.get_timed_lyrics(browse_id)
+        except Exception:
+            log.info("Timed lyrics unavailable for %s", query.video_id, exc_info=True)
+            timed = None
+        found = parse_lyrics(timed)
+        data = timed
+        if found is None or not found.synced:
+            data = self._gateway.get_lyrics(browse_id)
+            found = parse_lyrics(data) or found
         if found is None:
             return None
-        return Lyrics(found.lines, found.synced, self.name)
+        return Lyrics(found.lines, found.synced, source_name(data, self.name))

@@ -1,7 +1,7 @@
 import qtawesome as qta
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from core.config import HOVER_PREFETCH_MS
@@ -18,6 +18,15 @@ _TYPE_LABELS = {
     "single": "Sencillo", "ep": "EP",
 }
 _MAX_SONGS = 10
+SCOPE_YTMUSIC = "ytmusic"
+SCOPE_LIBRARY = "library"
+SEARCH_SCOPES = ((SCOPE_YTMUSIC, "YT MUSIC"), (SCOPE_LIBRARY, "BIBLIOTECA"))
+_TAB_QSS = """
+    QPushButton { background: transparent; border: none; border-bottom: 2px solid transparent;
+                  color: #aaa; font-size: 13px; font-weight: 600; padding: 8px 0; }
+    QPushButton:hover { color: #ddd; }
+    QPushButton:checked { color: white; border-bottom: 2px solid white; }
+"""
 
 
 def _result_title(item):
@@ -194,7 +203,8 @@ class _ResultRow(ClickableWidget):
             info.addWidget(subtitle)
         layout.addLayout(info, stretch=1)
 
-        self._actions = TrackActionsButton()
+        # parented: a visible orphan flashes as its own window
+        self._actions = TrackActionsButton(self)
         self._actions.song = item
         self._actions.setVisible(bool(item.get("videoId")))
         self._actions.add_next.connect(lambda: self.add_next.emit(self._item))
@@ -216,12 +226,29 @@ class SearchPanel(QWidget):
     item_hovered = Signal(dict)
     artist_shuffle_requested = Signal(dict)
     artist_mix_requested = Signal(dict)
+    scope_changed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+
+        tabs = QHBoxLayout()
+        tabs.setContentsMargins(48, 16, 48, 0)
+        tabs.setSpacing(28)
+        self._tabs = {}
+        for scope, label in SEARCH_SCOPES:
+            tab = QPushButton(label)
+            tab.setCheckable(True)
+            tab.setCursor(Qt.PointingHandCursor)
+            tab.setStyleSheet(_TAB_QSS)
+            tab.clicked.connect(lambda _=False, s=scope: self._on_tab(s))
+            tabs.addWidget(tab)
+            self._tabs[scope] = tab
+        tabs.addStretch()
+        outer.addLayout(tabs)
+        self.set_scope(SCOPE_YTMUSIC)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -236,6 +263,28 @@ class SearchPanel(QWidget):
         self._layout.addStretch()
         scroll.setWidget(content)
         outer.addWidget(scroll, stretch=1)
+
+    def set_scope(self, scope):
+        for name, tab in self._tabs.items():
+            tab.setChecked(name == scope)
+
+    def _on_tab(self, scope):
+        self.set_scope(scope)
+        self.scope_changed.emit(scope)
+
+    def show_library_results(self, sections, thumbnails):
+        self._clear()
+        widgets = []
+        for title, items in sections:
+            widgets.append(self._header(title))
+            widgets.extend(self._row(item, thumbnails) for item in items)
+            widgets.append(self._spacer(24))
+        if not widgets:
+            self.show_message("No se encontró en tu biblioteca.")
+            return
+        for position, widget in enumerate(widgets):
+            self._layout.insertWidget(position, widget)
+        self._scroll.verticalScrollBar().setValue(0)
 
     def _clear(self):
         while self._layout.count() > 1:

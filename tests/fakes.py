@@ -19,6 +19,7 @@ class FakeAudio(QObject):
         self.has_media = False
         self.volume = None
         self.seeks = []
+        self.poll_ms = 100
 
     def play_url(self, url):
         self.played_urls.append(url)
@@ -37,6 +38,12 @@ class FakeAudio(QObject):
 
     def seek(self, fraction):
         self.seeks.append(fraction)
+
+    def seek_by(self, delta_ms):
+        self.seeks.append(("by", delta_ms))
+
+    def set_poll_interval(self, ms):
+        self.poll_ms = ms
 
     def set_volume(self, volume):
         self.volume = volume

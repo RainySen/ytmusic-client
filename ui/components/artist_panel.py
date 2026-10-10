@@ -151,7 +151,7 @@ class ArtistPanel(QWidget):
             inner.addWidget(heading(profile.get("songs_title") or "Canciones más populares"))
             self.songs = self._song_list(songs, thumbnails, show_album=True)
             inner.addWidget(self.songs)
-            if profile.get("songs_browse_id"):
+            if profile.get("songs_browse_id") or len(profile.get("all_songs") or []) > len(songs):
                 self.show_all_button = outline_button("Mostrar todo")
                 self.show_all_button.clicked.connect(self.show_all_requested)
                 inner.addWidget(self.show_all_button, alignment=Qt.AlignLeft)

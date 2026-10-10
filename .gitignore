@@ -207,13 +207,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 
-# YTMusic Client — credentials / local state
+# PyMusic Client — credentials / local state
 oauth.json
 client_config.json
 queue_and_cache.json
 state_error.log
 __marimo__/
-/.claude/
 
 # Runtime data
 cache/
@@ -227,3 +226,7 @@ coverage.xml
 .coverage
 htmlcov/
 /tests/chaos/
+
+# Claude Code (herramientas locales)
+.claude/
+CLAUDE.md

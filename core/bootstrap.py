@@ -11,6 +11,7 @@ from core.config import NETWORK_CACHING_MS, STREAM_EXPIRY_MARGIN_S, AppPaths
 from domain.play_queue import PlayQueue
 from domain.settings import Settings
 from domain.stream_cache import StreamCache
+from infra.account_only_tracks import AccountOnlyTracks
 from infra.audio_backend import VlcAudioBackend
 from infra.autostart import Autostart
 from infra.cache_store import CacheStore
@@ -152,7 +153,8 @@ def build_services(paths: AppPaths) -> Services:
             settings.update(thumbnail_quality=recommended)
     migrate_lyrics_file(paths, settings)
     gateway = YTMusicGateway(paths.auth_file, settings.settings.content_language)
-    resolver = YtDlpStreamResolver(paths.ytdlp_cache_dir)
+    resolver = YtDlpStreamResolver(paths.ytdlp_cache_dir, auth_file=paths.auth_file,
+                                   account_only=AccountOnlyTracks(paths.account_only_file))
     audio = VlcAudioBackend(NETWORK_CACHING_MS)
     queue = PlayQueue(settings.settings.radio_size or None)
     streams = StreamService(resolver, StreamCache(margin=STREAM_EXPIRY_MARGIN_S), play_runner, prefetch_runner)
@@ -268,7 +270,7 @@ def build_ui(services: Services, app_icon, login_window_factory: Callable[[], QW
         home=home,
         explore=explore,
         search=SearchPresenter(window, services.catalog, services.playback, services.opener, services.notifier,
-                               services.history),
+                               services.history, library=services.library),
         library=LibraryPresenter(window, services.library, services.playback, services.opener, services.notifier,
                                  services.navigator),
         lyrics=LyricsPresenter(window, services.playback, services.lyrics),

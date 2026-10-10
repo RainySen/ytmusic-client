@@ -6,7 +6,9 @@ import threading
 from typing import Any
 
 from core.config import CONTENT_LANGUAGE
-from infra.json_store import read_json, write_json_atomic
+from infra import secure_store
+from infra.library_search import lenient_library_search
+from infra.secure_store import read_secret_json
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ class YTMusicGateway:
         self._client_lock = threading.Lock()
         self._ytm: Any = None
         self._ytm_browse: Any = None
+        self._ytm_public: Any = None
         self._authenticated = False
 
     @property
@@ -46,9 +49,14 @@ class YTMusicGateway:
             return self._has_credentials()
         return self._authenticated
 
+    def _credentials(self) -> dict | None:
+        data = read_secret_json(self._auth_file) if os.path.exists(self._auth_file) else None
+        if isinstance(data, dict) and any(str(k).lower() == "cookie" and v for k, v in data.items()):
+            return data
+        return None
+
     def _has_credentials(self) -> bool:
-        data = read_json(self._auth_file) if os.path.exists(self._auth_file) else None
-        return isinstance(data, dict) and any(str(k).lower() == "cookie" and v for k, v in data.items())
+        return self._credentials() is not None
 
     def _client(self) -> Any:
         ytm = self._ytm
@@ -79,14 +87,23 @@ class YTMusicGateway:
         from ytmusicapi import YTMusic
 
         options = {"language": language} if language else {}
-        if self._has_credentials():
+        headers = self._credentials()
+        if headers is not None:
             try:
-                return YTMusic(self._auth_file, **options), True
+                client = YTMusic(auth=headers, **options)
+                self._upgrade_storage(headers)
+                return client, True
             except OSError:
                 raise
             except Exception:
                 log.warning("Stored credentials are invalid; continuing unauthenticated", exc_info=True)
         return YTMusic(**options), False
+
+    # one-time move of a plaintext session to the encrypted format
+    def _upgrade_storage(self, headers: dict) -> None:
+        if secure_store.available() and not secure_store.is_encrypted(self._auth_file):
+            if secure_store.write_secret_json(self._auth_file, headers):
+                log.info("Session file encrypted with DPAPI")
 
     def warm_up(self) -> None:
         for client in (self._client(), self._browse_client()):
@@ -103,7 +120,7 @@ class YTMusicGateway:
             candidate.get_library_playlists(limit=1)
         except Exception as exc:
             raise GatewayError(str(exc)) from exc
-        if not write_json_atomic(self._auth_file, headers, indent=4):
+        if not secure_store.write_secret_json(self._auth_file, headers):
             raise GatewayError("No se pudieron guardar las credenciales.")
         try:
             browse = YTMusic(auth=headers, language=self._language)
@@ -144,8 +161,18 @@ class YTMusicGateway:
             raise AuthRequired("Se requiere iniciar sesión.")
         return client
 
-    def search(self, query: str, filter: str | None = None, limit: int = 25) -> list[dict]:
-        return self._client().search(query, filter=filter, limit=limit)
+    def search(self, query: str, filter: str | None = None, limit: int = 25, scope: str | None = None) -> list[dict]:
+        client = self._client()
+        try:
+            return client.search(query, filter=filter, limit=limit, scope=scope)
+        except KeyError:
+            if scope != "library" or filter:
+                raise
+            log.info("Library search hit a shelf without contents; parsing it leniently")
+            return lenient_library_search(client, query)
+
+    def search_suggestions(self, query: str) -> list[str]:
+        return self._client().get_search_suggestions(query)
 
     def get_home(self, limit: int) -> list[dict]:
         return self._browse_client().get_home(limit=limit)
@@ -176,6 +203,12 @@ class YTMusicGateway:
     def get_artist(self, browse_id: str) -> dict:
         return self._browse_client().get_artist(browse_id)
 
+    def get_user(self, channel_id: str) -> dict:
+        return self._browse_client().get_user(channel_id)
+
+    def get_user_videos(self, channel_id: str, params: str) -> list[dict]:
+        return self._browse_client().get_user_videos(channel_id, params)
+
     def get_album(self, browse_id: str) -> dict:
         return self._browse_client().get_album(browse_id)
 
@@ -184,6 +217,16 @@ class YTMusicGateway:
 
     def get_lyrics(self, browse_id: str) -> dict:
         return self._client().get_lyrics(browseId=browse_id)
+
+    # timed lyrics use the mobile client, which rejects account headers (http 400)
+    def get_timed_lyrics(self, browse_id: str) -> dict:
+        with self._client_lock:
+            if self._ytm_public is None:
+                from ytmusicapi import YTMusic
+
+                self._ytm_public = YTMusic()
+            public = self._ytm_public
+        return public.get_lyrics(browseId=browse_id, timestamps=True)
 
     def get_lyrics_browse_id(self, video_id: str) -> str | None:
         return self._client().get_watch_playlist(videoId=video_id, limit=1).get("lyrics")

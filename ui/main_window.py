@@ -43,6 +43,7 @@ class MainWindow(QWidget):
     like_clicked = Signal()
     history_removed = Signal(str)
     history_cleared = Signal()
+    search_typed = Signal(str)
     sidebar_expanded = Signal(bool)
     now_artist_clicked = Signal()
     now_album_clicked = Signal()
@@ -70,7 +71,7 @@ class MainWindow(QWidget):
         self._close_to_tray = True
 
         self.setWindowIcon(app_icon)
-        self.setWindowTitle("YouTube Music - Minimal Client")
+        self.setWindowTitle("PyMusic Client")
         self._load_icons()
 
         outer = QVBoxLayout(self)
@@ -125,6 +126,7 @@ class MainWindow(QWidget):
         self.top_bar.history.chosen.connect(self._search_from_history)
         self.top_bar.history.removed.connect(self.history_removed)
         self.top_bar.history.cleared.connect(self.history_cleared)
+        self.top_bar.history.typed.connect(self.search_typed)
         self.top_bar.login_requested.connect(self.account_action)
         self.top_bar.settings_requested.connect(self.settings_requested)
         self.top_bar.menu_toggled.connect(self._on_menu_toggled)
@@ -208,7 +210,7 @@ class MainWindow(QWidget):
 
     def _setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self._app_icon, self)
-        self.tray_icon.setToolTip("YTMusic Client")
+        self.tray_icon.setToolTip("PyMusic Client")
         menu = QMenu(self)
         menu.addAction("Mostrar").triggered.connect(self.bring_to_front)
         menu.addSeparator()
@@ -302,6 +304,9 @@ class MainWindow(QWidget):
 
     def set_search_history(self, items):
         self.top_bar.history.set_items(items)
+
+    def set_search_suggestions(self, query, items):
+        self.top_bar.history.set_suggestions(query, items)
 
     def _search_from_history(self, query):
         self.top_bar.search_box.setText(query)
