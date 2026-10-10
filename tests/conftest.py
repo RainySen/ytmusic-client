@@ -5,7 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from PySide6.QtCore import QEventLoop, QTimer
+from PySide6.QtCore import QEvent, QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication
 
 
@@ -14,6 +14,12 @@ def qapp():
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     yield app
+    # pyside 6.12 aborts at exit if widgets outlive the application
+    for widget in list(app.topLevelWidgets()):
+        widget.close()
+        widget.deleteLater()
+    app.sendPostedEvents(None, QEvent.DeferredDelete)
+    app.processEvents()
 
 
 @pytest.fixture

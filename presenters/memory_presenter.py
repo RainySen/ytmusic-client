@@ -13,6 +13,7 @@ from ui.main_window import MainWindow
 
 RELEASE_DELAY_MS = 20_000
 TRIM_EVERY_MS = 60_000
+RETRIM_MARGIN_MB = 25
 
 
 class MemoryPresenter:
@@ -23,6 +24,7 @@ class MemoryPresenter:
         self._home = home
         self._explore = explore
         self._released = False
+        self._trimmed_to = 0
         self._reloads: dict[str, Callable[[], None]] = {}
         self._timer = QTimer(window)
         self._timer.setSingleShot(True)
@@ -31,7 +33,7 @@ class MemoryPresenter:
         # os pages memory back in; trim again while hidden
         self._trim_timer = QTimer(window)
         self._trim_timer.setInterval(TRIM_EVERY_MS)
-        self._trim_timer.timeout.connect(memory.trim)
+        self._trim_timer.timeout.connect(self._trim_if_it_grew)
         # visible window: clean only when idle or in background
         self._idle_timer = QTimer(window)
         self._idle_timer.timeout.connect(self._on_idle_tick)
@@ -39,6 +41,14 @@ class MemoryPresenter:
         if settings is not None:
             settings.changed.connect(lambda _current: self._schedule_idle())
         self._schedule_idle()
+
+    # trimming costs cpu and pages memory back in; skip it while nothing grows
+    def _trim_if_it_grew(self) -> None:
+        before = memory.working_set_mb()
+        if before - self._trimmed_to < RETRIM_MARGIN_MB:
+            return
+        memory.trim()
+        self._trimmed_to = memory.working_set_mb()
 
     def _schedule_idle(self) -> None:
         if self._settings is None or not self._settings.settings.free_memory:
@@ -52,6 +62,8 @@ class MemoryPresenter:
         if not self._window.is_presented or self._released:
             return
         seconds = self._settings.settings.free_memory_seconds
+        if memory.working_set_mb() - self._trimmed_to < RETRIM_MARGIN_MB:
+            return
         if QApplication.activeWindow() is None or memory.idle_seconds() >= seconds:
             self.free_now()
 
@@ -98,7 +110,8 @@ class MemoryPresenter:
         self._window.sidebar.release_rail()
         self._window.thumbnails.clear_memory()
         memory.trim()
-        return before, memory.working_set_mb()
+        self._trimmed_to = memory.working_set_mb()
+        return before, self._trimmed_to
 
     def _release_pages(self, keep: str | None) -> None:
         window = self._window
