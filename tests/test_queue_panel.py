@@ -97,3 +97,32 @@ def test_empty_and_shrinking_queues(qapp):
     panel.set_queue(songs(2), 5, FakeThumbnails())
     assert len(items(panel)) == 2 and not any(w.is_current for w in items(panel))
     panel.close()
+
+
+def test_a_shrunken_layout_never_leaves_an_item_without_a_parent(qapp):
+    panel = shown_panel(qapp)
+    panel.set_queue(songs(120), 0, FakeThumbnails())
+    QTest.qWait(50)
+    # simulate the drift that made qt refuse the insert and float a blank window
+    for _ in range(min(5, panel._queue_layout.count() - 1)):
+        taken = panel._queue_layout.takeAt(0).widget()
+        taken.setParent(None)
+        taken.deleteLater()
+    before = panel._queue_layout.count()
+    panel._build_queue_items(panel._queue_built + 10)
+    assert panel._queue_layout.count() == before + 10
+    assert all(item.parent() is not None for item in items(panel))
+    panel.close()
+
+
+def test_removing_a_song_never_leaves_floating_windows(qapp):
+    from PySide6.QtWidgets import QApplication
+
+    panel = shown_panel(qapp)
+    panel.set_queue(songs(60), 0, FakeThumbnails())
+    QTest.qWait(30)
+    panel.set_queue(songs(59), 0, FakeThumbnails())
+    QTest.qWait(30)
+    floating = [w for w in QApplication.topLevelWidgets() if w.isVisible() and w is not panel]
+    assert floating == []
+    panel.close()

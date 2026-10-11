@@ -254,6 +254,19 @@ def test_carousel_shows_a_partial_card_at_the_edge(qapp):
     assert section._content_width() > 1000
 
 
+def test_carousel_arrows_never_take_focus_so_the_page_does_not_scroll(qapp):
+    from PySide6.QtCore import Qt
+
+    section = CardsSection("T", [playlist(i) for i in range(30)], FakeThumbnails())
+    section.resize(1000, 300)
+    section.show()
+    arrows = (section._header.prev, section._header.next)
+    assert all(arrow.focusPolicy() == Qt.NoFocus for arrow in arrows)
+    section._header.next.click()
+    assert not any(arrow.hasFocus() for arrow in arrows)
+    section.close()
+
+
 def test_carousel_arrow_slides_by_a_page_with_animation(qapp):
     section = CardsSection("T", [playlist(i) for i in range(30)], FakeThumbnails())
     section.resize(1000, 300)

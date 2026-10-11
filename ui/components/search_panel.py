@@ -290,6 +290,7 @@ class SearchPanel(QWidget):
         while self._layout.count() > 1:
             widget = self._layout.takeAt(0).widget()
             if widget is not None:
+                widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
 

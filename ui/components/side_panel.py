@@ -205,6 +205,7 @@ class SidePanel(QWidget):
         while self._queue_layout.count() > 1:
             widget = self._queue_layout.takeAt(0).widget()
             if widget is not None:
+                widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
         self._queue_built = 0
@@ -216,7 +217,8 @@ class SidePanel(QWidget):
             item = ImprovedQueueItem(self._queue_songs[index], index, index == self._queue_current, self._queue_thumbnails)
             item.play_clicked.connect(self.queue_item_activated)
             item.remove_clicked.connect(self.queue_item_removed)
-            self._queue_layout.insertWidget(index, item)
+            # before the trailing stretch: a stale index leaves the item parented to nothing
+            self._queue_layout.insertWidget(max(0, self._queue_layout.count() - 1), item)
             self._queue_built += 1
 
     def _mark_current(self, old, new):
@@ -391,6 +393,7 @@ class SidePanel(QWidget):
         while self._similar_layout.count() > 1:
             widget = self._similar_layout.takeAt(0).widget()
             if widget is not None:
+                widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
 
