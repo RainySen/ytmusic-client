@@ -123,6 +123,7 @@ class SearchHistoryPopup(QFrame):
         while self._rows.count():
             widget = self._rows.takeAt(0).widget()
             if widget is not None:
+                widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
         items = self.shown_items()

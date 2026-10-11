@@ -35,6 +35,8 @@ def _arrow_button(icon_name: str) -> QPushButton:
     button.setIcon(qta.icon(icon_name, color="white"))
     button.setFixedSize(32, 32)
     button.setCursor(Qt.PointingHandCursor)
+    # focused arrows get disabled at the edges and the scroll jumps to the next focusable widget
+    button.setFocusPolicy(Qt.NoFocus)
     button.setStyleSheet(_ARROW_STYLE)
     return button
 
@@ -44,6 +46,7 @@ def _clear_layout(layout) -> None:
         taken = layout.takeAt(0)
         widget = taken.widget()
         if widget is not None:
+            widget.hide()
             widget.setParent(None)
             widget.deleteLater()
 
@@ -520,6 +523,7 @@ class SectionFeed(QWidget):
         while self._layout.count() > 1:
             widget = self._layout.takeAt(0).widget()
             if widget is not None and widget is not self._message:
+                widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
 
@@ -544,6 +548,7 @@ class SectionFeed(QWidget):
         while self._header_slot.count():
             old = self._header_slot.takeAt(0).widget()
             if old is not None:
+                old.hide()
                 old.setParent(None)
                 old.deleteLater()
         if widget is not None:
