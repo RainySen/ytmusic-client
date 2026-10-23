@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from infra.concurrency import TaskRunner
 from infra.session_import import cookies_to_headers, session_headers
@@ -12,6 +12,9 @@ from infra.ytmusic_gateway import GatewayError, SessionRejected, YTMusicGateway
 log = logging.getLogger(__name__)
 
 LoginDone = Callable[[bool, str], None]
+
+# transient rejections: sign out only on the second one
+RECHECK_MS = 2 * 60 * 1000
 
 
 class AuthService(QObject):
@@ -24,6 +27,7 @@ class AuthService(QObject):
         super().__init__(parent)
         self._gateway = gateway
         self._runner = runner
+        self._rejected_once = False
 
     @property
     def is_authenticated(self) -> bool:
@@ -33,15 +37,25 @@ class AuthService(QObject):
         if not self._gateway.is_authenticated:
             return
 
-        def rejected(exc: Exception) -> None:
-            if isinstance(exc, SessionRejected):
-                log.warning("Session rejected by YouTube: %s", exc)
-                self.auth_changed.emit(False)
-                self.session_expired.emit()
-            else:
-                log.debug("Session check skipped: %s", exc)
+        def accepted(_: None) -> None:
+            self._rejected_once = False
 
-        self._runner.submit(self._gateway.verify_session, None, rejected, key="auth:verify")
+        def rejected(exc: Exception) -> None:
+            if not isinstance(exc, SessionRejected):
+                log.debug("Session check skipped: %s", exc)
+                return
+            if not self._rejected_once:
+                self._rejected_once = True
+                log.warning("Session rejected by YouTube, checking again in %d s: %s", RECHECK_MS // 1000, exc)
+                QTimer.singleShot(RECHECK_MS, self.verify_session)
+                return
+            self._rejected_once = False
+            log.warning("Session rejected by YouTube again: %s", exc)
+            self._gateway.mark_signed_out()
+            self.auth_changed.emit(False)
+            self.session_expired.emit()
+
+        self._runner.submit(self._gateway.verify_session, accepted, rejected, key="auth:verify")
 
     def login_with_text(self, pasted: str, on_done: LoginDone) -> None:
         self._authenticate(lambda: session_headers(pasted), on_done)
@@ -54,6 +68,7 @@ class AuthService(QObject):
             self._gateway.authenticate(build_headers())
 
         def ok(_: None) -> None:
+            self._rejected_once = False
             self.auth_changed.emit(True)
             on_done(True, "")
 

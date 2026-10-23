@@ -580,6 +580,40 @@ def test_dialog_account_button_matches_the_session_and_closes_before_acting(rig)
     signed_out.deleteLater()
 
 
+def test_dialog_log_button_reveals_the_log_only_when_available(rig):
+    opened = []
+    dialog, _ = make_dialog(rig, on_open_log=lambda: opened.append(1))
+    dialog.log_button.click()
+    assert opened == [1]
+    dialog.deleteLater()
+    missing, _ = make_dialog(rig)
+    assert not missing.log_button.isEnabled()
+    missing.deleteLater()
+
+
+def test_settings_presenter_hands_the_log_opener_to_the_dialog(rig, tmp_path, monkeypatch):
+    opened = []
+    presenter = rig.keep(SettingsPresenter(rig.window, make_settings(tmp_path), open_log=lambda: opened.append(1)))
+    monkeypatch.setattr(SettingsDialog, "exec", lambda self: self.log_button.click())
+    presenter.open()
+    assert opened == [1]
+
+
+def test_reveal_file_selects_the_file_in_explorer(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
+    from infra import file_reveal
+
+    log = tmp_path / "app.log"
+    log.write_text("x")
+    launched = []
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "Popen", lambda command: launched.append(command))
+    file_reveal.reveal_file(str(log))
+    assert launched == [f'explorer /select,"{log}"']
+
+
 def test_settings_presenter_hands_the_cache_and_account_to_the_dialog(rig, tmp_path, monkeypatch, wait_until):
     cache = CacheStore(FakeThumbnails(3 * 1024 * 1024))
     presenter = rig.keep(SettingsPresenter(rig.window, make_settings(tmp_path), cache=cache, autostart_available=False))

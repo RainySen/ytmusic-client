@@ -80,5 +80,5 @@ class HomePanel(QWidget):
     def show_message(self, text):
         self.feed.show_message(text)
 
-    def set_sections(self, sections, thumbnails, reset_scroll=True):
-        self.feed.set_sections(sections, thumbnails, reset_scroll)
+    def set_sections(self, sections, thumbnails, reset_scroll=True, layouts=None):
+        self.feed.set_sections(sections, thumbnails, reset_scroll, layouts=layouts)

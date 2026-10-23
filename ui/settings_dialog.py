@@ -114,13 +114,14 @@ def _separator() -> QFrame:
 class SettingsDialog(Modal):
     def __init__(self, parent, settings: Settings, tray_available: bool, on_change, on_free=None, *,
                  cache_size=None, clear_cache=None, logged_in: bool = False, on_account=None,
-                 autostart_available: bool = True):
+                 autostart_available: bool = True, on_open_log=None):
         super().__init__(parent, "Configuración", width=540, height=_dialog_height())
         self._on_change = on_change
         self._on_free = on_free
         self._cache_size = cache_size
         self._clear_cache = clear_cache
         self._on_account = on_account
+        self._on_open_log = on_open_log
         content = QWidget()
         content.setStyleSheet("background: transparent;")
         body = QVBoxLayout(content)
@@ -309,6 +310,13 @@ class SettingsDialog(Modal):
         hint = ("Con la sesión iniciada ves tu biblioteca y tus playlists de YouTube Music." if logged_in
                 else "Sin sesión puedes escuchar, pero no ves tu biblioteca ni tus playlists.")
         body.addWidget(_row("Sesión iniciada" if logged_in else "Sin sesión", hint, self.account_button))
+        self.log_button = QPushButton("Abrir registro")
+        self.log_button.setCursor(Qt.PointingHandCursor)
+        self.log_button.setStyleSheet(theme.button_qss("tonal", height=34))
+        self.log_button.setEnabled(self._on_open_log is not None)
+        self.log_button.clicked.connect(lambda: self._on_open_log())
+        body.addWidget(_row("Registro de errores", "Si algo falla, envía este archivo para ayudar a encontrar el "
+                            "problema. No incluye tu sesión ni tus datos.", self.log_button))
 
     def _on_background(self, enabled: bool) -> None:
         self._on_change(background_on_close=enabled)

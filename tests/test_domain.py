@@ -4,9 +4,18 @@ from domain.models import (
     Lyrics, artist_names, normalize_track, parse_home_section, parse_lyrics, parse_time_ms,
     playlist_id_of, primary_artist, thumbnail_url,
 )
+from domain.home_shelves import CARDS_LAYOUT, is_greeting, shelf_layout
 from domain.search_results import flatten_search_results, group_search_results
 from domain.stream_cache import StreamCache, StreamInfo, expiry_from_url
 from infra.ttl_cache import TTLCache
+
+
+def test_greeting_shelves_are_recognised_in_spanish_and_english():
+    for title in ("¡Buen día!", "¡Buenos días, Rainy!", "Buenas tardes", "¡Buenas noches!",
+                  "Good morning", "Good afternoon, Rainy", "Good evening", "Good night"):
+        assert is_greeting(title), title
+    for title in ("Vuelve a escucharlo", "Selecciones rápidas", "Mixes personalizados", "Día de lluvia", ""):
+        assert not is_greeting(title), title
 
 
 def test_thumbnail_picks_smallest_sufficient():
@@ -47,6 +56,26 @@ def test_parse_home_section_kinds():
         {"browseId": "b", "title": "A"}, None, {"unknown": 1},
     ]}
     assert [i["type"] for i in parse_home_section(section)] == ["song", "playlist", "album"]
+
+
+def test_card_row_shelves_get_the_cards_layout():
+    for title in ("Tu descubrimiento diario", "Tus descubrimientos diarios", "Últimos lanzamientos",
+                  "Daily discover", "New releases"):
+        assert shelf_layout(title) == CARDS_LAYOUT, title
+    assert shelf_layout("Selecciones rápidas") is None and shelf_layout("") is None
+
+
+def test_parse_home_section_keeps_song_plays_and_release_details():
+    section = {"contents": [
+        {"videoId": "v", "title": "No pain", "artists": [{"name": "nano"}], "views": "24\xa0M"},
+        {"videoId": "w", "title": "Bare", "artists": [{"name": "X"}]},
+        {"browseId": "MPREb_1", "title": "****Me", "type": "Single", "artists": [{"name": "¿?shimon"}]},
+        {"browseId": "MPREb_2", "title": "LP"},
+    ]}
+    song, bare, single, album = parse_home_section(section)
+    assert song["views"] == "24\xa0M reproducciones" and "views" not in bare
+    assert single["subtitle"] == "Sencillo • ¿?shimon" and single["artists"] == [{"name": "¿?shimon"}]
+    assert album["subtitle"] == "Álbum"
 
 
 def test_parse_time_ms():
