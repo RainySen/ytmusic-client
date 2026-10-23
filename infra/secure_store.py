@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import ctypes
 import json
 import logging
@@ -70,8 +71,9 @@ def write_secret_json(path: str, data: Any) -> bool:
     try:
         blob = MAGIC + protect(json.dumps(data, ensure_ascii=False).encode("utf-8"))
     except OSError:
-        log.warning("Could not encrypt %s; storing it as plain text", path, exc_info=True)
-        return write_json_atomic(path, data, indent=4)
+        # never fall back to plain text on windows
+        log.warning("Could not encrypt %s; not saved", path, exc_info=True)
+        return False
     directory = os.path.dirname(path) or "."
     tmp_path = f"{path}.tmp"
     try:
@@ -87,6 +89,30 @@ def write_secret_json(path: str, data: Any) -> bool:
         except OSError:
             pass
         return False
+
+
+TEXT_PREFIX = "dpapi:"
+
+
+def protect_text(text: str) -> str:
+    if not text or not available():
+        return text
+    try:
+        return TEXT_PREFIX + base64.b64encode(protect(text.encode("utf-8"))).decode("ascii")
+    except OSError:
+        log.warning("Could not encrypt a text secret; not saved", exc_info=True)
+        return ""
+
+
+# plain values from older versions pass through; unreadable tokens become empty
+def unprotect_text(token: str) -> str:
+    if not token.startswith(TEXT_PREFIX):
+        return token
+    try:
+        return unprotect(base64.b64decode(token[len(TEXT_PREFIX):], validate=True)).decode("utf-8")
+    except (OSError, ValueError):
+        log.warning("Could not decrypt a text secret; it belongs to another Windows user or is damaged")
+        return ""
 
 
 def is_encrypted(path: str) -> bool:

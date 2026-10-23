@@ -12,6 +12,7 @@ from services.settings_service import SettingsService
 log = logging.getLogger(__name__)
 
 RELEASES_URL = "https://api.github.com/repos/RainySen/ytmusic-client/releases/latest"
+RELEASES_PAGE = "https://github.com/RainySen/ytmusic-client/releases/"
 
 Available = Callable[[str, str], None]
 
@@ -32,7 +33,9 @@ class UpdateService:
         def done(release: tuple[str, str]) -> None:
             tag, url = release
             version = version_label(tag)
-            if url and is_newer(tag, self._current) and version != self._settings.settings.announced_version:
+            # only this project's release pages are ever opened
+            if (url.startswith(RELEASES_PAGE) and is_newer(tag, self._current)
+                    and version != self._settings.settings.announced_version):
                 on_available(version, url)
 
         self._runner.submit(work, done, lambda exc: log.info("Update check skipped: %s", exc), key="update-check")

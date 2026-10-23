@@ -74,7 +74,7 @@ El engranaje de la barra superior abre la configuración; los cambios se aplican
 
 Para actualizar, ejecuta el instalador de la versión nueva sobre la anterior: la app se reemplaza en su sitio y se conservan tus datos.
 
-Como el instalador todavía no está firmado, Windows SmartScreen puede mostrar "Windows protegió su PC". Pulsa **Más información** y luego **Ejecutar de todas formas**.
+Como el instalador todavía no está firmado, Windows SmartScreen puede mostrar "Windows protegió su PC". Pulsa **Más información** y luego **Ejecutar de todas formas**. Cada Release incluye un archivo `.sha256` junto al instalador; puedes comprobar la descarga con `Get-FileHash PyMusicClient-Setup-<versión>.exe` en PowerShell y comparar el resultado.
 
 ### Tus datos
 
@@ -97,7 +97,7 @@ Se consultan varios proveedores en orden y gana la primera respuesta sincronizad
 2. **LRCLIB** ([lrclib.net](https://lrclib.net)): gratuito, sincronizado por línea.
 3. **YouTube Music:** la letra de YouTube. Cuando está disponible llega sincronizada por línea (la provee Musixmatch) y, si no, en texto plano.
 
-El orden, qué proveedores usar y la clave de Better Lyrics se cambian en la configuración y se aplican a la siguiente letra que se pida. También puedes definir la clave con la variable de entorno `BETTER_LYRICS_API_KEY`, que tiene prioridad. Si tenías un `data/lyrics_settings.json` de versiones anteriores, se importa solo la primera vez y se renombra a `lyrics_settings.json.migrated`.
+El orden, qué proveedores usar y la clave de Better Lyrics se cambian en la configuración y se aplican a la siguiente letra que se pida. También puedes definir la clave con la variable de entorno `BETTER_LYRICS_API_KEY`, que tiene prioridad. Si tenías un `data/lyrics_settings.json` de versiones anteriores, se importa solo la primera vez y después se borra, porque guardaba la clave sin cifrar. La clave de Better Lyrics se guarda cifrada con DPAPI dentro de `data/settings.json`.
 
 **Romanización (romaji y similares):** cuando el idioma original no usa alfabeto latino, se pide una transcripción a [Unison](https://unison.boidu.dev) (el mismo servicio que usa Better Lyrics para esto) y se muestra en una segunda línea, más pequeña, debajo de cada verso. Se puede apagar en la configuración. Unison detecta solo si hace falta romanizar; no hay una manera de pedir solo un idioma en particular.
 
@@ -134,6 +134,8 @@ El script hace tres cosas:
 La versión sale de `version_info.txt`. Para cambiarla, ejecuta `.\bump-version.ps1 1.3.0`, que actualiza sus cuatro campos a la vez (`filevers`, `prodvers`, `FileVersion` y `ProductVersion`); después compila.
 
 Para publicar una versión nueva basta un comando: `.\bump-version.ps1 1.3.0 -Publish`. Cambia la versión, hace commit, crea la etiqueta `v1.3.0` y la sube. Con eso, el workflow `.github/workflows/release.yml` compila el instalador en GitHub Actions y crea el Release solo. El workflow toma la versión de la etiqueta (acepta `v1.3.0` y `v.1.3.0`), así que el `.exe` y el instalador siempre dicen la misma versión que el Release. Si el Release ya existía, reemplaza el instalador en vez de fallar.
+
+El Release instala las dependencias desde `requirements-release.txt`, con versiones exactas y hashes, para que un paquete alterado o inesperado haga fallar el build. Para actualizarlas (por ejemplo, un yt-dlp nuevo), regenéralo y haz commit: `pip install pip-tools` y luego `pip-compile --generate-hashes --strip-extras --allow-unsafe --no-emit-index-url -o requirements-release.txt requirements-dev.txt`.
 
 ## Arquitectura
 
@@ -272,7 +274,7 @@ The gear in the top bar opens the settings; changes apply instantly and are save
 
 To update, run the new version's installer over the previous one: the app is replaced in place and your data is kept.
 
-Since the installer is not signed yet, Windows SmartScreen may show "Windows protected your PC". Click **More info** and then **Run anyway**.
+Since the installer is not signed yet, Windows SmartScreen may show "Windows protected your PC". Click **More info** and then **Run anyway**. Each Release ships a `.sha256` file next to the installer; you can check the download with `Get-FileHash PyMusicClient-Setup-<version>.exe` in PowerShell and compare the result.
 
 ### Your data
 
@@ -295,7 +297,7 @@ Several providers are queried in order and the first synced answer wins. If none
 2. **LRCLIB** ([lrclib.net](https://lrclib.net)): free, synced by line.
 3. **YouTube Music:** YouTube's lyrics. When available they come synced by line (provided by Musixmatch) and otherwise as plain text.
 
-The order, which providers to use and the Better Lyrics key are changed in the settings and apply to the next lyrics request. You can also set the key with the `BETTER_LYRICS_API_KEY` environment variable, which takes precedence. If you had a `data/lyrics_settings.json` from earlier versions, it is imported once and renamed to `lyrics_settings.json.migrated`.
+The order, which providers to use and the Better Lyrics key are changed in the settings and apply to the next lyrics request. You can also set the key with the `BETTER_LYRICS_API_KEY` environment variable, which takes precedence. If you had a `data/lyrics_settings.json` from earlier versions, it is imported once and then deleted, since it stored the key unencrypted. The Better Lyrics key is stored encrypted with DPAPI inside `data/settings.json`.
 
 **Romanisation (romaji and the like):** when the original language does not use the Latin alphabet, a transcription is requested from [Unison](https://unison.boidu.dev) (the same service Better Lyrics uses for this) and shown on a second, smaller line under each verse. It can be turned off in the settings. Unison detects on its own whether romanisation is needed; there is no way to request one specific language.
 
@@ -332,6 +334,8 @@ The script does three things:
 The version comes from `version_info.txt`. To change it, run `.\bump-version.ps1 1.3.0`, which updates its four fields at once (`filevers`, `prodvers`, `FileVersion` and `ProductVersion`); then build.
 
 Publishing a new version takes a single command: `.\bump-version.ps1 1.3.0 -Publish`. It changes the version, commits, creates the `v1.3.0` tag and pushes it. From there the `.github/workflows/release.yml` workflow builds the installer on GitHub Actions and creates the Release by itself. The workflow takes the version from the tag (it accepts both `v1.3.0` and `v.1.3.0`), so the `.exe` and the installer always report the same version as the Release. If the Release already existed, it replaces the installer instead of failing.
+
+The Release installs dependencies from `requirements-release.txt`, with exact versions and hashes, so a tampered or unexpected package fails the build. To update them (a new yt-dlp, for instance), regenerate it and commit: `pip install pip-tools`, then `pip-compile --generate-hashes --strip-extras --allow-unsafe --no-emit-index-url -o requirements-release.txt requirements-dev.txt`.
 
 ## Architecture
 

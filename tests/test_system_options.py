@@ -391,9 +391,20 @@ def test_old_lyrics_file_is_migrated_once_into_the_settings(tmp_path):
     service = SettingsService(SettingsRepository(paths.settings_file))
     migrate_lyrics_file(paths, service)
     assert service.settings.lyrics_providers == ("youtube", "lrclib") and service.settings.better_lyrics_key == "vieja"
-    assert not os.path.exists(paths.lyrics_settings_file) and os.path.exists(paths.lyrics_settings_file + ".migrated")
+    # the old file held the key in plain text: nothing of it may stay on disk
+    assert not os.path.exists(paths.lyrics_settings_file) and not os.path.exists(paths.lyrics_settings_file + ".migrated")
     assert SettingsRepository(paths.settings_file).load().better_lyrics_key == "vieja"
     migrate_lyrics_file(paths, service)
+
+
+def test_a_leftover_migrated_lyrics_file_from_older_versions_is_removed(tmp_path):
+    paths = AppPaths(str(tmp_path))
+    paths.ensure_dirs()
+    leftover = paths.lyrics_settings_file + ".migrated"
+    with open(leftover, "w", encoding="utf-8") as handle:
+        json.dump({"better_lyrics_api_key": "vieja"}, handle)
+    migrate_lyrics_file(paths, SettingsService(SettingsRepository(paths.settings_file)))
+    assert not os.path.exists(leftover)
 
 
 def test_editing_lyrics_options_updates_the_live_service_and_the_language_the_catalog(tmp_path):
