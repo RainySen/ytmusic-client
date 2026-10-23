@@ -7,7 +7,7 @@ from typing import Callable
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QWidget
 
-from core.config import NETWORK_CACHING_MS, STREAM_EXPIRY_MARGIN_S, AppPaths
+from core.config import NETWORK_CACHING_MS, STREAM_EXPIRY_MARGIN_S, AppPaths, app_version
 from domain.play_queue import PlayQueue
 from domain.settings import Settings
 from domain.stream_cache import StreamCache
@@ -16,6 +16,7 @@ from infra.audio_backend import VlcAudioBackend
 from infra.autostart import Autostart
 from infra.cache_store import CacheStore
 from infra.concurrency import TaskRunner
+from infra.file_reveal import reveal_file
 from infra.lyrics_providers import BetterLyricsProvider, LrcLibProvider, YouTubeMusicProvider
 from infra.lyrics_settings import load_lyrics_settings
 from infra.media_keys import MediaKeys
@@ -43,6 +44,7 @@ from presenters.profile_presenter import ProfilePresenter
 from presenters.search_presenter import SearchPresenter
 from presenters.settings_presenter import SettingsPresenter
 from presenters.system_presenter import SystemPresenter
+from presenters.update_presenter import UpdatePresenter
 from presenters.similar_presenter import SimilarPresenter
 from presenters.song_menu_presenter import SongMenuPresenter
 from services.auth_service import AuthService
@@ -57,6 +59,7 @@ from services.playback_service import PlaybackService
 from services.search_history_service import SearchHistoryService
 from services.session_service import SessionService
 from services.settings_service import SettingsService
+from services.update_service import UpdateService
 from services.stream_service import StreamService
 from ui import imaging
 from ui.login_window import LoginWindow
@@ -87,6 +90,7 @@ class Services:
     history: SearchHistoryService
     runners: list[TaskRunner]
     warmup_runner: TaskRunner
+    updates: UpdateService
 
     def warm_up(self) -> None:
         notify = self.notifier
@@ -122,17 +126,23 @@ def build_romanizer() -> UnisonRomanizer:
     return UnisonRomanizer()
 
 
+def _remove_quietly(path: str) -> None:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+# legacy file holds the key in plain text: deleted once imported (also old .migrated copies)
 def migrate_lyrics_file(paths: AppPaths, settings: SettingsService) -> None:
     legacy = paths.lyrics_settings_file
+    _remove_quietly(legacy + ".migrated")
     if not os.path.exists(legacy):
         return
     old = load_lyrics_settings(legacy, {})
     clean = Settings.from_dict({"lyrics_providers": list(old.providers), "better_lyrics_key": old.better_lyrics_api_key})
     settings.update(lyrics_providers=clean.lyrics_providers, better_lyrics_key=clean.better_lyrics_key)
-    try:
-        os.replace(legacy, legacy + ".migrated")
-    except OSError:
-        pass
+    _remove_quietly(legacy)
 
 
 def build_services(paths: AppPaths) -> Services:
@@ -202,6 +212,7 @@ def build_services(paths: AppPaths) -> Services:
         history=SearchHistoryService(paths.search_history_file),
         runners=[browse_runner, auth_runner, play_runner, prefetch_runner, warmup_runner],
         warmup_runner=warmup_runner,
+        updates=UpdateService(warmup_runner, settings, app_version()),
     )
 
 
@@ -226,6 +237,7 @@ class UserInterface:
     system: SystemPresenter
     playlist_rail: PlaylistRailPresenter
     song_menu: SongMenuPresenter
+    updates: UpdatePresenter
 
     def start(self, services: Services) -> None:
         services.session.restore(load=services.settings.settings.restore_queue)
@@ -234,6 +246,7 @@ class UserInterface:
         self.player.start()
         self.account.start()
         self.home.start()
+        self.updates.start()
         services.session.enable_autosave()
         # prefetch playlists so the library opens instantly
         QTimer.singleShot(LIBRARY_PREFETCH_MS, self.window, lambda: services.library.playlists(lambda _items: None))
@@ -283,11 +296,12 @@ def build_ui(services: Services, app_icon, login_window_factory: Callable[[], QW
         memory=memory,
         preferences=SettingsPresenter(window, services.settings, free_now=memory.free_now, cache=cache,
                                       on_language=change_language, autostart_available=autostart.available,
-                                      thumbnails=thumbnails),
+                                      thumbnails=thumbnails, open_log=lambda: reveal_file(paths.log_file)),
         mini=MiniPlayerPresenter(window, services.playback, services.settings),
         system=SystemPresenter(window, services.playback, services.settings, MediaKeys(), autostart),
         playlist_rail=PlaylistRailPresenter(window, services.library, services.playback, services.notifier),
         song_menu=SongMenuPresenter(song_hub, services.navigator, pins, services.notifier, home, auth=services.auth),
+        updates=UpdatePresenter(window, services.updates),
     )
     memory.on_restore("library", interface.library.reload)
     memory.on_restore("album", interface.profiles.reload)

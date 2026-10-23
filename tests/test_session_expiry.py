@@ -1,10 +1,13 @@
 import pytest
+import requests
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtTest import QSignalSpy
 
 from infra.concurrency import TaskRunner
+from infra.secure_store import read_secret_json, write_secret_json
 from infra.ytmusic_gateway import SessionRejected, YTMusicGateway, looks_like_auth_failure
 from presenters.auth_presenter import SESSION_CHECK_MS, AuthPresenter
+from services import auth_service
 from services.auth_service import AuthService
 from tests.test_presenters import Rig
 
@@ -49,11 +52,62 @@ def test_a_working_session_stays_authenticated():
     assert client.calls == 1 and gateway.is_authenticated
 
 
-def test_a_rejected_session_is_marked_as_signed_out():
+def test_a_rejection_is_reported_but_only_signs_out_when_confirmed():
     gateway = gateway_with(FakeClient(RuntimeError("Server returned HTTP 401: Unauthorized.")))
     with pytest.raises(SessionRejected):
         gateway.verify_session()
+    assert gateway.is_authenticated
+    gateway.mark_signed_out()
     assert not gateway.is_authenticated
+
+
+class RotatingClient(FakeClient):
+    def __init__(self, cookie):
+        super().__init__()
+        self._auth_headers = {"cookie": cookie}
+
+
+def rotation_response(**cookies):
+    response = requests.Response()
+    response.status_code = 200
+    for name, value in cookies.items():
+        response.cookies.set(name, value, domain=".youtube.com")
+    return response
+
+
+def test_checking_the_session_rotates_and_saves_the_cookies(tmp_path, monkeypatch):
+    path = str(tmp_path / "oauth.json")
+    write_secret_json(path, {"cookie": "SID=s; __Secure-3PAPISID=k; __Secure-3PSIDTS=old", "user-agent": "UA"})
+    client = RotatingClient("SID=s; __Secure-3PAPISID=k; __Secure-3PSIDTS=old")
+    gateway = YTMusicGateway(path)
+    gateway._ytm, gateway._authenticated = client, True
+    sent = []
+    monkeypatch.setattr(requests, "post", lambda url, **kw: sent.append((url, kw)) or rotation_response(**{"__Secure-3PSIDTS": "new"}))
+
+    gateway.verify_session()
+
+    expected = "SID=s; __Secure-3PAPISID=k; __Secure-3PSIDTS=new"
+    assert sent[0][0] == "https://accounts.youtube.com/RotateCookies"
+    assert read_secret_json(path)["cookie"] == expected
+    assert client._auth_headers["cookie"] == expected
+    assert client.calls == 1
+
+
+def test_a_failed_rotation_still_checks_the_session(tmp_path, monkeypatch):
+    path = str(tmp_path / "oauth.json")
+    write_secret_json(path, {"cookie": "__Secure-3PAPISID=k; __Secure-3PSIDTS=old"})
+    client = RotatingClient("__Secure-3PAPISID=k; __Secure-3PSIDTS=old")
+    gateway = YTMusicGateway(path)
+    gateway._ytm, gateway._authenticated = client, True
+
+    def offline(url, **kw):
+        raise requests.ConnectionError("offline")
+    monkeypatch.setattr(requests, "post", offline)
+
+    gateway.verify_session()
+
+    assert client.calls == 1 and gateway.is_authenticated
+    assert read_secret_json(path)["cookie"] == "__Secure-3PAPISID=k; __Secure-3PSIDTS=old"
 
 
 def test_network_errors_do_not_sign_the_user_out():
@@ -64,31 +118,52 @@ def test_network_errors_do_not_sign_the_user_out():
 
 
 class ScriptedGateway:
-    def __init__(self, error=None, authenticated=True):
-        self.error = error
+    def __init__(self, error=None, authenticated=True, errors=None):
+        self.errors = errors if errors is not None else [error]
         self.is_authenticated = authenticated
         self.checks = 0
 
     def verify_session(self):
         self.checks += 1
-        if self.error:
-            raise self.error
+        error = self.errors.pop(0) if len(self.errors) > 1 else self.errors[0]
+        if error:
+            raise error
+
+    def mark_signed_out(self):
+        self.is_authenticated = False
 
 
 @pytest.fixture
-def service(qapp):
+def service(qapp, monkeypatch):
+    monkeypatch.setattr(auth_service, "RECHECK_MS", 10)
     runner = TaskRunner("expiry", 2)
     yield runner
     runner.shutdown()
 
 
-def test_service_announces_an_expired_session(service, wait_until):
+def test_service_announces_an_expired_session_once_it_is_rejected_twice(service, wait_until):
     gateway = ScriptedGateway(SessionRejected("HTTP 401"))
     auth = AuthService(gateway, service)
     expired, changed = QSignalSpy(auth.session_expired), QSignalSpy(auth.auth_changed)
     auth.verify_session()
     assert wait_until(lambda: expired.count() == 1)
+    assert gateway.checks == 2 and not gateway.is_authenticated
     assert changed.count() == 1 and changed.at(0)[0] is False
+
+
+def test_a_one_off_rejection_keeps_the_session(service, wait_until):
+    gateway = ScriptedGateway(errors=[SessionRejected("HTTP 401"), None])
+    auth = AuthService(gateway, service)
+    expired = QSignalSpy(auth.session_expired)
+    auth.verify_session()
+    assert wait_until(lambda: gateway.checks == 2)
+    wait_until(lambda: False, 200)
+    assert expired.count() == 0 and gateway.is_authenticated
+    gateway.errors = [SessionRejected("HTTP 401"), None]
+    auth.verify_session()
+    assert wait_until(lambda: gateway.checks == 4)
+    wait_until(lambda: False, 200)
+    assert expired.count() == 0 and gateway.is_authenticated
 
 
 def test_service_stays_quiet_when_the_session_is_fine_or_the_network_is_down(service, wait_until):

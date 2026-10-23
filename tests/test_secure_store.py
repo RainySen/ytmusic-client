@@ -35,6 +35,25 @@ def test_missing_and_damaged_files_fall_back_to_the_default(tmp_path):
 
 
 @windows_only
+def test_a_failed_encryption_never_falls_back_to_plain_text(tmp_path, monkeypatch):
+    def broken(_data):
+        raise OSError("CryptProtectData failed")
+    monkeypatch.setattr(secure_store, "protect", broken)
+    path = tmp_path / "oauth.json"
+    assert not secure_store.write_secret_json(str(path), SESSION)
+    assert not path.exists()
+
+
+@windows_only
+def test_text_secrets_round_trip_and_unknown_tokens_are_dropped():
+    token = secure_store.protect_text("clave-123")
+    assert token.startswith(secure_store.TEXT_PREFIX) and "clave-123" not in token
+    assert secure_store.unprotect_text(token) == "clave-123"
+    assert secure_store.unprotect_text(secure_store.TEXT_PREFIX + "basura") == ""
+    assert secure_store.unprotect_text("clave-antigua") == "clave-antigua"
+
+
+@windows_only
 def test_another_windows_user_cannot_decrypt_it(tmp_path):
     blob = secure_store.protect(b"secreto")
     assert secure_store.unprotect(blob) == b"secreto"

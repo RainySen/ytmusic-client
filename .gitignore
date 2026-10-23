@@ -230,3 +230,4 @@ htmlcov/
 # Claude Code (herramientas locales)
 .claude/
 CLAUDE.md
+docs/*

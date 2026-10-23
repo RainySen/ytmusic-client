@@ -160,6 +160,18 @@ def test_thumbnail_cache_set_max_items_trims_immediately(qapp):
     assert len(cache._memory) == 3
 
 
+def test_thumbnail_cache_evicts_the_oldest_once_over_the_byte_budget(qapp):
+    from PySide6.QtGui import QPixmap
+
+    cache = ThumbnailCache(None, max_items=10, max_memory_mb=1)
+    for name in ("a", "b", "c"):
+        cache._store(name, QPixmap(300, 300))
+    assert list(cache._memory) == ["b", "c"]
+    assert cache._memory_bytes == 2 * 300 * 300 * 4
+    cache.clear_memory()
+    assert cache._memory_bytes == 0
+
+
 def test_dialog_reports_the_thumbnail_cache_limit_choice(rig):
     changes = []
     dialog = SettingsDialog(rig.window, Settings(), True, lambda **kw: changes.append(kw))

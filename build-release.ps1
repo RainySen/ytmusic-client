@@ -18,7 +18,7 @@ Write-Host "Limpiando builds anteriores..." -ForegroundColor Yellow
 Remove-Item -Recurse -Force build, dist, release, "*.spec" -ErrorAction SilentlyContinue
 
 Write-Host "Compilando YTMusicClient $version..." -ForegroundColor Cyan
-& $python -m PyInstaller --onedir --noconsole --clean --noconfirm --distpath release --name "YTMusicClient" --icon "icon.ico" --version-file "version_info.txt" --collect-datas yt_dlp --collect-datas yt_dlp_ejs --hidden-import yt_dlp_ejs --collect-datas qtawesome --collect-datas ytmusicapi --hidden-import "PySide6.QtSvg" "app.py"
+& $python -m PyInstaller --onedir --noconsole --clean --noconfirm --distpath release --name "YTMusicClient" --icon "icon.ico" --version-file "version_info.txt" --add-data "version_info.txt;." --collect-datas yt_dlp --collect-datas yt_dlp_ejs --hidden-import yt_dlp_ejs --collect-datas qtawesome --collect-datas ytmusicapi --hidden-import "PySide6.QtSvg" "app.py"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller fallo" }
 
 & $python installer\prune_bundle.py release\YTMusicClient
