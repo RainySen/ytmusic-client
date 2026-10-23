@@ -19,6 +19,7 @@ from ui.components.search_panel import SearchPanel
 from ui.components.side_panel import SidePanel
 from ui.components.sidebar import Sidebar
 from ui.components.toast import Toast
+from ui.components.update_banner import UpdateBanner
 from ui.components.top_bar import TopBar
 from ui.components.track_actions import MENU_QSS
 from ui.imaging import scale_cover
@@ -96,6 +97,7 @@ class MainWindow(QWidget):
         outer.addWidget(self._build_player_bar())
 
         self._toast = Toast(self)
+        self.update_banner = UpdateBanner(self)
         self._setup_shortcuts()
         self._setup_tray()
         self.setStyleSheet(APP_STYLESHEET)
@@ -254,6 +256,7 @@ class MainWindow(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._toast.reposition()
+        self.update_banner.reposition()
 
     @property
     def is_presented(self) -> bool:
@@ -373,7 +376,8 @@ class MainWindow(QWidget):
         self.player_panel.like_button.setEnabled(logged_in)
 
     def ask_relogin(self):
-        return dialogs.confirm(self, "Tu sesión caducó", "YouTube Music cerró tu sesión. Inicia sesión de nuevo para ver tu biblioteca y tus playlists.",
+        return dialogs.confirm(self, "Tu sesión caducó", "YouTube Music cerró tu sesión. Inicia sesión de nuevo para ver tu biblioteca y tus playlists.\n\n"
+                               "Si esto se repite, envía el registro desde Configuración → Cuenta → Abrir registro.",
                                ok="Iniciar sesión", cancel="Ahora no")
 
     @property

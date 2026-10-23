@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 
 from core.config import HOVER_PREFETCH_MS
 from ui import imaging
+from domain.home_shelves import CARDS_LAYOUT
 from domain.models import artist_names, thumbnail_url
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
@@ -28,6 +29,14 @@ _PLAY_ALL_STYLE = """
                   border-radius: 16px; padding: 5px 14px; color: #e0e0e0; font-size: 12px; }
     QPushButton:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.5); color: white; }
 """
+
+
+def _play_all_button(on_click) -> QPushButton:
+    button = QPushButton("Reproducir todo")
+    button.setCursor(Qt.PointingHandCursor)
+    button.setStyleSheet(_PLAY_ALL_STYLE)
+    button.clicked.connect(on_click)
+    return button
 
 
 def _arrow_button(icon_name: str) -> QPushButton:
@@ -91,12 +100,37 @@ class _CardOverlay(QWidget):
         painter.end()
 
 
+# hover hint only; clicks fall through to the card
+class _PlayHint(QWidget):
+    ICON = 56
+
+    def __init__(self, cover, size):
+        super().__init__(cover)
+        self.setGeometry(0, 0, size, size)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._icon = qta.icon("fa5s.play", color="white").pixmap(self.ICON, self.ICON)
+        self.hide()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 70))
+        x = (self.width() - self.ICON) // 2
+        painter.drawPixmap(x, (self.height() - self.ICON) // 2, self._icon)
+        painter.end()
+
+
 class HomeCard(ClickableWidget):
     chosen = Signal(dict)
     action_requested = Signal(str, dict)
+    add_next = Signal(dict)
+    add_queue = Signal(dict)
+    add_playlist = Signal(dict)
+    # not "hovered": that name is ClickableWidget's hover state
+    song_hovered = Signal(dict)
 
     def __init__(self, item, thumbnails, parent=None, size=CARD_SIZE):
-        super().__init__(parent, radius=10)
+        is_song = item.get("type") == "song"
+        super().__init__(parent, radius=10, dwell_ms=HOVER_PREFETCH_MS if is_song else 0)
         self.item = item
         self.setFixedWidth(size + 12)
         layout = QVBoxLayout(self)
@@ -115,15 +149,15 @@ class HomeCard(ClickableWidget):
         title.setText(_elided(item.get("title", ""), 13, QFont.DemiBold, size))
         layout.addWidget(title)
 
-        subtitle = (item.get("subtitle") or artist_names(item, limit=2) or item.get("subscribers", "")
-                    or {"playlist": "Playlist", "album": "Álbum", "artist": "Artista"}.get(kind, ""))
-        if subtitle:
-            sub = QLabel(_elided(subtitle, 11, QFont.Normal, size))
+        for line in self._subtitles(item, kind):
+            sub = QLabel(_elided(line, 11, QFont.Normal, size))
             sub.setObjectName("card_subtitle")
             sub.setMaximumWidth(size)
             layout.addWidget(sub)
 
         self.activated.connect(lambda: self.chosen.emit(self.item))
+        if is_song:
+            self._add_song_controls(size)
 
         # overlay built on first hover, ~160 KB each
         self._size = size
@@ -132,6 +166,39 @@ class HomeCard(ClickableWidget):
         if self._collection:
             self.hover_changed.connect(self._sync_overlay)
             self.context_requested.connect(lambda pos: self._overlay.menu_button.show_menu(pos))
+
+    @staticmethod
+    def _subtitles(item, kind) -> list[str]:
+        if kind == "song":
+            by, plays = artist_names(item, limit=2), item.get("views", "")
+            return [line for line in (f"{by} •" if by and plays else by, plays) if line]
+        subtitle = (item.get("subtitle") or artist_names(item, limit=2) or item.get("subscribers", "")
+                    or {"playlist": "Playlist", "album": "Álbum", "artist": "Artista"}.get(kind, ""))
+        return [subtitle] if subtitle else []
+
+    def _add_song_controls(self, size):
+        self._play_hint = _PlayHint(self.thumb, size)
+        self._actions = TrackActionsButton(self.thumb, overlay=True)
+        self._actions.song = self.item
+        self._actions.move(size - 32 - 8, 8)
+        self._actions.add_next.connect(lambda: self.add_next.emit(self.item))
+        self._actions.add_queue.connect(lambda: self.add_queue.emit(self.item))
+        self._actions.add_playlist.connect(lambda: self.add_playlist.emit(self.item))
+        self._actions.hide()
+        self._actions.menu_closed.connect(self._sync_song_controls)
+        self.hover_changed.connect(self._sync_song_controls)
+        self.context_requested.connect(self._show_song_menu)
+        self.dwelled.connect(lambda: self.song_hovered.emit(self.item))
+
+    def _sync_song_controls(self, *_):
+        shown = self.hovered or self._actions.menu_is_open
+        self._play_hint.setVisible(shown)
+        self._actions.setVisible(shown)
+        self._actions.set_revealed(shown)
+
+    def _show_song_menu(self, pos):
+        self._sync_song_controls()
+        self._actions.show_menu(pos)
 
     @property
     def _overlay(self):
@@ -246,11 +313,17 @@ class _Viewport(QWidget):
 class CardsSection(QWidget):
     item_clicked = Signal(dict)
     collection_action_requested = Signal(str, dict)
+    add_next_clicked = Signal(dict)
+    add_queue_clicked = Signal(dict)
+    add_playlist_clicked = Signal(dict)
+    play_all_requested = Signal(list)
+    item_hovered = Signal(dict)
     SPACING = 4
     SLOT = CARD_SIZE + 12 + SPACING
     INITIAL_CARDS = 6
 
-    def __init__(self, title, items, thumbnails, parent=None, *, card_size=CARD_SIZE, title_px=20):
+    def __init__(self, title, items, thumbnails, parent=None, *, card_size=CARD_SIZE, title_px=20,
+                 play_all=False):
         super().__init__(parent)
         self._card_size = card_size
         self.SLOT = card_size + 12 + self.SPACING
@@ -262,7 +335,8 @@ class CardsSection(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(12)
-        self._header = _SectionHeader(title, self._go_prev, self._go_next, title_px=title_px)
+        extra = _play_all_button(lambda: self.play_all_requested.emit(list(self._items))) if play_all else None
+        self._header = _SectionHeader(title, self._go_prev, self._go_next, extra=extra, title_px=title_px)
         root.addLayout(self._header)
 
         self._view = _Viewport()
@@ -289,6 +363,10 @@ class CardsSection(QWidget):
             card = HomeCard(self._items[self._built], self._thumbnails, size=self._card_size)
             card.chosen.connect(self.item_clicked)
             card.action_requested.connect(self.collection_action_requested)
+            card.add_next.connect(self.add_next_clicked)
+            card.add_queue.connect(self.add_queue_clicked)
+            card.add_playlist.connect(self.add_playlist_clicked)
+            card.song_hovered.connect(self.item_hovered)
             self._row.addWidget(card)
             card.show()
             self._built += 1
@@ -347,12 +425,7 @@ class CompactSection(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(12)
 
-        extra = None
-        if play_all:
-            extra = QPushButton("Reproducir todo")
-            extra.setCursor(Qt.PointingHandCursor)
-            extra.setStyleSheet(_PLAY_ALL_STYLE)
-            extra.clicked.connect(lambda: self.play_all_requested.emit(list(self._items)))
+        extra = _play_all_button(lambda: self.play_all_requested.emit(list(self._items))) if play_all else None
         self._header = _SectionHeader(title, self._go_prev, self._go_next, extra=extra, title_px=title_px)
         root.addLayout(self._header)
 
@@ -476,6 +549,7 @@ class SectionFeed(QWidget):
         self._pending = []
         self._built = []
         self._thumbnails = None
+        self._layouts = {}
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -530,8 +604,10 @@ class SectionFeed(QWidget):
     def clear(self):
         self._clear()
 
-    def set_sections(self, sections, thumbnails, reset_scroll=True, empty_message="No hay contenido para mostrar."):
+    def set_sections(self, sections, thumbnails, reset_scroll=True, empty_message="No hay contenido para mostrar.",
+                     layouts=None):
         self._thumbnails = thumbnails
+        self._layouts = layouts or {}
         scroll_value = self._scroll.verticalScrollBar().value()
         self._clear()
         self._pending = [(title, items) for title, items in sections if items]
@@ -592,16 +668,18 @@ class SectionFeed(QWidget):
         kind = items[0].get("type")
         if kind == "mood":
             section = MoodGridSection(title, items, self._thumbnails)
-        elif kind == "song":
+            section.item_clicked.connect(self.item_clicked)
+            return section
+        if kind == "song" and self._layouts.get(title) != CARDS_LAYOUT:
             section = CompactSection(title, items, self._thumbnails)
-            section.add_next_clicked.connect(self.add_next_clicked)
-            section.add_queue_clicked.connect(self.add_queue_clicked)
-            section.add_playlist_clicked.connect(self.add_playlist_clicked)
-            section.play_all_requested.connect(self.play_all_requested)
-            section.item_hovered.connect(self.item_hovered)
         else:
-            section = CardsSection(title, items, self._thumbnails)
+            section = CardsSection(title, items, self._thumbnails, play_all=kind == "song")
             section.collection_action_requested.connect(self.collection_action_requested)
+        section.add_next_clicked.connect(self.add_next_clicked)
+        section.add_queue_clicked.connect(self.add_queue_clicked)
+        section.add_playlist_clicked.connect(self.add_playlist_clicked)
+        section.play_all_requested.connect(self.play_all_requested)
+        section.item_hovered.connect(self.item_hovered)
         section.item_clicked.connect(self.item_clicked)
         return section
 

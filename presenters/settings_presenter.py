@@ -18,8 +18,9 @@ class SettingsPresenter:
     def __init__(self, window: MainWindow, settings: SettingsService,
                  free_now: Callable[[], tuple[int, int]] | None = None, cache=None,
                  on_language: Callable[[str], None] | None = None, autostart_available: bool = True,
-                 thumbnails=None):
+                 thumbnails=None, open_log: Callable[[], None] | None = None):
         self._window = window
+        self._open_log = open_log
         self._free_now = free_now
         self._cache = cache
         self._on_language = on_language
@@ -50,7 +51,8 @@ class SettingsPresenter:
             self._window, self._settings.settings, QSystemTrayIcon.isSystemTrayAvailable(), self._settings.update,
             self._free_now, cache_size=self._cache.size_bytes if self._cache else None,
             clear_cache=self._cache.clear if self._cache else None, logged_in=self._window.logged_in,
-            on_account=self._account_action, autostart_available=self._autostart_available)
+            on_account=self._account_action, autostart_available=self._autostart_available,
+            on_open_log=self._open_log)
         dialog.exec()
 
     def _account_action(self) -> None:

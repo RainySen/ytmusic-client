@@ -1,5 +1,6 @@
 import random
 
+from domain.home_shelves import is_greeting, shelf_layout
 from infra.listen_again_pins import ListenAgainPins
 from ui.main_window import MainWindow
 from services.catalog_service import CatalogService
@@ -130,16 +131,22 @@ class HomePresenter:
         self._scroll_top = False
         sections = self._with_swaps(sections)
         self._sections = sections
-        self._panel.set_sections(self._displayed(sections), self._window.thumbnails, reset_scroll=reset_scroll)
+        self._show(sections, reset_scroll)
         if self._pool_ready is None:
             self._prefetch_pool()
 
     def refresh_pins(self) -> None:
         if self._has_content and not self._released and self._sections:
-            self._panel.set_sections(self._displayed(self._sections), self._window.thumbnails, reset_scroll=False)
+            self._show(self._sections, reset_scroll=False)
 
+    def _show(self, sections, reset_scroll: bool) -> None:
+        shown = self._displayed(sections)
+        layouts = {title: layout for title, _ in shown if (layout := shelf_layout(title))}
+        self._panel.set_sections(shown, self._window.thumbnails, reset_scroll=reset_scroll, layouts=layouts)
+
+    # greeting shelf (time-of-day playlists) dropped before the first-shelf swap
     def _displayed(self, sections):
-        return self._with_pins(self._ordered(sections))
+        return self._with_pins(self._ordered([s for s in sections if not is_greeting(s[0])]))
 
     # local pins first in listen again; shelf created if missing; not in moods
     def _with_pins(self, sections):

@@ -82,6 +82,7 @@ class Settings:
     thumbnail_quality: str = DEFAULT_THUMBNAIL_QUALITY
     thumbnail_cache_limit: int = DEFAULT_THUMBNAIL_CACHE
     romanized_lyrics: bool = True
+    announced_version: str = ""
 
     def with_changes(self, **changes) -> "Settings":
         unknown = set(changes) - set(self.__dataclass_fields__)
@@ -120,4 +121,5 @@ class Settings:
             thumbnail_quality=_quality(data),
             thumbnail_cache_limit=_choice(data, "thumbnail_cache_limit", THUMBNAIL_CACHE_OPTIONS, DEFAULT_THUMBNAIL_CACHE),
             romanized_lyrics=_flag(data, "romanized_lyrics", True),
+            announced_version=_text(data, "announced_version"),
         )

@@ -1,5 +1,6 @@
 import glob
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass
@@ -24,6 +25,17 @@ HOME_SECTIONS = 20
 QUEUE_HISTORY_LIMIT = 50
 MAX_CONSECUTIVE_PLAY_FAILURES = 3
 STREAM_RETRIES = 2
+
+
+# single source: version_info.txt, bundled next to the code by build-release.ps1
+def app_version() -> str:
+    root = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        with open(os.path.join(root, "version_info.txt"), encoding="utf-8-sig") as fh:
+            match = re.search(r"'FileVersion',\s*'([^']+)'", fh.read())
+    except OSError:
+        return ""
+    return match.group(1) if match else ""
 
 
 @dataclass(frozen=True)

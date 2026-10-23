@@ -18,7 +18,7 @@ _QT_LEVELS = {
 def setup_logging(paths: AppPaths, level: int = logging.INFO) -> None:
     handlers: list[logging.Handler] = []
     try:
-        handlers.append(RotatingFileHandler(paths.log_file, maxBytes=1_000_000, backupCount=2, encoding="utf-8"))
+        handlers.append(RotatingFileHandler(paths.log_file, maxBytes=2_000_000, backupCount=2, encoding="utf-8"))
     except OSError:
         pass
     if sys.stderr is not None:

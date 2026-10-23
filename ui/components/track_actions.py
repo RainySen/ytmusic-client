@@ -132,8 +132,9 @@ class TrackActionsButton(ActionsButton):
     add_queue = Signal()
     add_playlist = Signal()
 
-    def __init__(self, parent=None):
-        super().__init__(SONG_ACTIONS, parent)
+    def __init__(self, parent=None, *, overlay: bool = False):
+        style = dict(style=_OVERLAY_QSS, size=32, icon_color="white") if overlay else {}
+        super().__init__(SONG_ACTIONS, parent, **style)
         self.song: dict | None = None
         self.action_chosen.connect(self._relay)
 

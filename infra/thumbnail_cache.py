@@ -15,7 +15,8 @@ PixmapCallback = Callable[[QPixmap], None]
 
 class ThumbnailCache(QObject):
     def __init__(self, cache_dir: str | None = None, max_items: int = 400,
-                 disk_bytes: int = 150 * 1024 * 1024, parent: QObject | None = None):
+                 disk_bytes: int = 150 * 1024 * 1024, max_memory_mb: int = 20,
+                 parent: QObject | None = None):
         super().__init__(parent)
         self._manager = QNetworkAccessManager(self)
         if cache_dir:
@@ -25,15 +26,17 @@ class ThumbnailCache(QObject):
             self._manager.setCache(disk)
         self._memory: "OrderedDict[str, QPixmap]" = OrderedDict()
         self._max_items = max_items
+        self._max_memory_bytes = max_memory_mb * 1024 * 1024
+        self._memory_bytes = 0
         self._pending: dict[str, list[PixmapCallback]] = {}
 
     def clear_memory(self) -> None:
         self._memory.clear()
+        self._memory_bytes = 0
 
     def set_max_items(self, max_items: int) -> None:
         self._max_items = max_items
-        while len(self._memory) > self._max_items:
-            self._memory.popitem(last=False)
+        self._trim()
 
     def disk_size(self) -> int:
         disk = self._manager.cache()
@@ -43,7 +46,7 @@ class ThumbnailCache(QObject):
         disk = self._manager.cache()
         if disk is not None:
             disk.clear()
-        self._memory.clear()
+        self.clear_memory()
 
     def request(self, url: str, callback: PixmapCallback) -> None:
         if not url:
@@ -73,11 +76,28 @@ class ThumbnailCache(QObject):
         if pixmap.isNull():
             log.debug("Thumbnail failed: %s", url)
             return
-        self._memory[url] = pixmap
-        while len(self._memory) > self._max_items:
-            self._memory.popitem(last=False)
+        self._store(url, pixmap)
         for callback in callbacks:
             self._invoke(callback, pixmap)
+
+    def _store(self, url: str, pixmap: QPixmap) -> None:
+        previous = self._memory.pop(url, None)
+        if previous is not None:
+            self._memory_bytes -= self._weight(previous)
+        self._memory[url] = pixmap
+        self._memory_bytes += self._weight(pixmap)
+        self._trim()
+
+    # LRU: item count and byte budget
+    def _trim(self) -> None:
+        while self._memory and (len(self._memory) > self._max_items or
+                                self._memory_bytes > self._max_memory_bytes):
+            _url, old = self._memory.popitem(last=False)
+            self._memory_bytes -= self._weight(old)
+
+    @staticmethod
+    def _weight(pixmap: QPixmap) -> int:
+        return pixmap.width() * pixmap.height() * 4
 
     @staticmethod
     def _invoke(callback: PixmapCallback, pixmap: QPixmap) -> None:
