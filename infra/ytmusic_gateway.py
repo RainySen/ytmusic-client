@@ -7,6 +7,7 @@ from typing import Any
 
 from core.config import CONTENT_LANGUAGE
 from infra import secure_store
+from infra.auth_headers import cookie_header, parse_cookie_string
 from infra.library_search import lenient_library_search
 from infra.secure_store import read_secret_json
 
@@ -24,6 +25,10 @@ class AuthRequired(GatewayError):
 class SessionRejected(GatewayError):
     pass
 
+
+# *PSIDTS expire unless rotated, as the web client does
+ROTATE_COOKIES_URL = "https://accounts.youtube.com/RotateCookies"
+_ROTATE_COOKIES_BODY = '[000,"-0000000000000000000"]'
 
 _AUTH_FAILURE_MARKERS = ("http 401", "http 403", "unauthorized", "forbidden", "authenticat", "sign in", "login required")
 
@@ -131,26 +136,63 @@ class YTMusicGateway:
             self._ytm_browse = browse
             self._authenticated = True
 
+    def rotate_cookies(self) -> None:
+        import requests
+
+        headers = self._credentials()
+        if headers is None:
+            return
+        key = next(k for k in headers if str(k).lower() == "cookie")
+        response = requests.post(ROTATE_COOKIES_URL, data=_ROTATE_COOKIES_BODY, timeout=15, headers={
+            "content-type": "application/json",
+            "origin": "https://accounts.youtube.com",
+            "user-agent": headers.get("user-agent", ""),
+            "cookie": headers[key],
+        })
+        response.raise_for_status()
+        cookies = parse_cookie_string(headers[key])
+        rotated = {c.name: c.value for c in response.cookies if cookies.get(c.name) != c.value}
+        if not rotated:
+            return
+        cookie = cookie_header({**cookies, **rotated})
+        with self._client_lock:
+            # logout race: never restore the file
+            if not self._authenticated:
+                return
+            headers[key] = cookie
+            secure_store.write_secret_json(self._auth_file, headers)
+            for client in (self._ytm, self._ytm_browse):
+                auth = getattr(client, "_auth_headers", None)
+                if auth is not None and "cookie" in auth:
+                    auth["cookie"] = cookie
+        log.info("Session cookies rotated: %s", ", ".join(sorted(rotated)))
+
     def verify_session(self) -> None:
         client = self._require_auth()
+        try:
+            self.rotate_cookies()
+        except Exception:  # noqa: BLE001
+            log.warning("Cookie rotation failed", exc_info=True)
         try:
             client.get_library_playlists(limit=1)
         except Exception as exc:  # noqa: BLE001
             if looks_like_auth_failure(exc):
-                with self._client_lock:
-                    self._authenticated = False
                 raise SessionRejected(str(exc)) from exc
             raise
+
+    def mark_signed_out(self) -> None:
+        with self._client_lock:
+            self._authenticated = False
 
     def logout(self) -> None:
         from ytmusicapi import YTMusic
 
-        try:
-            if os.path.exists(self._auth_file):
-                os.remove(self._auth_file)
-        except OSError as exc:
-            raise GatewayError(str(exc)) from exc
         with self._client_lock:
+            try:
+                if os.path.exists(self._auth_file):
+                    os.remove(self._auth_file)
+            except OSError as exc:
+                raise GatewayError(str(exc)) from exc
             self._ytm = YTMusic()
             self._ytm_browse = None
             self._authenticated = False

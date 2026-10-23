@@ -287,6 +287,32 @@ def test_carousel_arrow_slides_by_a_page_with_animation(qapp):
     assert section._view.track.pos().x() == -step
 
 
+def test_cards_layout_shows_songs_as_big_cards_with_plays_and_actions(qapp):
+    from ui.components.section_feed import HomeCard, SectionFeed
+
+    songs = [{**song(i), "views": "24 M reproducciones"} for i in range(3)]
+    feed = SectionFeed()
+    feed.resize(1000, 600)
+    feed.set_sections([("Diario", songs), ("Lista", [song(9)])], FakeThumbnails(), layouts={"Diario": "cards"})
+    feed._fill()
+    cards, compact = feed._built
+    assert isinstance(cards, CardsSection) and isinstance(compact, CompactSection)
+
+    card = cards.findChildren(HomeCard)[0]
+    texts = [label.text() for label in card.findChildren(QLabel)]
+    assert "A •" in texts and "24 M reproducciones" in texts
+    assert card._actions.isHidden() and card._play_hint.isHidden()
+    QApplication.sendEvent(card, QEvent(QEvent.Enter))
+    assert not card._actions.isHidden() and not card._play_hint.isHidden()
+    QApplication.sendEvent(card, QEvent(QEvent.Leave))
+    assert card._actions.isHidden() and card._play_hint.isHidden()
+
+    played, queued = QSignalSpy(cards.play_all_requested), QSignalSpy(cards.add_queue_clicked)
+    next(b for b in cards.findChildren(QPushButton) if b.text() == "Reproducir todo").click()
+    card._actions.add_queue.emit()
+    assert played.at(0)[0] == songs and queued.at(0)[0] == songs[0]
+
+
 def test_carousel_stops_at_the_end(qapp):
     section = CardsSection("T", [playlist(i) for i in range(7)], FakeThumbnails())
     section.resize(1000, 300)

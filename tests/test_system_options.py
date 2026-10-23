@@ -391,9 +391,20 @@ def test_old_lyrics_file_is_migrated_once_into_the_settings(tmp_path):
     service = SettingsService(SettingsRepository(paths.settings_file))
     migrate_lyrics_file(paths, service)
     assert service.settings.lyrics_providers == ("youtube", "lrclib") and service.settings.better_lyrics_key == "vieja"
-    assert not os.path.exists(paths.lyrics_settings_file) and os.path.exists(paths.lyrics_settings_file + ".migrated")
+    # the old file held the key in plain text: nothing of it may stay on disk
+    assert not os.path.exists(paths.lyrics_settings_file) and not os.path.exists(paths.lyrics_settings_file + ".migrated")
     assert SettingsRepository(paths.settings_file).load().better_lyrics_key == "vieja"
     migrate_lyrics_file(paths, service)
+
+
+def test_a_leftover_migrated_lyrics_file_from_older_versions_is_removed(tmp_path):
+    paths = AppPaths(str(tmp_path))
+    paths.ensure_dirs()
+    leftover = paths.lyrics_settings_file + ".migrated"
+    with open(leftover, "w", encoding="utf-8") as handle:
+        json.dump({"better_lyrics_api_key": "vieja"}, handle)
+    migrate_lyrics_file(paths, SettingsService(SettingsRepository(paths.settings_file)))
+    assert not os.path.exists(leftover)
 
 
 def test_editing_lyrics_options_updates_the_live_service_and_the_language_the_catalog(tmp_path):
@@ -578,6 +589,40 @@ def test_dialog_account_button_matches_the_session_and_closes_before_acting(rig)
     signed_out, _ = make_dialog(rig)
     assert signed_out.account_button.text() == "Iniciar sesión" and not signed_out.account_button.isEnabled()
     signed_out.deleteLater()
+
+
+def test_dialog_log_button_reveals_the_log_only_when_available(rig):
+    opened = []
+    dialog, _ = make_dialog(rig, on_open_log=lambda: opened.append(1))
+    dialog.log_button.click()
+    assert opened == [1]
+    dialog.deleteLater()
+    missing, _ = make_dialog(rig)
+    assert not missing.log_button.isEnabled()
+    missing.deleteLater()
+
+
+def test_settings_presenter_hands_the_log_opener_to_the_dialog(rig, tmp_path, monkeypatch):
+    opened = []
+    presenter = rig.keep(SettingsPresenter(rig.window, make_settings(tmp_path), open_log=lambda: opened.append(1)))
+    monkeypatch.setattr(SettingsDialog, "exec", lambda self: self.log_button.click())
+    presenter.open()
+    assert opened == [1]
+
+
+def test_reveal_file_selects_the_file_in_explorer(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
+    from infra import file_reveal
+
+    log = tmp_path / "app.log"
+    log.write_text("x")
+    launched = []
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "Popen", lambda command: launched.append(command))
+    file_reveal.reveal_file(str(log))
+    assert launched == [f'explorer /select,"{log}"']
 
 
 def test_settings_presenter_hands_the_cache_and_account_to_the_dialog(rig, tmp_path, monkeypatch, wait_until):

@@ -206,6 +206,9 @@ def parse_home_section(section: dict) -> list[dict]:
             }
             if item.get("likeStatus"):
                 song["likeStatus"] = item["likeStatus"]
+            views = _home_plays(item.get("views"))
+            if views:
+                song["views"] = views
             items.append(song)
         elif "playlistId" in item:
             items.append({
@@ -215,13 +218,21 @@ def parse_home_section(section: dict) -> list[dict]:
                 "thumbnails": thumbs,
             })
         elif "browseId" in item:
-            items.append({
-                "type": "artist" if str(item.get("browseId")).startswith("UC") else "album",
-                "browseId": item.get("browseId"),
-                "title": item.get("title", "Álbum"),
-                "thumbnails": thumbs,
-            })
+            kind = "artist" if str(item.get("browseId")).startswith("UC") else "album"
+            entry = {"type": kind, "browseId": item.get("browseId"), "title": item.get("title", "Álbum"),
+                     "thumbnails": thumbs}
+            if kind == "album":
+                by = artist_names(item, limit=2)
+                label = release_label(item.get("type"))
+                entry["artists"] = item.get("artists") or []
+                entry["subtitle"] = f"{label} • {by}" if by else label
+            items.append(entry)
     return items
+
+
+def _home_plays(raw: Any) -> str:
+    text = _play_count(raw)
+    return text if not text or text.endswith(" reproducciones") else f"{text} reproducciones"
 
 
 @dataclass(frozen=True)

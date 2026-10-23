@@ -21,12 +21,16 @@ def parse_cookie_string(value: str) -> dict[str, str]:
     return cookies
 
 
+def cookie_header(cookies: dict[str, str]) -> str:
+    return "; ".join(f"{k}={v}" for k, v in cookies.items())
+
+
 def headers_from_cookies(cookies: dict[str, str], *, user_agent: str | None = None, authuser: str = "0") -> dict[str, str]:
     sapisid = session_id(cookies)
     timestamp = str(int(time.time()))
     digest = sha1(f"{timestamp} {sapisid} {YTM_ORIGIN}".encode()).hexdigest()
     return {
-        "cookie": "; ".join(f"{k}={v}" for k, v in cookies.items()),
+        "cookie": cookie_header(cookies),
         "x-goog-authuser": authuser,
         "authorization": f"SAPISIDHASH {timestamp}_{digest}",
         "user-agent": user_agent or _USER_AGENT,

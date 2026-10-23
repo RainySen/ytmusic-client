@@ -257,6 +257,28 @@ def test_home_shows_stored_feed_instantly_then_refreshes(rig):
     assert home._has_content
 
 
+def test_home_hides_the_greeting_shelf_from_fresh_and_stored_feeds(rig):
+    greeting = ("¡Buen día!", [{"type": "playlist", "playlistId": "PL1", "title": "Boleros"}])
+    rig.catalog.stored = [greeting, *SECTIONS]
+    home = make_home(rig)
+    shown = []
+    home._panel.set_sections = lambda sections, *_a, **_k: shown.append([t for t, _ in sections])
+    home.start()
+    rig.catalog.home_calls[-1]["on_done"]([greeting, *SECTIONS])
+    expected = [t for t, _ in SECTIONS]
+    assert shown == [expected, expected]
+
+
+def test_home_asks_for_big_cards_on_daily_discover_and_releases(rig):
+    daily = ("Tu descubrimiento diario", [{"type": "song", "videoId": "v9", "title": "D", "artists": []}])
+    home = make_home(rig)
+    layouts = []
+    home._panel.set_sections = lambda sections, *_a, **kw: layouts.append(kw.get("layouts"))
+    home.start()
+    rig.catalog.home_calls[-1]["on_done"]([daily, *SECTIONS])
+    assert layouts[-1] == {"Tu descubrimiento diario": "cards"}
+
+
 def test_home_shows_loading_without_stored_feed(rig):
     home = make_home(rig)
     home.start()
