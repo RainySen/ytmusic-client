@@ -126,17 +126,23 @@ def build_romanizer() -> UnisonRomanizer:
     return UnisonRomanizer()
 
 
+def _remove_quietly(path: str) -> None:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+# legacy file holds the key in plain text: deleted once imported (also old .migrated copies)
 def migrate_lyrics_file(paths: AppPaths, settings: SettingsService) -> None:
     legacy = paths.lyrics_settings_file
+    _remove_quietly(legacy + ".migrated")
     if not os.path.exists(legacy):
         return
     old = load_lyrics_settings(legacy, {})
     clean = Settings.from_dict({"lyrics_providers": list(old.providers), "better_lyrics_key": old.better_lyrics_api_key})
     settings.update(lyrics_providers=clean.lyrics_providers, better_lyrics_key=clean.better_lyrics_key)
-    try:
-        os.replace(legacy, legacy + ".migrated")
-    except OSError:
-        pass
+    _remove_quietly(legacy)
 
 
 def build_services(paths: AppPaths) -> Services:

@@ -85,6 +85,12 @@ def test_a_newer_release_is_announced_once(updates, wait_until):
     assert check(service, wait_until) == []
 
 
+def test_a_link_outside_the_project_releases_is_never_offered(updates, wait_until):
+    service, _settings, release, _calls = updates
+    release["html_url"] = "https://evil.example/ytmusic-client/releases/tag/v1.5.0"
+    assert check(service, wait_until) == []
+
+
 def test_no_notice_for_the_same_version_or_a_network_error(updates, wait_until, monkeypatch):
     service, _settings, release, _calls = updates
     release["tag_name"] = "v1.4.0"

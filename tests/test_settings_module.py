@@ -28,6 +28,19 @@ def make_settings(tmp_path):
     return SettingsService(SettingsRepository(str(tmp_path / "settings.json")))
 
 
+@pytest.mark.skipif(not __import__("infra.secure_store").secure_store.available(), reason="DPAPI solo en Windows")
+def test_the_lyrics_key_is_encrypted_on_disk_and_old_plain_keys_still_load(tmp_path):
+    path = tmp_path / "settings.json"
+    repository = SettingsRepository(str(path))
+    repository.save(Settings(better_lyrics_key="clave-secreta"))
+    assert "clave-secreta" not in path.read_text(encoding="utf-8")
+    assert repository.load().better_lyrics_key == "clave-secreta"
+    path.write_text('{"better_lyrics_key": "clave-antigua"}', encoding="utf-8")
+    assert repository.load().better_lyrics_key == "clave-antigua"
+    repository.save(Settings())
+    assert repository.load().better_lyrics_key == ""
+
+
 def song(n=1):
     return {"videoId": f"v{n}", "title": f"Titulo {n}", "artists": [{"name": "Artista"}]}
 
