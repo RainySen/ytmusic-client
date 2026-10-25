@@ -1,5 +1,6 @@
 from bisect import bisect_right
 
+from core.i18n import t
 from domain.models import Lyrics
 from services.lyrics_service import LyricsService
 from services.playback_service import PlaybackService
@@ -35,7 +36,7 @@ class LyricsPresenter:
         if video_id != self._video_id:
             return
         if lyrics is None:
-            self._panel.set_lyrics_message("Letra no encontrada.")
+            self._panel.set_lyrics_message(t("player.lyrics.not_found"))
             return
         self._panel.set_lyrics(lyrics)
         self._times = [line.time_ms for line in lyrics.lines] if lyrics.synced else []

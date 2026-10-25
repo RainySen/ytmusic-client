@@ -4,6 +4,7 @@ import logging
 import random
 from typing import Callable
 
+from core.i18n import t
 from domain.models import Track, playlist_id_of
 from services.catalog_service import CatalogService
 from services.notifier import Notifier
@@ -30,11 +31,11 @@ class CollectionActions:
             if tracks:
                 done(tracks)
             else:
-                self._notifier.warning("No hay canciones reproducibles aquí.")
+                self._notifier.warning(t("library.collection.no_tracks"))
 
         def failed(exc: Exception) -> None:
             log.warning("Could not load %r: %s", item.get("title"), exc)
-            self._notifier.error("No se pudo cargar el contenido. Revisa tu conexión.")
+            self._notifier.error(t("library.collection.load_failed"))
 
         if self.is_album(item):
             self._catalog.album(item["browseId"], ready, failed)
@@ -53,7 +54,8 @@ class CollectionActions:
             log.warning("Unknown collection action %r", action)
             return
         if action in ("play", "shuffle", "mix") and item.get("title"):
-            self._notifier.info(f"{'Mezclando' if action == 'shuffle' else 'Abriendo'} «{item['title']}»…")
+            self._notifier.info(t("library.collection.shuffling", title=item["title"]) if action == "shuffle"
+                                else t("library.collection.opening", title=item["title"]))
         self.tracks_of(item, handler)
 
     def share_url(self, item: dict) -> str:

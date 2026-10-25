@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.config import HOVER_PREFETCH_MS
+from core.i18n import t
 from ui import imaging
 from domain.models import artist_names, primary_artist, thumbnail_url
 from ui.components.clickable import ClickableWidget
@@ -12,15 +13,24 @@ from ui.components.lazy_thumbnail import LazyThumbnail
 from ui.components.page_parts import pill_button
 from ui.components.track_actions import TrackActionsButton
 
-_TYPE_LABELS = {
-    "song": "Canción", "album": "Álbum", "playlist": "Playlist", "video": "Video",
-    "artist": "Artista", "profile": "Perfil", "podcast": "Podcast", "episode": "Episodio",
-    "single": "Sencillo", "ep": "EP",
-}
+# built on use: the language is only known after startup
+def _type_labels() -> dict:
+    return {
+        "song": t("search.type.song"), "album": t("search.type.album"), "playlist": t("search.type.playlist"),
+        "video": t("search.type.video"), "artist": t("search.type.artist"), "profile": t("search.type.profile"),
+        "podcast": t("search.type.podcast"), "episode": t("search.type.episode"),
+        "single": t("search.type.single"), "ep": t("search.type.ep"),
+    }
+
+
 _MAX_SONGS = 10
 SCOPE_YTMUSIC = "ytmusic"
 SCOPE_LIBRARY = "library"
-SEARCH_SCOPES = ((SCOPE_YTMUSIC, "YT MUSIC"), (SCOPE_LIBRARY, "BIBLIOTECA"))
+
+
+def _search_scopes() -> tuple:
+    return ((SCOPE_YTMUSIC, t("search.scope.ytmusic")), (SCOPE_LIBRARY, t("search.scope.library")))
+
 _TAB_QSS = """
     QPushButton { background: transparent; border: none; border-bottom: 2px solid transparent;
                   color: #aaa; font-size: 13px; font-weight: 600; padding: 8px 0; }
@@ -59,12 +69,13 @@ class _ArtistHero(QFrame):
         info.setSpacing(4)
         info.setContentsMargins(0, 0, 0, 0)
 
-        name = QLabel(_result_title(data) or "Artista")
+        name = QLabel(_result_title(data) or t("search.artist.label"))
         name.setStyleSheet("font-size: 22px; font-weight: 700; color: white; background: transparent;")
         info.addWidget(name)
 
         subscribers = data.get("subscribers", "")
-        subtitle = QLabel(f"Artista  •  {subscribers} suscriptores" if subscribers else "Artista")
+        subtitle = QLabel(f"{t('search.artist.label')}  •  {t('search.artist.subscribers', n=subscribers)}"
+                          if subscribers else t("search.artist.label"))
         subtitle.setStyleSheet("font-size: 12px; color: #aaa; background: transparent;")
         info.addWidget(subtitle)
         info.addSpacing(10)
@@ -72,9 +83,9 @@ class _ArtistHero(QFrame):
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
-        self.shuffle_button = pill_button("Aleatorio", "primary", "fa5s.random", height=36)
+        self.shuffle_button = pill_button(t("search.artist.shuffle"), "primary", "fa5s.random", height=36)
         self.shuffle_button.clicked.connect(lambda: self.shuffle_clicked.emit(data))
-        self.mix_button = pill_button("Mix", "tonal", "fa5s.broadcast-tower", height=36)
+        self.mix_button = pill_button(t("search.artist.mix"), "tonal", "fa5s.broadcast-tower", height=36)
         self.mix_button.clicked.connect(lambda: self.mix_clicked.emit(data))
         row.addWidget(self.shuffle_button)
         row.addWidget(self.mix_button)
@@ -118,7 +129,7 @@ class _TopResultHero(QFrame):
         info = QVBoxLayout()
         info.setSpacing(4)
         info.setContentsMargins(0, 0, 0, 0)
-        label = QLabel("MEJOR RESULTADO")
+        label = QLabel(t("search.top.label"))
         label.setStyleSheet("font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #888; background: transparent;")
         info.addWidget(label)
         name = QLabel(_result_title(data))
@@ -126,7 +137,7 @@ class _TopResultHero(QFrame):
         name.setStyleSheet("font-size: 24px; font-weight: 700; color: white; background: transparent;")
         info.addWidget(name)
 
-        parts = [_TYPE_LABELS.get(kind, kind.title())] if kind else []
+        parts = [_type_labels().get(kind, kind.title())] if kind else []
         by = artist_names(data, limit=2) or data.get("author", "")
         if by:
             parts.append(by)
@@ -141,13 +152,13 @@ class _TopResultHero(QFrame):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
         playable = bool(data.get("videoId"))
-        self.play_button = pill_button("Reproducir" if playable else "Abrir", "primary",
+        self.play_button = pill_button(t("search.top.play") if playable else t("search.top.open"), "primary",
                                        "fa5s.play" if playable else "fa5s.folder-open", height=36)
         self.play_button.clicked.connect(lambda: self.opened.emit(data))
         row.addWidget(self.play_button)
         self.queue_button = None
         if playable:
-            self.queue_button = pill_button("A la cola", "tonal", "fa5s.list", height=36)
+            self.queue_button = pill_button(t("search.top.queue"), "tonal", "fa5s.list", height=36)
             self.queue_button.clicked.connect(lambda: self.queue_clicked.emit(data))
             row.addWidget(self.queue_button)
         row.addStretch()
@@ -191,7 +202,7 @@ class _ResultRow(ClickableWidget):
 
         parts = []
         if kind:
-            parts.append(_TYPE_LABELS.get(kind, kind.title()))
+            parts.append(_type_labels().get(kind, kind.title()))
         by = item.get("subscribers", "") if is_artist else (artist_names(item, limit=2) or item.get("author", ""))
         if by:
             parts.append(by)
@@ -238,7 +249,7 @@ class SearchPanel(QWidget):
         tabs.setContentsMargins(48, 16, 48, 0)
         tabs.setSpacing(28)
         self._tabs = {}
-        for scope, label in SEARCH_SCOPES:
+        for scope, label in _search_scopes():
             tab = QPushButton(label)
             tab.setCheckable(True)
             tab.setCursor(Qt.PointingHandCursor)
@@ -280,7 +291,7 @@ class SearchPanel(QWidget):
             widgets.extend(self._row(item, thumbnails) for item in items)
             widgets.append(self._spacer(24))
         if not widgets:
-            self.show_message("No se encontró en tu biblioteca.")
+            self.show_message(t("search.empty.library"))
             return
         for position, widget in enumerate(widgets):
             self._layout.insertWidget(position, widget)
@@ -322,14 +333,14 @@ class SearchPanel(QWidget):
             widgets.append(card)
             widgets.append(self._spacer(20))
         if songs:
-            widgets.append(self._header("Canciones"))
+            widgets.append(self._header(t("search.section.songs")))
             widgets.extend(self._row(s, thumbnails) for s in songs[:_MAX_SONGS])
             widgets.append(self._spacer(24))
         if more:
-            widgets.append(self._header("Más resultados"))
+            widgets.append(self._header(t("search.section.more")))
             widgets.extend(self._row(m, thumbnails) for m in more)
         if not widgets:
-            self.show_message("Sin resultados.")
+            self.show_message(t("search.empty.results"))
             return
 
         for position, widget in enumerate(widgets):

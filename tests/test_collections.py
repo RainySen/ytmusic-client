@@ -19,7 +19,7 @@ from tests.test_ui import FakeThumbnails, choose_from_open_menu, song
 from ui.components.album_panel import AlbumPanel
 from ui.components.section_feed import CardsSection, CompactSongItem, HomeCard, is_collection_card
 from ui.components.track_actions import (
-    COLLECTION_ACTIONS, SONG_ACTIONS, ActionsButton, CollectionActionsButton, TrackActionsButton,
+    ActionsButton, CollectionActionsButton, TrackActionsButton, collection_actions, song_actions,
 )
 from ui.components.track_list import TrackList
 
@@ -360,7 +360,7 @@ def test_clicking_the_cover_still_opens_the_card(qapp):
     assert opened.count() == 1 and opened.at(0)[0] == PLAYLIST
 
 
-@pytest.mark.parametrize("index, key", list(enumerate(k for k, _, _ in COLLECTION_ACTIONS)))
+@pytest.mark.parametrize("index, key", list(enumerate(k for k, _, _ in collection_actions())))
 def test_card_menu_offers_every_collection_action(qapp, index, key):
     card = hovered_card(PLAYLIST)
     spy = QSignalSpy(card.action_requested)
@@ -392,7 +392,7 @@ def test_right_clicking_a_card_opens_its_menu(qapp):
 
 
 def test_card_menu_labels():
-    labels = [label for _, label, _ in COLLECTION_ACTIONS]
+    labels = [label for _, label, _ in collection_actions()]
     assert labels == ["Reproducir aleatoriamente", "Comenzar mix", "Reproducir a continuación",
                       "Agregar a la cola", "Guardar en una playlist", "Compartir"]
 
@@ -428,7 +428,7 @@ def test_song_rows_open_their_menu_on_right_click(qapp):
     row.move(400, 400)
     row.show()
     texts = open_menu_texts(lambda: row.context_requested.emit(row.mapToGlobal(QPoint(30, 30))))
-    assert texts[:3] == [label for _, label, _ in SONG_ACTIONS] and "Fijar en volver a escuchar" in texts
+    assert texts[:3] == [label for _, label, _ in song_actions()] and "Fijar en volver a escuchar" in texts
 
 
 def test_track_list_right_click_offers_the_song_actions(qapp, monkeypatch):
@@ -444,7 +444,7 @@ def test_track_list_right_click_offers_the_song_actions(qapp, monkeypatch):
     viewport = listing.view.viewport()
     QApplication.sendEvent(viewport, QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(30, 28),
                                                        viewport.mapToGlobal(QPoint(30, 28))))
-    assert len(shown) == 1 and shown[0][:3] == [label for _, label, _ in SONG_ACTIONS]
+    assert len(shown) == 1 and shown[0][:3] == [label for _, label, _ in song_actions()]
 
 
 def test_search_rows_open_their_menu_on_right_click(qapp):
@@ -455,7 +455,7 @@ def test_search_rows_open_their_menu_on_right_click(qapp):
     row.move(400, 400)
     row.show()
     texts = open_menu_texts(lambda: row.context_requested.emit(row.mapToGlobal(QPoint(30, 30))))
-    assert texts[:3] == [label for _, label, _ in SONG_ACTIONS] and "Fijar en volver a escuchar" in texts
+    assert texts[:3] == [label for _, label, _ in song_actions()] and "Fijar en volver a escuchar" in texts
 
 
 def test_rows_of_things_that_cannot_be_queued_ignore_right_click(qapp):
@@ -483,7 +483,7 @@ def test_right_click_choice_reaches_the_row_signals(qapp):
 
 def test_actions_button_variants(qapp):
     songs, cards = TrackActionsButton(), CollectionActionsButton()
-    assert songs._entries == SONG_ACTIONS and cards._entries == COLLECTION_ACTIONS
+    assert songs._entries == song_actions() and cards._entries == collection_actions()
     assert cards.isEnabled() and not songs.isEnabled()
     cards.set_revealed(False)
     assert cards.isEnabled()

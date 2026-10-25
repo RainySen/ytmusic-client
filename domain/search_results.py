@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.i18n import t
+
 
 def group_search_results(raw: list[dict]) -> dict[str, Any]:
     top_result = None
@@ -24,13 +26,17 @@ def group_search_results(raw: list[dict]) -> dict[str, Any]:
     return {"top_result": top_result, "songs": songs, "more": more}
 
 
-LIBRARY_SECTIONS = (("artist", "Artistas"), ("album", "Álbumes"), ("song", "Canciones"), ("playlist", "Playlists"),
-                    ("video", "Videos"))
+# built on use: the language is only known after startup
+def library_sections() -> tuple:
+    return (("artist", t("domain.library.artists")), ("album", t("domain.library.albums")),
+            ("song", t("domain.library.songs")), ("playlist", t("domain.library.playlists")),
+            ("video", t("domain.library.videos")))
 
 
 # library search groups by type; library artist ids are MPLA + channel id
 def group_library_results(raw: list[dict], local_songs: list[dict] | None = None) -> list[tuple[str, list[dict]]]:
-    buckets: dict[str, list[dict]] = {kind: [] for kind, _title in LIBRARY_SECTIONS}
+    sections = library_sections()
+    buckets: dict[str, list[dict]] = {kind: [] for kind, _title in sections}
     seen: set[str] = set()
     for item in raw:
         kind = item.get("resultType")
@@ -45,7 +51,7 @@ def group_library_results(raw: list[dict], local_songs: list[dict] | None = None
         if song.get("videoId") not in seen:
             seen.add(song["videoId"])
             buckets["song"].append({**song, "resultType": "song"})
-    return [(title, buckets[kind]) for kind, title in LIBRARY_SECTIONS if buckets[kind]]
+    return [(title, buckets[kind]) for kind, title in sections if buckets[kind]]
 
 
 def matches_query(item: dict, query: str) -> bool:

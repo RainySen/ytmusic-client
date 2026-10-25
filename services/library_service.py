@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from core.i18n import t
 from domain.models import LOCAL_SOURCES, Track, normalize_artist_card, normalize_tracks
 from domain.search_results import group_library_results, matches_query
 from infra.concurrency import TaskRunner
@@ -144,7 +145,7 @@ class LibraryService:
 
         def work() -> bool:
             ids = [t["videoId"] for t in tracks if t.get("videoId")]
-            return bool(self._gateway.create_playlist(title, "Creada desde PyMusic Client", ids))
+            return bool(self._gateway.create_playlist(title, t("library.cloud_playlist_description"), ids))
 
         def failed(exc: Exception) -> None:
             log.warning("Cloud save failed: %s", exc)
@@ -251,11 +252,11 @@ class LibraryService:
                 "description": "",
                 "banner": [{"url": photo}] if photo else [],
                 "top_songs": history,
-                "songs_title": "Escuchado recientemente",
+                "songs_title": t("library.channel.recent"),
                 "songs_browse_id": "",
                 "shuffle_id": "",
                 "radio_id": "",
-                "sections": [("Tus artistas favoritos", artists)] if artists else [],
+                "sections": [(t("library.channel.favorite_artists"), artists)] if artists else [],
             }
 
         def failed(exc: Exception) -> None:

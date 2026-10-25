@@ -1,6 +1,7 @@
 import time
 from typing import Callable
 
+from core.i18n import t
 from domain.models import artist_names, primary_artist, thumbnail_url
 from services.library_service import LibraryService
 from services.navigation import Navigator
@@ -109,7 +110,7 @@ class PlayerPresenter:
 
     def _on_loading(self, song: dict) -> None:
         window = self._window
-        self._show(song, f"Cargando: {song.get('title', '')}")
+        self._show(song, t("player.loading_track", title=song.get('title', '')))
         window.reset_progress()
         window.set_playing(True)
         self._load_cover(song)
@@ -157,7 +158,7 @@ class PlayerPresenter:
                 self._liked = not wanted
                 self._window.set_liked(self._liked)
             if self._notifier:
-                self._notifier.error("No se pudo actualizar Me gusta.")
+                self._notifier.error(t("player.like_failed"))
 
         self._library.set_like(video_id, wanted, done)
 

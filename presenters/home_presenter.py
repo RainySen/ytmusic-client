@@ -1,6 +1,7 @@
 import random
 
-from domain.home_shelves import is_greeting, shelf_layout
+from core.i18n import t
+from domain.home_shelves import is_greeting, mood_label, shelf_layout
 from infra.listen_again_pins import ListenAgainPins
 from ui.main_window import MainWindow
 from services.catalog_service import CatalogService
@@ -10,11 +11,16 @@ from services.playback_service import PlaybackService
 
 ALL_MOODS = "Todos"
 LISTEN_AGAIN_TITLE = "Volver a escucharlo"
-LISTEN_AGAIN_KEYS = ("volver a escuchar", "listen again")
+LISTEN_AGAIN_KEYS = ("volver a escuchar", "listen again", "ouvir de novo")
 SEED_COUNT = 2
 SWAP_FRACTION = 0.4
 MIN_SHELF_SONGS = 4
 REORDER_CHANCE = 0.35
+
+
+# built on use: the language is only known after startup
+def listen_again_title() -> str:
+    return t("home.listen_again")
 
 
 class HomePresenter:
@@ -121,7 +127,7 @@ class HomePresenter:
         if self._mood != mood:
             return
         if not sections:
-            self._panel.show_message(f"No se encontró contenido para «{mood}».")
+            self._panel.show_message(t("home.mood.empty", mood=mood_label(mood)))
             return
         self._render(sections, reset_scroll=True)
 
@@ -158,7 +164,7 @@ class HomePresenter:
             if any(key in title.lower() for key in LISTEN_AGAIN_KEYS):
                 rest = [i for i in items if i.get("videoId") not in pinned_ids]
                 return [*sections[:position], (title, pinned + rest), *sections[position + 1:]]
-        return [(LISTEN_AGAIN_TITLE, pinned), *sections]
+        return [(listen_again_title(), pinned), *sections]
 
     # random first-shelf swap, kept until the next reload so the fresh feed doesn't undo it
     def _should_reorder(self) -> bool:
@@ -229,6 +235,6 @@ class HomePresenter:
 
     def _on_error(self, exc: Exception) -> None:
         if self._has_content:
-            self._notifier.warning("No se pudo actualizar el inicio.")
+            self._notifier.warning(t("home.error.refresh"))
         else:
-            self._panel.show_message("No se pudo cargar el inicio. Revisa tu conexión e inténtalo de nuevo.")
+            self._panel.show_message(t("home.error.load"))

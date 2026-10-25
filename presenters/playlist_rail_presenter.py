@@ -1,3 +1,4 @@
+from core.i18n import t
 from services.library_service import LibraryService
 from services.notifier import Notifier
 from services.playback_service import PlaybackService
@@ -42,11 +43,11 @@ class PlaylistRailPresenter:
     def _open(self, playlist: dict) -> None:
         def done(data):
             if not data:
-                self._notifier.warning("La playlist está vacía o no se pudo cargar.")
+                self._notifier.warning(t("playlist.open.empty"))
                 return
             self._playback.play_collection(data["tracks"])
 
-        self._library.playlist_tracks(playlist, done, lambda _exc: self._notifier.error("No se pudo abrir la playlist."))
+        self._library.playlist_tracks(playlist, done, lambda _exc: self._notifier.error(t("playlist.open.failed")))
 
     def _with_tracks(self, playlist: dict, apply) -> None:
         def done(data):
@@ -54,16 +55,17 @@ class PlaylistRailPresenter:
             if tracks:
                 apply(tracks)
             else:
-                self._notifier.warning("La playlist está vacía o no se pudo cargar.")
+                self._notifier.warning(t("playlist.open.empty"))
 
-        self._library.playlist_tracks(playlist, done, lambda _exc: self._notifier.error("No se pudo abrir la playlist."))
+        self._library.playlist_tracks(playlist, done, lambda _exc: self._notifier.error(t("playlist.open.failed")))
 
     def _toggle_pin(self, playlist: dict) -> None:
         self._library.toggle_pin(playlist["playlistId"])
         self.refresh()
 
     def _delete(self, playlist: dict) -> None:
-        if dialogs.confirm(self._window, "¿Eliminar playlist?", f"Se eliminará «{playlist.get('title', '')}» de este "
-                           "equipo. Esto no se puede deshacer.", ok="Eliminar"):
+        if dialogs.confirm(self._window, t("playlist.delete.title"),
+                           t("playlist.delete.message", title=playlist.get("title", "")),
+                           ok=t("playlist.delete.ok")):
             self._library.delete_local_playlist(playlist["playlistId"])
             self.refresh()

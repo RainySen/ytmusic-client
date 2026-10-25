@@ -1,0 +1,18 @@
+{
+  "queue.title": "Cola de reproducción",
+  "queue.save": "Guardar cola como playlist",
+  "queue.clear": "Limpiar cola",
+  "queue.autoplay": "Reproducción automática",
+  "queue.tab.up_next": "A continuación",
+  "queue.tab.lyrics": "Letra",
+  "queue.tab.similar": "Similares",
+  "queue.unknown": "Desconocido",
+  "queue.lyrics.credit": "Letra: {source}",
+  "queue.similar.loading": "Cargando…",
+  "queue.similar.songs": "Esto también te va a gustar",
+  "queue.similar.playlists": "Playlists para ti",
+  "queue.similar.artists": "Artistas similares",
+  "queue.similar.empty": "No hay contenido similar para esta canción.",
+  "queue.similar.no_track": "Reproduce una canción para ver contenido similar.",
+  "queue.similar.failed": "No se pudo cargar. Vuelve a abrir la pestaña para reintentar."
+}

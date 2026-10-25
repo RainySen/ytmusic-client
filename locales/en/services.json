@@ -1,0 +1,19 @@
+{
+  "services.catalog.new_releases": "New albums & singles",
+  "services.catalog.trending": "Trending",
+  "services.catalog.moods": "Moods & genres",
+  "services.catalog.chart_lists": "Top charts",
+  "services.home.fallback_section": "Section",
+  "services.catalog.mood_songs": "Songs — {mood}",
+  "services.catalog.mood_mixes": "Mixes for you",
+  "services.catalog.mood_playlists": "Playlists • {mood}",
+  "services.catalog.imported_playlist": "Imported Playlist",
+  "services.catalog.mix": "Mix",
+  "services.catalog.playlist_kind": "Playlist",
+  "services.artist.albums": "Albums",
+  "services.artist.singles": "Singles & EP",
+  "services.artist.videos": "Videos",
+  "services.artist.related": "Fans also listen to",
+  "services.artist.uploader_videos": "Videos",
+  "services.artist.playlists": "Playlists"
+}

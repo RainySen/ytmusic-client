@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from core.i18n import t
+
 Track = dict[str, Any]
 
-UNKNOWN_ARTIST = "Desconocido"
 LOCAL_SOURCES = ("local", "imported", "user_created")
+
+
+# built on use: the language is only known after startup
+def unknown_artist() -> str:
+    return t("domain.unknown_artist")
 
 
 def artist_list(item: dict) -> list[str]:
@@ -25,9 +32,11 @@ def artist_names(item: dict, limit: int | None = None, sep: str = " • ") -> st
     return sep.join(names)
 
 
-def primary_artist(item: dict, default: str = UNKNOWN_ARTIST) -> str:
+def primary_artist(item: dict, default: str | None = None) -> str:
     names = artist_list(item)
-    return names[0] if names else default
+    if names:
+        return names[0]
+    return default if default is not None else unknown_artist()
 
 
 MAX_THUMBNAIL_PX = 1200
@@ -49,12 +58,12 @@ def _width(thumb: dict) -> int:
 
 def thumbnail_url(item: dict, min_width: int = 0) -> str:
     raw = item.get("thumbnails")
-    thumbs = [t for t in (raw if isinstance(raw, list) else []) if isinstance(t, dict) and isinstance(t.get("url"), str) and t["url"]]
+    thumbs = [thumb for thumb in (raw if isinstance(raw, list) else []) if isinstance(thumb, dict) and isinstance(thumb.get("url"), str) and thumb["url"]]
     if thumbs:
         thumbs.sort(key=_width)
-        for t in thumbs:
-            if _width(t) >= min_width:
-                return _at_size(t["url"], min_width)
+        for thumb in thumbs:
+            if _width(thumb) >= min_width:
+                return _at_size(thumb["url"], min_width)
         return _at_size(thumbs[-1]["url"], min_width)
     video_id = item.get("videoId", "")
     if video_id:
@@ -72,8 +81,8 @@ def normalize_track(raw: dict | None) -> Track | None:
         return None
     track: Track = {
         "videoId": raw["videoId"],
-        "title": raw.get("title") or "Título Desconocido",
-        "artists": raw.get("artists") or [{"name": UNKNOWN_ARTIST}],
+        "title": raw.get("title") or t("domain.unknown_title"),
+        "artists": raw.get("artists") or [{"name": unknown_artist()}],
         "thumbnails": raw.get("thumbnails") or [],
     }
     duration = raw.get("duration")
@@ -95,17 +104,26 @@ def normalize_track(raw: dict | None) -> Track | None:
     return track
 
 
+def _plays_text(text: str) -> str:
+    return t("domain.plays", count=text)
+
+
+# known suffixes from YouTube in every supported UI/content language
+_PLAY_SUFFIXES = (" plays", " views", " reproducciones", " reproduções")
+
+
+def _has_plays_suffix(text: str) -> bool:
+    return text.endswith(_PLAY_SUFFIXES)
+
+
 def _play_count(raw: Any) -> str:
     if not raw or not isinstance(raw, str):
         return ""
     text = raw.strip()
     for english in (" plays", " views"):
         if text.endswith(english):
-            text = text[: -len(english)]
-            break
-    else:
-        return text
-    return f"{text} reproducciones"
+            return _plays_text(text[: -len(english)])
+    return text
 
 
 def normalize_tracks(raw_tracks: Iterable[dict]) -> list[Track]:
@@ -134,14 +152,18 @@ def normalize_playlist_item(raw: dict) -> dict:
     }
 
 
-_RELEASE_LABELS = {"single": "Sencillo", "sencillo": "Sencillo", "ep": "EP", "album": "Álbum", "álbum": "Álbum"}
+def release_label(kind: Any, default: str | None = None) -> str:
+    key = str(kind or "").strip().lower()
+    key = "".join(c for c in unicodedata.normalize("NFKD", key) if not unicodedata.combining(c))
+    labels = {
+        "single": t("domain.release.single"), "sencillo": t("domain.release.single"),
+        "ep": t("domain.release.ep"), "album": t("domain.release.album"),
+    }
+    fallback = default if default is not None else t("domain.release.album")
+    return labels.get(key, fallback)
 
 
-def release_label(kind: Any, default: str = "Álbum") -> str:
-    return _RELEASE_LABELS.get(str(kind or "").strip().lower(), default)
-
-
-def normalize_release(raw: dict, default_kind: str = "Álbum") -> dict | None:
+def normalize_release(raw: dict, default_kind: str | None = None) -> dict | None:
     if not raw.get("browseId"):
         return None
     label = release_label(raw.get("type"), default_kind)
@@ -160,7 +182,7 @@ def _views_label(raw: Any) -> str:
     if not raw or not isinstance(raw, str):
         return ""
     text = raw.strip()
-    return f"{text} visualizaciones" if re.fullmatch(r"[\d.,]+\s?[KMBkmb]?", text) else text
+    return t("domain.views", count=text) if re.fullmatch(r"[\d.,]+\s?[KMBkmb]?", text) else text
 
 
 def normalize_video(raw: dict) -> dict | None:
@@ -200,7 +222,7 @@ def parse_home_section(section: dict) -> list[dict]:
             song = {
                 "type": "song",
                 "videoId": item.get("videoId"),
-                "title": item.get("title", "Sin título"),
+                "title": item.get("title", t("domain.untitled")),
                 "artists": item.get("artists", []),
                 "thumbnails": thumbs,
             }
@@ -214,12 +236,12 @@ def parse_home_section(section: dict) -> list[dict]:
             items.append({
                 "type": "playlist",
                 "playlistId": item.get("playlistId"),
-                "title": item.get("title", "Playlist"),
+                "title": item.get("title", t("domain.playlist")),
                 "thumbnails": thumbs,
             })
         elif "browseId" in item:
             kind = "artist" if str(item.get("browseId")).startswith("UC") else "album"
-            entry = {"type": kind, "browseId": item.get("browseId"), "title": item.get("title", "Álbum"),
+            entry = {"type": kind, "browseId": item.get("browseId"), "title": item.get("title", t("domain.release.album")),
                      "thumbnails": thumbs}
             if kind == "album":
                 by = artist_names(item, limit=2)
@@ -232,7 +254,7 @@ def parse_home_section(section: dict) -> list[dict]:
 
 def _home_plays(raw: Any) -> str:
     text = _play_count(raw)
-    return text if not text or text.endswith(" reproducciones") else f"{text} reproducciones"
+    return text if not text or _has_plays_suffix(text) else _plays_text(text)
 
 
 @dataclass(frozen=True)

@@ -1,5 +1,6 @@
 from PySide6.QtCore import QTimer
 
+from core.i18n import t
 from services.catalog_service import CatalogService
 from services.library_service import LibraryService
 from services.item_opener import ItemOpener
@@ -95,7 +96,7 @@ class SearchPresenter:
         self._panel.show_library_results(sections, self._window.thumbnails)
 
     def _show_loading(self) -> None:
-        self._panel.show_message(f"Buscando «{self._pending_query}»…")
+        self._panel.show_message(t("search.loading", query=self._pending_query))
 
     def _show_results(self, grouped) -> None:
         self._loading_timer.stop()
@@ -103,5 +104,5 @@ class SearchPresenter:
 
     def _on_error(self, exc: Exception) -> None:
         self._loading_timer.stop()
-        self._panel.show_message("No se pudo completar la búsqueda. Revisa tu conexión.")
-        self._notifier.error("Error de búsqueda.")
+        self._panel.show_message(t("search.failed"))
+        self._notifier.error(t("search.error"))

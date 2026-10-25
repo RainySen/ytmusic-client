@@ -2,6 +2,7 @@ import qtawesome as qta
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu, QPushButton
 
+from core.i18n import t
 from ui.components.jump_slider import JumpSlider
 from ui.components.link_label import LinkLabel
 from ui.components.marquee_label import MarqueeLabel
@@ -64,7 +65,7 @@ class PlayerPanel(QWidget):
         text_l.setContentsMargins(0, 0, 0, 0)
         text_l.setSpacing(2)
 
-        self.song_label = MarqueeLabel("Sin reproducción")
+        self.song_label = MarqueeLabel(t("player.now_playing.empty"))
         self.song_label.setObjectName("song_label")
 
         self.artist_label = LinkLabel("")
@@ -152,14 +153,14 @@ class PlayerPanel(QWidget):
 
         self.shuffle_button = QPushButton()
         self.shuffle_button.setIcon(qta.icon('fa5s.random', color='#aaa'))
-        self.shuffle_button.setToolTip("Aleatorio")
+        self.shuffle_button.setToolTip(t("player.tooltip.shuffle"))
         self.shuffle_button.setFixedSize(34, 34)
         self.shuffle_button.setCursor(Qt.PointingHandCursor)
         self.shuffle_button.setStyleSheet(_aux_style)
 
         self.loop_button = QPushButton()
         self.loop_button.setIcon(self.icons["loop_off"])
-        self.loop_button.setToolTip("Repetir")
+        self.loop_button.setToolTip(t("player.tooltip.repeat"))
         self.loop_button.setFixedSize(34, 34)
         self.loop_button.setCursor(Qt.PointingHandCursor)
         self.loop_button.setStyleSheet(_aux_style)
@@ -185,7 +186,7 @@ class PlayerPanel(QWidget):
 
         self._expand_btn = QPushButton()
         self._expand_btn.setIcon(qta.icon('fa5s.chevron-up', color='#aaa'))
-        self._expand_btn.setToolTip("Ampliar")
+        self._expand_btn.setToolTip(t("player.tooltip.expand"))
         self._expand_btn.setFixedSize(34, 34)
         self._expand_btn.setCursor(Qt.PointingHandCursor)
         self._expand_btn.clicked.connect(self.expand_clicked.emit)
@@ -246,15 +247,20 @@ class PlayerPanel(QWidget):
         menu.setStyleSheet(MENU_QSS)
         light = "#e0e0e0"
         menu.addAction(qta.icon("fa5s.pause" if self._playing else "fa5s.play", color=light),
-                       "Pausar" if self._playing else "Reproducir").triggered.connect(self.play_button.click)
-        menu.addAction(qta.icon("fa5s.step-backward", color=light), "Anterior").triggered.connect(self.prev_button.click)
-        menu.addAction(qta.icon("fa5s.step-forward", color=light), "Siguiente").triggered.connect(self.next_button.click)
+                       t("player.menu.pause") if self._playing else t("player.menu.play")
+                       ).triggered.connect(self.play_button.click)
+        menu.addAction(qta.icon("fa5s.step-backward", color=light),
+                       t("player.menu.previous")).triggered.connect(self.prev_button.click)
+        menu.addAction(qta.icon("fa5s.step-forward", color=light),
+                       t("player.menu.next")).triggered.connect(self.next_button.click)
         menu.addSeparator()
-        menu.addAction(qta.icon("fa5s.random", color=light), "Aleatorio").triggered.connect(self.shuffle_button.click)
-        menu.addAction(qta.icon("fa5s.sync-alt", color=light), "Cambiar repetición").triggered.connect(self.loop_button.click)
+        menu.addAction(qta.icon("fa5s.random", color=light),
+                       t("player.menu.shuffle")).triggered.connect(self.shuffle_button.click)
+        menu.addAction(qta.icon("fa5s.sync-alt", color=light),
+                       t("player.menu.change_repeat")).triggered.connect(self.loop_button.click)
         muted = self.volume_slider.value() == 0
         menu.addAction(qta.icon("fa5s.volume-up" if muted else "fa5s.volume-mute", color=light),
-                       "Activar sonido" if muted else "Silenciar").triggered.connect(self.toggle_mute)
+                       t("player.menu.unmute") if muted else t("player.menu.mute")).triggered.connect(self.toggle_mute)
         song = self.song
         extra = [entry for entry in song_entries(song) if entry[0] in ("artist", "pin")] if song else []
         if extra:
@@ -264,7 +270,7 @@ class PlayerPanel(QWidget):
                     lambda _=False, k=key: song_hub.relay(k, song))
         menu.addSeparator()
         menu.addAction(qta.icon("fa5s.chevron-down" if self._is_expanded else "fa5s.chevron-up", color=light),
-                       "Cerrar el reproductor" if self._is_expanded else "Abrir el reproductor"
+                       t("player.menu.close_player") if self._is_expanded else t("player.menu.open_player")
                        ).triggered.connect(self.expand_clicked)
         return menu
 
@@ -278,9 +284,9 @@ class PlayerPanel(QWidget):
     def _on_volume(self, value: int) -> None:
         icon = next(name for limit, name in VOLUME_STEP_ICONS if value < limit)
         self.mute_button.setIcon(qta.icon(icon, color="#dddddd"))
-        self.mute_button.setToolTip("Activar sonido" if value == 0 else "Silenciar")
+        self.mute_button.setToolTip(t("player.tooltip.unmute") if value == 0 else t("player.tooltip.mute"))
         self.volume_label.setText(f"{value}%")
-        self.volume_slider.setToolTip(f"Volumen {value}%")
+        self.volume_slider.setToolTip(t("player.tooltip.volume", value=value))
 
     def set_playing(self, playing: bool) -> None:
         self._playing = playing
@@ -293,7 +299,7 @@ class PlayerPanel(QWidget):
 
     def set_liked(self, liked: bool, available: bool = True) -> None:
         self.like_button.setIcon(qta.icon("fa5s.heart", color="#ff3b5c" if liked else "#aaa"))
-        self.like_button.setToolTip("Quitar de Me gusta" if liked else "Me gusta")
+        self.like_button.setToolTip(t("player.tooltip.unlike") if liked else t("player.tooltip.like"))
         self.like_button.setEnabled(available)
 
     def set_expanded(self, expanded: bool):

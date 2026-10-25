@@ -4,7 +4,10 @@ from PySide6.QtWidgets import (
     QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget,
 )
 
+from core.i18n import t
 from ui import theme
+
+_UNSET = object()
 
 _CARD_QSS = f"#modal_card {{ background: {theme.SURFACE}; border: 1px solid {theme.BORDER}; border-radius: 16px; }}"
 _CLOSE_QSS = """
@@ -45,7 +48,7 @@ class Modal(QDialog):
             close.setFixedSize(36, 36)
             close.setCursor(Qt.PointingHandCursor)
             close.setStyleSheet(_CLOSE_QSS)
-            close.setToolTip("Cerrar")
+            close.setToolTip(t("dialogs.close"))
             close.clicked.connect(self.reject)
             header.addWidget(close, alignment=Qt.AlignTop)
         root.addLayout(header)
@@ -110,7 +113,7 @@ class Modal(QDialog):
 
 
 class PromptDialog(Modal):
-    def __init__(self, parent, title, label="", *, text="", ok="Aceptar", placeholder="", multiline=False):
+    def __init__(self, parent, title, label="", *, text="", ok=None, placeholder="", multiline=False):
         super().__init__(parent, title, width=560 if multiline else 440, closable=False)
         self.value = None
         if label:
@@ -133,8 +136,9 @@ class PromptDialog(Modal):
             read = self.field.text
         self._read = read
         self.body.addWidget(self.field)
-        self.add_button("Cancelar", "tonal", self.reject)
-        self.ok_button = self.add_button(ok, "primary", self._accept_if_valid, default=True)
+        self.add_button(t("dialogs.cancel"), "tonal", self.reject)
+        self.ok_button = self.add_button(t("dialogs.ok") if ok is None else ok, "primary",
+                                         self._accept_if_valid, default=True)
         changed.connect(self._refresh)
         self._refresh()
         self.field.setFocus()
@@ -152,12 +156,13 @@ class PromptDialog(Modal):
 
 
 class ConfirmDialog(Modal):
-    def __init__(self, parent, title, message, *, ok="Aceptar", cancel="Cancelar"):
+    def __init__(self, parent, title, message, *, ok=None, cancel=_UNSET):
         super().__init__(parent, title, closable=False)
         self.add_text(message, secondary=True)
+        cancel = t("dialogs.cancel") if cancel is _UNSET else cancel
         if cancel:
             self.add_button(cancel, "tonal", self.reject)
-        self.add_button(ok, "primary", self.accept, default=True)
+        self.add_button(t("dialogs.ok") if ok is None else ok, "primary", self.accept, default=True)
 
 
 class ChoiceDialog(Modal):
@@ -165,7 +170,7 @@ class ChoiceDialog(Modal):
         super().__init__(parent, title, closable=False)
         self.value = None
         self.add_text(message, secondary=True)
-        self.add_button("Cancelar", "tonal", self.reject)
+        self.add_button(t("dialogs.cancel"), "tonal", self.reject)
         for index, (label, value) in enumerate(options):
             self.add_button(label, "primary", lambda _=False, v=value: self._pick(v), default=index == 0)
 
@@ -174,17 +179,17 @@ class ChoiceDialog(Modal):
         self.accept()
 
 
-def prompt_text(parent, title, label="", *, text="", ok="Aceptar", placeholder="", multiline=False):
+def prompt_text(parent, title, label="", *, text="", ok=None, placeholder="", multiline=False):
     dialog = PromptDialog(parent, title, label, text=text, ok=ok, placeholder=placeholder, multiline=multiline)
     return dialog.value if dialog.exec() == QDialog.Accepted else None
 
 
-def confirm(parent, title, message, *, ok="Aceptar", cancel="Cancelar") -> bool:
+def confirm(parent, title, message, *, ok=None, cancel=_UNSET) -> bool:
     return ConfirmDialog(parent, title, message, ok=ok, cancel=cancel).exec() == QDialog.Accepted
 
 
 def notify(parent, title, message) -> None:
-    ConfirmDialog(parent, title, message, ok="Entendido", cancel=None).exec()
+    ConfirmDialog(parent, title, message, ok=t("dialogs.understood"), cancel=None).exec()
 
 
 def choose(parent, title, message, options):

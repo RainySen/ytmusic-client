@@ -1,3 +1,4 @@
+from core.i18n import t
 from services.catalog_service import CatalogService
 from services.item_opener import ItemOpener
 from services.playback_service import PlaybackService
@@ -36,7 +37,7 @@ class SimilarPresenter:
             current = self._queue.current
             self._video_id = current.get("videoId") if current else None
         if self._video_id is None:
-            self._panel.set_similar_message("Reproduce una canción para ver contenido similar.")
+            self._panel.set_similar_message(t("queue.similar.no_track"))
         elif not self._loaded and not self._loading:
             self._load()
 
@@ -60,4 +61,4 @@ class SimilarPresenter:
         if video_id != self._video_id:
             return
         self._loading = False
-        self._panel.set_similar_message("No se pudo cargar. Vuelve a abrir la pestaña para reintentar.")
+        self._panel.set_similar_message(t("queue.similar.failed"))

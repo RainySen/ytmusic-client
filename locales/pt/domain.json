@@ -1,0 +1,17 @@
+{
+  "domain.unknown_artist": "Desconhecido",
+  "domain.unknown_title": "Título desconhecido",
+  "domain.untitled": "Sem título",
+  "domain.playlist": "Playlist",
+  "domain.release.album": "Álbum",
+  "domain.release.single": "Single",
+  "domain.release.ep": "EP",
+  "domain.plays": "{count} reproduções",
+  "domain.views": "{count} visualizações",
+  "domain.library.artists": "Artistas",
+  "domain.library.albums": "Álbuns",
+  "domain.library.songs": "Músicas",
+  "domain.library.playlists": "Playlists",
+  "domain.library.videos": "Vídeos",
+  "domain.settings.unknown": "Configuração desconhecida: {names}"
+}

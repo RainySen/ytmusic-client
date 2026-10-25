@@ -3,6 +3,7 @@ from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QSizePolicy, QLabel, QPushButton
 import qtawesome as qta
 
+from core.i18n import t
 from domain.models import artist_names, thumbnail_url
 from ui import imaging
 from ui.components.lazy_thumbnail import LazyThumbnail
@@ -40,16 +41,16 @@ class ImprovedQueueItem(QWidget):
         info_layout.setSpacing(2)
         info_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.title_label = QLabel(song.get('title', 'Desconocido'))
+        self.title_label = QLabel(song.get('title', t("queue.unknown")))
         self.title_label.setStyleSheet("font-weight: 600; font-size: 13px;")
         self.title_label.setWordWrap(False)
         self.title_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.title_label.setTextFormat(Qt.PlainText)
         self.title_label.setTextInteractionFlags(Qt.NoTextInteraction)
 
-        self.full_title = song.get('title', 'Desconocido')
+        self.full_title = song.get('title', t("queue.unknown"))
 
-        artist_text = artist_names(song, sep=", ") or "Desconocido"
+        artist_text = artist_names(song, sep=", ") or t("queue.unknown")
         self.artist_label = QLabel(artist_text)
         self.artist_label.setStyleSheet("color: #999; font-size: 11px;")
         self.artist_label.setWordWrap(False)

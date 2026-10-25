@@ -4,6 +4,7 @@ import qtawesome as qta
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from core.i18n import t
 from ui import theme
 from ui.components.elided_label import ElidedLabel
 
@@ -45,7 +46,7 @@ class _Row(QWidget):
         self.remove_button = QPushButton()
         self.remove_button.setIcon(qta.icon("fa5s.times", color="#999"))
         self.remove_button.setFixedSize(26, 26)
-        self.remove_button.setToolTip("Quitar del historial")
+        self.remove_button.setToolTip(t("search.history.remove"))
         self.remove_button.setCursor(Qt.PointingHandCursor)
         self.remove_button.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 13px; } "
                                          "QPushButton:hover { background: rgba(255,255,255,0.15); }")
@@ -141,7 +142,7 @@ class SearchHistoryPopup(QFrame):
             row.chosen.connect(self._pick)
             self._rows.addWidget(row)
         if not self._box.text().strip():
-            clear = QPushButton("Borrar historial")
+            clear = QPushButton(t("search.history.clear"))
             clear.setCursor(Qt.PointingHandCursor)
             clear.setStyleSheet(f"QPushButton {{ background: transparent; color: {theme.LINK}; border: none; "
                                 f"text-align: left; padding: 8px 12px; font-size: 12px; font-weight: 600; }}")

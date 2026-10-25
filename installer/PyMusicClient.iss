@@ -27,9 +27,24 @@ OutputBaseFilename=PyMusicClient-Setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+ShowLanguageDialog=auto
 
+; english first: fallback when windows uses another language
 [Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+
+[CustomMessages]
+english.VlcInstalling=Installing VLC (asks for administrator rights)...
+spanish.VlcInstalling=Instalando VLC (pide permisos de administrador)...
+brazilianportuguese.VlcInstalling=Instalando o VLC (pede permissões de administrador)...
+english.VlcDownloadFailed=Could not download VLC:
+spanish.VlcDownloadFailed=No se pudo descargar VLC:
+brazilianportuguese.VlcDownloadFailed=Não foi possível baixar o VLC:
+english.VlcManual=The app will be installed anyway, but you need to install 64-bit VLC manually (videolan.org).
+spanish.VlcManual=La app se instalara igual, pero necesitas instalar VLC de 64 bits manualmente (videolan.org).
+brazilianportuguese.VlcManual=O app será instalado mesmo assim, mas você precisa instalar o VLC de 64 bits manualmente (videolan.org).
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -42,7 +57,7 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
-Filename: "{tmp}\vlc-setup.exe"; Parameters: "/L=1033 /S"; Verb: "runas"; Flags: shellexec waituntilterminated; StatusMsg: "Instalando VLC (pide permisos de administrador)..."; Check: VlcDownloaded
+Filename: "{tmp}\vlc-setup.exe"; Parameters: "/L=1033 /S"; Verb: "runas"; Flags: shellexec waituntilterminated; StatusMsg: "{cm:VlcInstalling}"; Check: VlcDownloaded
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
@@ -94,8 +109,8 @@ begin
         if DownloadPage.AbortedByUser then
           Result := False
         else
-          SuppressibleMsgBox('No se pudo descargar VLC:' + #13#10 + GetExceptionMessage + #13#10#13#10 +
-            'La app se instalara igual, pero necesitas instalar VLC de 64 bits manualmente (videolan.org).',
+          SuppressibleMsgBox(CustomMessage('VlcDownloadFailed') + #13#10 + GetExceptionMessage + #13#10#13#10 +
+            CustomMessage('VlcManual'),
             mbError, MB_OK, IDOK);
       end;
     finally
