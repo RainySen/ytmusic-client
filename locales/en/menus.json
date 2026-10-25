@@ -1,0 +1,17 @@
+{
+  "menus.song.next": "Play next",
+  "menus.song.queue": "Add to queue",
+  "menus.song.playlist": "Add to a playlist",
+  "menus.song.artist": "Go to artist",
+  "menus.song.pin": "Pin to Listen again",
+  "menus.song.unpin": "Remove from Listen again",
+  "menus.collection.shuffle": "Shuffle play",
+  "menus.collection.mix": "Start mix",
+  "menus.collection.next": "Play next",
+  "menus.collection.queue": "Add to queue",
+  "menus.collection.playlist": "Save to a playlist",
+  "menus.collection.share": "Share",
+  "menus.artist_missing": "Could not find the artist of this song.",
+  "menus.pinned": "«{title}» pinned to Listen again.",
+  "menus.unpinned": "«{title}» is no longer pinned."
+}

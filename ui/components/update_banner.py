@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
+from core.i18n import t
 from ui import theme
 from ui.components.icon_button import icon_button
 
@@ -20,12 +21,12 @@ class UpdateBanner(QWidget):
         self._label = QLabel()
         self._label.setStyleSheet("color: #e6e6e6; font-size: 13px; background: transparent;")
         layout.addWidget(self._label)
-        self.open_button = QPushButton("Ver novedades")
+        self.open_button = QPushButton(t("main.update.open"))
         self.open_button.setCursor(Qt.PointingHandCursor)
         self.open_button.setStyleSheet(theme.button_qss("tonal", height=30))
         self.open_button.clicked.connect(self._open)
         layout.addWidget(self.open_button)
-        self.close_button = icon_button("fa5s.times", size=30, tooltip="Cerrar")
+        self.close_button = icon_button("fa5s.times", size=30, tooltip=t("main.update.close"))
         self.close_button.clicked.connect(self._close)
         layout.addWidget(self.close_button)
         self.hide()
@@ -34,7 +35,7 @@ class UpdateBanner(QWidget):
         return self._label.text()
 
     def show_version(self, version: str) -> None:
-        self._label.setText(f"Hay una nueva versión disponible ({version}).")
+        self._label.setText(t("main.update.available", version=version))
         self.reposition()
         self.show()
         self.raise_()

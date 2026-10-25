@@ -6,6 +6,7 @@ import threading
 from typing import Any
 
 from core.config import CONTENT_LANGUAGE
+from core.i18n import t
 from infra import secure_store
 from infra.auth_headers import cookie_header, parse_cookie_string
 from infra.library_search import lenient_library_search
@@ -126,7 +127,7 @@ class YTMusicGateway:
         except Exception as exc:
             raise GatewayError(str(exc)) from exc
         if not secure_store.write_secret_json(self._auth_file, headers):
-            raise GatewayError("No se pudieron guardar las credenciales.")
+            raise GatewayError(t("login.error.save_credentials"))
         try:
             browse = YTMusic(auth=headers, language=self._language)
         except Exception:
@@ -200,7 +201,7 @@ class YTMusicGateway:
     def _require_auth(self) -> Any:
         client = self._client()
         if not self._authenticated:
-            raise AuthRequired("Se requiere iniciar sesión.")
+            raise AuthRequired(t("login.required"))
         return client
 
     def search(self, query: str, filter: str | None = None, limit: int = 25, scope: str | None = None) -> list[dict]:

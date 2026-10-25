@@ -4,10 +4,12 @@ import os
 from dataclasses import dataclass
 from typing import Callable
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QLocale, QTimer
 from PySide6.QtWidgets import QWidget
 
+from core import i18n
 from core.config import NETWORK_CACHING_MS, STREAM_EXPIRY_MARGIN_S, AppPaths, app_version
+from core.i18n import t
 from domain.play_queue import PlayQueue
 from domain.settings import Settings
 from domain.stream_cache import StreamCache
@@ -98,7 +100,7 @@ class Services:
         self.warmup_runner.submit(self.streams.warm_up)
         self.warmup_runner.submit(
             self.audio.warm_up, None,
-            lambda exc: notify.error(f"No se pudo iniciar el audio (¿VLC instalado?): {exc}"),
+            lambda exc: notify.error(t("main.audio.start_failed", error=exc)),
         )
 
     def shutdown(self) -> bool:
@@ -145,6 +147,14 @@ def migrate_lyrics_file(paths: AppPaths, settings: SettingsService) -> None:
     _remove_quietly(legacy)
 
 
+# fixed for the whole run, before any widget; first run: youtube content follows the app
+def apply_language(settings: SettingsService, settings_is_new: bool, locale_name: str) -> str:
+    lang = i18n.set_language(i18n.resolve_language(settings.settings, locale_name), i18n.load(i18n.locales_dir()))
+    if settings_is_new and settings.settings.content_language != lang:
+        settings.update(content_language=lang)
+    return lang
+
+
 def build_services(paths: AppPaths) -> Services:
     paths.ensure_dirs()
     notifier = Notifier()
@@ -162,6 +172,7 @@ def build_services(paths: AppPaths) -> Services:
         if recommended != settings.settings.thumbnail_quality:
             settings.update(thumbnail_quality=recommended)
     migrate_lyrics_file(paths, settings)
+    apply_language(settings, settings_is_new, QLocale.system().name())
     gateway = YTMusicGateway(paths.auth_file, settings.settings.content_language)
     resolver = YtDlpStreamResolver(paths.ytdlp_cache_dir, auth_file=paths.auth_file,
                                    account_only=AccountOnlyTracks(paths.account_only_file))
@@ -252,7 +263,8 @@ class UserInterface:
         QTimer.singleShot(LIBRARY_PREFETCH_MS, self.window, lambda: services.library.playlists(lambda _items: None))
 
 
-def build_ui(services: Services, app_icon, login_window_factory: Callable[[], QWidget] | None = None) -> UserInterface:
+def build_ui(services: Services, app_icon, login_window_factory: Callable[[], QWidget] | None = None,
+             restart: Callable[[], None] | None = None) -> UserInterface:
     thumbnails = ThumbnailCache(services.paths.thumbnail_cache_dir)
     window = MainWindow(thumbnails, app_icon)
     services.notifier.message.connect(window.show_toast)
@@ -296,7 +308,7 @@ def build_ui(services: Services, app_icon, login_window_factory: Callable[[], QW
         memory=memory,
         preferences=SettingsPresenter(window, services.settings, free_now=memory.free_now, cache=cache,
                                       on_language=change_language, autostart_available=autostart.available,
-                                      thumbnails=thumbnails, open_log=lambda: reveal_file(paths.log_file)),
+                                      thumbnails=thumbnails, open_log=lambda: reveal_file(paths.log_file), restart=restart),
         mini=MiniPlayerPresenter(window, services.playback, services.settings),
         system=SystemPresenter(window, services.playback, services.settings, MediaKeys(), autostart),
         playlist_rail=PlaylistRailPresenter(window, services.library, services.playback, services.notifier),

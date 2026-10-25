@@ -1,3 +1,4 @@
+from core.i18n import t
 from services.catalog_service import CatalogService
 from services.item_opener import ItemOpener
 from services.notifier import Notifier
@@ -83,15 +84,15 @@ class ExplorePresenter:
         if self._detail != title:
             return
         chunks = [playlists[i:i + DETAIL_CHUNK] for i in range(0, len(playlists), DETAIL_CHUNK)]
-        sections = [(title if n == 0 else f"Más de {title}", chunk)
+        sections = [(title if n == 0 else t("home.explore.more", title=title), chunk)
                     for n, chunk in enumerate(chunks[:DETAIL_MAX_SECTIONS])]
         if not sections:
-            self._panel.show_message(f"No se encontraron playlists para «{title}».")
+            self._panel.show_message(t("home.explore.empty", title=title))
             return
         self._panel.set_sections(sections, self._window.thumbnails)
 
     def _on_error(self, exc: Exception) -> None:
         if self._sections and self._detail is None:
-            self._notifier.warning("No se pudo actualizar Explorar.")
+            self._notifier.warning(t("home.explore.error.refresh"))
         else:
-            self._panel.show_message("No se pudo cargar. Revisa tu conexión e inténtalo de nuevo.")
+            self._panel.show_message(t("home.explore.error.load"))

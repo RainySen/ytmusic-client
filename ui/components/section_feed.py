@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.config import HOVER_PREFETCH_MS
+from core.i18n import t
 from ui import imaging
 from domain.home_shelves import CARDS_LAYOUT
 from domain.models import artist_names, thumbnail_url
@@ -32,7 +33,7 @@ _PLAY_ALL_STYLE = """
 
 
 def _play_all_button(on_click) -> QPushButton:
-    button = QPushButton("Reproducir todo")
+    button = QPushButton(t("section.play_all"))
     button.setCursor(Qt.PointingHandCursor)
     button.setStyleSheet(_PLAY_ALL_STYLE)
     button.clicked.connect(on_click)
@@ -85,7 +86,7 @@ class _CardOverlay(QWidget):
         self.play_button.setFixedSize(48, 48)
         self.play_button.move(size - 48 - 10, size - 48 - 10)
         self.play_button.setCursor(Qt.PointingHandCursor)
-        self.play_button.setToolTip("Reproducir")
+        self.play_button.setToolTip(t("card.play_tooltip"))
         self.play_button.setStyleSheet("QPushButton { background: white; border: none; border-radius: 24px; }"
                                        "QPushButton:hover { background: #e6e6e6; }")
         self.play_button.clicked.connect(self.play_clicked)
@@ -173,7 +174,7 @@ class HomeCard(ClickableWidget):
             by, plays = artist_names(item, limit=2), item.get("views", "")
             return [line for line in (f"{by} •" if by and plays else by, plays) if line]
         subtitle = (item.get("subtitle") or artist_names(item, limit=2) or item.get("subscribers", "")
-                    or {"playlist": "Playlist", "album": "Álbum", "artist": "Artista"}.get(kind, ""))
+                    or {"playlist": t("kind.playlist"), "album": t("kind.album"), "artist": t("kind.artist")}.get(kind, ""))
         return [subtitle] if subtitle else []
 
     def _add_song_controls(self, size):
@@ -581,7 +582,7 @@ class SectionFeed(QWidget):
         self._message.hide()
 
     def set_loading(self):
-        self.show_message("Cargando…")
+        self.show_message(t("home.loading"))
 
     def show_message(self, text):
         self._clear()
@@ -604,7 +605,7 @@ class SectionFeed(QWidget):
     def clear(self):
         self._clear()
 
-    def set_sections(self, sections, thumbnails, reset_scroll=True, empty_message="No hay contenido para mostrar.",
+    def set_sections(self, sections, thumbnails, reset_scroll=True, empty_message=None,
                      layouts=None):
         self._thumbnails = thumbnails
         self._layouts = layouts or {}
@@ -612,8 +613,10 @@ class SectionFeed(QWidget):
         self._clear()
         self._pending = [(title, items) for title, items in sections if items]
         if not self._pending:
-            if empty_message:
-                self.show_message(empty_message)
+            # None: default text; "": no message
+            message = t("home.feed.empty") if empty_message is None else empty_message
+            if message:
+                self.show_message(message)
             return
         self._fill()
         QTimer.singleShot(0, self, self._fill)

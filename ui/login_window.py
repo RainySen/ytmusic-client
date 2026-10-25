@@ -4,21 +4,17 @@ from importlib.util import find_spec
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from core.i18n import t
 from ui import theme
 from ui.components import dialogs
 
 WINDOW_HEIGHT = 480
 WEB_LOGIN_AVAILABLE = find_spec("PySide6.QtWebEngineWidgets") is not None
 
-_MANUAL_INSTRUCTIONS = (
-    "Pega lo que copies de tu navegador con la sesión de music.youtube.com iniciada. Sirve cualquiera de estas opciones:\n\n"
-    "• Chrome, Edge, Opera GX, Brave: F12 → Red (Network) → recarga con Ctrl+R → filtra por «browse» → clic "
-    "derecho en la petición → Copiar → Copiar como cURL (bash o cmd).\n\n"
-    "• Firefox: F12 → Red → clic derecho en una petición a music.youtube.com → Copiar valor → Copiar como "
-    "cURL (Windows o POSIX).\n\n"
-    "• Cualquier navegador: exporta las cookies de music.youtube.com con la extensión Cookie-Editor (formato "
-    "JSON) o como cookies.txt, y pégalas aquí."
-)
+
+# built on use: the language is only known after startup
+def _manual_instructions() -> str:
+    return t("login.manual.instructions")
 
 
 class LoginWindow(QWidget):
@@ -34,7 +30,7 @@ class LoginWindow(QWidget):
         self._build()
 
     def _build(self):
-        self.setWindowTitle("Bienvenido a PyMusic Client")
+        self.setWindowTitle(t("login.window.title"))
         self.setWindowIcon(self._app_icon)
         self.setFixedSize(400, WINDOW_HEIGHT)
         self.setStyleSheet(f"QWidget {{ background-color: {theme.BG}; }} QLabel {{ background: transparent; }}")
@@ -49,27 +45,27 @@ class LoginWindow(QWidget):
         icon.setAlignment(Qt.AlignCenter)
         self._layout.addWidget(icon)
 
-        title = QLabel("PyMusic Client")
+        title = QLabel(t("login.app_name"))
         title.setAlignment(Qt.AlignCenter)
         title.setWordWrap(True)
         title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {theme.TEXT};")
         self._layout.addWidget(title)
 
-        credits_label = QLabel("by RainySen & Moonshine")
+        credits_label = QLabel(t("login.credits"))
         credits_label.setAlignment(Qt.AlignCenter)
         credits_label.setStyleSheet(f"font-size: 13px; color: {theme.TEXT_MUTED};")
         self._layout.addWidget(credits_label)
         self._layout.addStretch(1)
 
         if self._auth.is_authenticated:
-            button = self._make_button("Continuar", "primary")
+            button = self._make_button(t("login.continue"), "primary")
             button.setDefault(True)
             button.clicked.connect(self.login_skipped)
             self._layout.addWidget(button)
             return
 
         if WEB_LOGIN_AVAILABLE:
-            self._web_button = self._make_button("Iniciar sesión con Google", "primary")
+            self._web_button = self._make_button(t("login.google"), "primary")
             self._web_button.setIcon(qta.icon("fa5b.google", color=theme.BG))
             self._web_button.clicked.connect(self._login_with_web)
             self._layout.addWidget(self._web_button)
@@ -80,13 +76,13 @@ class LoginWindow(QWidget):
         separator.setStyleSheet(f"color: {theme.BORDER};")
         self._layout.addWidget(separator)
 
-        manual = QPushButton("Pegar cURL o cookies")
+        manual = QPushButton(t("login.manual.button"))
         manual.clicked.connect(self._manual_login)
         manual.setCursor(Qt.PointingHandCursor)
         manual.setStyleSheet(theme.button_qss("text", height=32))
         self._layout.addWidget(manual)
 
-        skip = self._make_button("Continuar sin sesión", "tonal")
+        skip = self._make_button(t("login.skip"), "tonal")
         skip.clicked.connect(self.login_skipped)
         self._layout.addWidget(skip)
 
@@ -109,7 +105,7 @@ class LoginWindow(QWidget):
 
     def _on_web_session(self, cookies, user_agent):
         self._web_button.setEnabled(False)
-        self._web_button.setText("Iniciando sesión…")
+        self._web_button.setText(t("login.pending"))
         self._auth.login_with_web_session(cookies, user_agent, self._on_web_result)
 
     def _on_web_closed(self):
@@ -118,12 +114,12 @@ class LoginWindow(QWidget):
     def _on_web_result(self, ok, error):
         self._web = None
         self._web_button.setEnabled(True)
-        self._web_button.setText("Iniciar sesión con Google")
+        self._web_button.setText(t("login.google"))
         self._on_manual_result(ok, error)
 
     def _manual_login(self):
-        text = dialogs.prompt_text(self, "Iniciar sesión manualmente", _MANUAL_INSTRUCTIONS, ok="Iniciar sesión",
-                                   placeholder="curl 'https://music.youtube.com/youtubei/v1/browse…'  ·  cookies  ·  JSON",
+        text = dialogs.prompt_text(self, t("login.manual.title"), _manual_instructions(), ok=t("login.manual.ok"),
+                                   placeholder=t("login.manual.placeholder"),
                                    multiline=True)
         if text:
             self._auth.login_with_text(text, self._on_manual_result)
@@ -132,7 +128,7 @@ class LoginWindow(QWidget):
         if ok:
             self.login_success.emit()
         else:
-            dialogs.notify(self, "Error al iniciar sesión", f"No se pudo completar el inicio de sesión.\n\n{error}")
+            dialogs.notify(self, t("login.error.title"), t("login.error.message", error=error))
 
     @staticmethod
     def _make_button(text, kind):

@@ -3,14 +3,29 @@ from PySide6.QtCore import QObject, QPoint, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QMenu, QPushButton
 
-SONG_ACTIONS = (
-    ("next", "Reproducir a continuación", "fa5s.angle-double-right"),
-    ("queue", "Agregar a la cola", "fa5s.list"),
-    ("playlist", "Agregar a una playlist", "fa5s.plus"),
+from core.i18n import t
+
+# (key, label key, icon); the label is resolved on use: the language is set after imports
+_SONG_SPECS = (
+    ("next", "menus.song.next", "fa5s.angle-double-right"),
+    ("queue", "menus.song.queue", "fa5s.list"),
+    ("playlist", "menus.song.playlist", "fa5s.plus"),
 )
-ARTIST_ACTION = ("artist", "Ir al artista", "fa5s.user")
-PIN_ACTION = ("pin", "Fijar en volver a escuchar", "fa5s.thumbtack")
-UNPIN_ACTION = ("pin", "Quitar de volver a escuchar", "fa5s.thumbtack")
+_ARTIST_SPEC = ("artist", "menus.song.artist", "fa5s.user")
+_PIN_SPEC = ("pin", "menus.song.pin", "fa5s.thumbtack")
+_UNPIN_SPEC = ("pin", "menus.song.unpin", "fa5s.thumbtack")
+_COLLECTION_SPECS = (
+    ("shuffle", "menus.collection.shuffle", "fa5s.random"),
+    ("mix", "menus.collection.mix", "fa5s.broadcast-tower"),
+    ("next", "menus.collection.next", "fa5s.angle-double-right"),
+    ("queue", "menus.collection.queue", "fa5s.list"),
+    ("playlist", "menus.collection.playlist", "fa5s.plus"),
+    ("share", "menus.collection.share", "fa5s.share"),
+)
+
+
+def _labeled(specs) -> tuple:
+    return tuple((key, t(label), icon) for key, label, icon in specs)
 
 
 # song actions routed through one hub instead of every widget
@@ -40,20 +55,20 @@ def has_artist(song: dict | None) -> bool:
 
 
 def song_entries(song: dict | None) -> tuple:
-    entries = list(SONG_ACTIONS)
+    entries = list(_SONG_SPECS)
     if has_artist(song):
-        entries.append(ARTIST_ACTION)
+        entries.append(_ARTIST_SPEC)
     if song and song.get("videoId"):
-        entries.append(UNPIN_ACTION if song_hub.is_pinned(song) else PIN_ACTION)
-    return tuple(entries)
-COLLECTION_ACTIONS = (
-    ("shuffle", "Reproducir aleatoriamente", "fa5s.random"),
-    ("mix", "Comenzar mix", "fa5s.broadcast-tower"),
-    ("next", "Reproducir a continuación", "fa5s.angle-double-right"),
-    ("queue", "Agregar a la cola", "fa5s.list"),
-    ("playlist", "Guardar en una playlist", "fa5s.plus"),
-    ("share", "Compartir", "fa5s.share"),
-)
+        entries.append(_UNPIN_SPEC if song_hub.is_pinned(song) else _PIN_SPEC)
+    return _labeled(entries)
+
+
+def song_actions() -> tuple:
+    return _labeled(_SONG_SPECS)
+
+
+def collection_actions() -> tuple:
+    return _labeled(_COLLECTION_SPECS)
 
 MENU_QSS = """
     QMenu { background: #282828; border: 1px solid #383838; border-radius: 8px; padding: 6px; }
@@ -134,7 +149,7 @@ class TrackActionsButton(ActionsButton):
 
     def __init__(self, parent=None, *, overlay: bool = False):
         style = dict(style=_OVERLAY_QSS, size=32, icon_color="white") if overlay else {}
-        super().__init__(SONG_ACTIONS, parent, **style)
+        super().__init__(song_actions(), parent, **style)
         self.song: dict | None = None
         self.action_chosen.connect(self._relay)
 
@@ -149,7 +164,7 @@ class TrackActionsButton(ActionsButton):
 
 class CollectionActionsButton(ActionsButton):
     def __init__(self, parent=None):
-        super().__init__(COLLECTION_ACTIONS, parent, style=_OVERLAY_QSS, size=32, icon_color="white")
+        super().__init__(collection_actions(), parent, style=_OVERLAY_QSS, size=32, icon_color="white")
         self._revealed = True
         self._apply(True)
 

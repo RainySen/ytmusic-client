@@ -1,3 +1,4 @@
+from core.i18n import t
 from domain.models import LOCAL_SOURCES
 from presenters.paging import Pager
 from services.item_opener import ItemOpener
@@ -7,8 +8,8 @@ from services.notifier import Notifier
 from services.playback_service import PlaybackService
 from ui.main_window import MainWindow
 
-DEFAULT_CHIP = "Playlists"
-_PAGED = {"Canciones": (SONGS_PAGE, "songs", "show_songs"), "Me gusta": (LIKED_PAGE, "liked_songs", "show_liked")}
+DEFAULT_CHIP = "playlists"
+_PAGED = {"songs": (SONGS_PAGE, "songs", "show_songs"), "liked": (LIKED_PAGE, "liked_songs", "show_liked")}
 
 
 class LibraryPresenter:
@@ -43,10 +44,10 @@ class LibraryPresenter:
         self._active = chip
         self._pager.stop()
         self._browser.set_active_chip(chip)
-        self._browser.show_message("Cargando…")
-        if chip == "Playlists":
+        self._browser.show_message(t("library.loading"))
+        if chip == "playlists":
             self._library.playlists(lambda items: self._render(chip, self._browser.show_playlists, items))
-        elif chip == "Artistas":
+        elif chip == "artists":
             self._library.library_artists(lambda items: self._render(chip, self._browser.show_artists, items))
         elif chip in _PAGED:
             self._pager.start(_PAGED[chip][0])
@@ -72,8 +73,8 @@ class LibraryPresenter:
 
         def done(data):
             if not data:
-                self._notifier.warning("La playlist está vacía o no se pudo cargar.")
+                self._notifier.warning(t("playlist.open.empty"))
                 return
             self._playback.play_collection(data["tracks"])
 
-        self._library.playlist_tracks(entry, done, lambda exc: self._notifier.error("No se pudo abrir la playlist."))
+        self._library.playlist_tracks(entry, done, lambda exc: self._notifier.error(t("playlist.open.failed")))

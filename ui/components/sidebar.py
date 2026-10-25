@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QFrame, QScrollArea, QVBoxLayout, QToolButton, QWidget
 
+from core.i18n import t
 from ui.components.playlist_rail import PlaylistRail
 
 COLLAPSED_WIDTH = 90
@@ -88,7 +89,7 @@ class Sidebar(QWidget):
         self.setObjectName("sidebar")
         self.setFixedWidth(COLLAPSED_WIDTH)
         self._expanded = False
-        self._active = "Inicio"
+        self._active = t("main.nav.home")
 
         self._nav_layout = layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 20, 8, 12)
@@ -98,9 +99,9 @@ class Sidebar(QWidget):
         self.nav_buttons = {}
         self._nav_icons = {}
         for label, icon_key, signal in [
-            ("Inicio",    "home",    self.home_requested),
-            ("Explorar",  "explore", self.explore_requested),
-            ("Biblioteca","library", self.library_requested),
+            (t("main.nav.home"),   "home",    self.home_requested),
+            (t("main.nav.explore"), "explore", self.explore_requested),
+            (t("main.nav.library"), "library", self.library_requested),
         ]:
             btn = QToolButton()
             btn.setText(label)
@@ -125,7 +126,7 @@ class Sidebar(QWidget):
         self._rail_scroll = scroll
         layout.addWidget(scroll, stretch=1)
 
-        self.set_active("Inicio")
+        self.set_active(t("main.nav.home"))
 
     def set_active(self, name: str):
         self._active = name

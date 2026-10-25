@@ -1,0 +1,12 @@
+{
+  "artist.subscribers": "{subscribers} suscriptores",
+  "artist.shuffle": "Aleatorio",
+  "artist.shuffle_tooltip": "Reproducir toda su discografía en orden aleatorio",
+  "artist.mix": "Mix",
+  "artist.mix_tooltip": "Una radio a partir de una de sus canciones",
+  "artist.top_songs": "Canciones más populares",
+  "artist.show_all": "Mostrar todo",
+  "artist.empty_songs": "No hay canciones para mostrar.",
+  "artist.no_songs": "No hay canciones para reproducir.",
+  "artist.no_mix_songs": "No hay canciones para empezar un mix."
+}

@@ -1,13 +1,15 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
+from core.i18n import t
+from domain.home_shelves import MOODS
 from ui.components.chip import Chip
 from ui.components.section_feed import SectionFeed
 
-MOOD_CHIPS = [
-    "Todos", "Relajación", "Actívate", "Fiesta",
-    "Entrenamiento", "Romance", "Concentración", "Tristeza",
-]
+
+def _mood_labels() -> list[tuple[str, str]]:
+    return [(mid, t(label)) for mid, label in MOODS]
+
 
 MoodChip = Chip
 
@@ -45,10 +47,11 @@ class HomePanel(QWidget):
         layout = QHBoxLayout(row)
         layout.setContentsMargins(48, 8, 48, 8)
         layout.setSpacing(8)
-        for mood in MOOD_CHIPS:
-            chip = MoodChip(mood)
-            chip.setChecked(mood == "Todos")
-            chip.clicked.connect(lambda _=False, m=mood: self._on_mood(m))
+        for mid, label in _mood_labels():
+            chip = MoodChip(label)
+            chip.setProperty("mood_id", mid)
+            chip.setChecked(mid == "Todos")
+            chip.clicked.connect(lambda _=False, m=mid: self._on_mood(m))
             layout.addWidget(chip)
             self._chips.append(chip)
         layout.addStretch()
@@ -62,14 +65,14 @@ class HomePanel(QWidget):
         scroll.setFixedHeight(52)
         return scroll
 
-    def _on_mood(self, mood):
+    def _on_mood(self, mood_id):
         for chip in self._chips:
-            chip.setChecked(chip.text() == mood)
-        self.mood_selected.emit(mood)
+            chip.setChecked(chip.property("mood_id") == mood_id)
+        self.mood_selected.emit(mood_id)
 
     def reset_mood(self):
         for chip in self._chips:
-            chip.setChecked(chip.text() == "Todos")
+            chip.setChecked(chip.property("mood_id") == "Todos")
 
     def scroll_to_top(self):
         self.feed.scroll_to_top()

@@ -18,9 +18,11 @@ class SettingsPresenter:
     def __init__(self, window: MainWindow, settings: SettingsService,
                  free_now: Callable[[], tuple[int, int]] | None = None, cache=None,
                  on_language: Callable[[str], None] | None = None, autostart_available: bool = True,
-                 thumbnails=None, open_log: Callable[[], None] | None = None):
+                 thumbnails=None, open_log: Callable[[], None] | None = None,
+                 restart: Callable[[], None] | None = None):
         self._window = window
         self._open_log = open_log
+        self._restart = restart
         self._free_now = free_now
         self._cache = cache
         self._on_language = on_language
@@ -52,7 +54,7 @@ class SettingsPresenter:
             self._free_now, cache_size=self._cache.size_bytes if self._cache else None,
             clear_cache=self._cache.clear if self._cache else None, logged_in=self._window.logged_in,
             on_account=self._account_action, autostart_available=self._autostart_available,
-            on_open_log=self._open_log)
+            on_open_log=self._open_log, on_restart=self._restart)
         dialog.exec()
 
     def _account_action(self) -> None:

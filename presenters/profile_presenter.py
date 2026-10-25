@@ -1,5 +1,6 @@
 import random
 
+from core.i18n import t
 from presenters.paging import Pager
 from services.catalog_service import PLAYLIST_PAGE_CAP, PLAYLIST_PAGE_SIZE, PLAYLIST_PAGE_STEP, CatalogService
 from services.item_opener import ItemOpener
@@ -131,7 +132,7 @@ class ProfilePresenter:
         if target != self._current:
             return
         if not data or not data.get("tracks"):
-            self._window.artist_panel.show_message("No hay canciones para mostrar.")
+            self._window.artist_panel.show_message(t("artist.empty_songs"))
             return
         self._window.artist_panel.show_all_songs(profile["name"], data["tracks"], self._window.thumbnails)
 
@@ -140,7 +141,7 @@ class ProfilePresenter:
             return
         panel = self._window.album_panel
         if not data:
-            panel.show_message("No hay canciones disponibles aquí.")
+            panel.show_message(t("album.empty"))
             return
         self._collection = data
         if target[0] == "album":
@@ -166,7 +167,7 @@ class ProfilePresenter:
     def _on_failed(self, target: tuple[str, str], view: str) -> None:
         if target != self._current:
             return
-        text = "No se pudo cargar. Revisa tu conexión e inténtalo de nuevo."
+        text = t("library.load_failed")
         panel = self._window.album_panel if view == "album" else self._window.artist_panel
         panel.show_message(text)
 
@@ -184,7 +185,7 @@ class ProfilePresenter:
             if songs:
                 self._playback.play_collection(random.sample(songs, len(songs)))
             else:
-                self._notifier.warning("No hay canciones para reproducir.")
+                self._notifier.warning(t("artist.no_songs"))
             return
         self._opener.shuffle_artist(self._profile["id"], self._profile["name"])
 
@@ -196,7 +197,7 @@ class ProfilePresenter:
             if songs:
                 self._playback.start_radio(random.choice(songs))
             else:
-                self._notifier.warning("No hay canciones para empezar un mix.")
+                self._notifier.warning(t("artist.no_mix_songs"))
             return
         self._opener.mix_artist(self._profile["id"])
 
@@ -206,7 +207,7 @@ class ProfilePresenter:
         if self._is_channel():
             self._window.artist_panel.show_all_songs(
                 self._profile["name"], self._channel_songs(), self._window.thumbnails,
-                title=self._profile.get("songs_title") or "Canciones más populares")
+                title=self._profile.get("songs_title") or t("artist.top_songs"))
             return
         self._go(("songs", self._profile["id"]))
 

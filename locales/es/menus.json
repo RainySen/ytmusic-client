@@ -1,0 +1,17 @@
+{
+  "menus.song.next": "Reproducir a continuación",
+  "menus.song.queue": "Agregar a la cola",
+  "menus.song.playlist": "Agregar a una playlist",
+  "menus.song.artist": "Ir al artista",
+  "menus.song.pin": "Fijar en volver a escuchar",
+  "menus.song.unpin": "Quitar de volver a escuchar",
+  "menus.collection.shuffle": "Reproducir aleatoriamente",
+  "menus.collection.mix": "Comenzar mix",
+  "menus.collection.next": "Reproducir a continuación",
+  "menus.collection.queue": "Agregar a la cola",
+  "menus.collection.playlist": "Guardar en una playlist",
+  "menus.collection.share": "Compartir",
+  "menus.artist_missing": "No se encontró el artista de esta canción.",
+  "menus.pinned": "«{title}» fijada en Volver a escucharlo.",
+  "menus.unpinned": "«{title}» ya no está fijada."
+}

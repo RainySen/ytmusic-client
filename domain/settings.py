@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from core.i18n import t
+
 RADIO_SIZE_OPTIONS = (5, 10, 15, 25, 50, 75, 100, 150, 200, 300, 500, 1000, 0)
 DEFAULT_RADIO_SIZE = 50
 FREE_MEMORY_OPTIONS = (10, 20, 60, 180)
 DEFAULT_FREE_MEMORY_S = 20
 REWIND_OPTIONS = (5, 10, 15, 20)
 DEFAULT_REWIND_S = 10
+APP_LANGUAGES = ("", "es", "en", "pt")
 CONTENT_LANGUAGES = {
     "es": "Español", "en": "English", "pt": "Português", "fr": "Français", "de": "Deutsch", "it": "Italiano",
     "nl": "Nederlands", "cs": "Čeština", "tr": "Türkçe", "ru": "Русский", "ar": "العربية", "hi": "हिन्दी",
@@ -83,11 +86,12 @@ class Settings:
     thumbnail_cache_limit: int = DEFAULT_THUMBNAIL_CACHE
     romanized_lyrics: bool = True
     announced_version: str = ""
+    app_language: str = ""
 
     def with_changes(self, **changes) -> "Settings":
         unknown = set(changes) - set(self.__dataclass_fields__)
         if unknown:
-            raise KeyError(f"Ajuste desconocido: {', '.join(sorted(unknown))}")
+            raise KeyError(t("domain.settings.unknown", names=", ".join(sorted(unknown))))
         return replace(self, **changes)
 
     def to_dict(self) -> dict:
@@ -122,4 +126,5 @@ class Settings:
             thumbnail_cache_limit=_choice(data, "thumbnail_cache_limit", THUMBNAIL_CACHE_OPTIONS, DEFAULT_THUMBNAIL_CACHE),
             romanized_lyrics=_flag(data, "romanized_lyrics", True),
             announced_version=_text(data, "announced_version"),
+            app_language=_text(data, "app_language") if _text(data, "app_language") in APP_LANGUAGES else "",
         )

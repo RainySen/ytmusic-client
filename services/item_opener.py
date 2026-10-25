@@ -4,6 +4,7 @@ import logging
 import random
 from typing import Callable
 
+from core.i18n import t
 from domain.models import playlist_id_of
 from services.catalog_service import CatalogService
 from services.navigation import Navigator
@@ -36,22 +37,22 @@ class ItemOpener:
             self._navigator.artist_requested.emit(self._artist_id(item))
         else:
             log.info("Nothing to open for item: %s", item)
-            self._notifier.warning("Este elemento no se puede reproducir todavía.")
+            self._notifier.warning(t("library.opener.unsupported"))
 
     def shuffle_artist(self, artist_id: str, name: str = "") -> None:
-        self._load(lambda done, fail: self._catalog.artist_tracks(artist_id, done, fail), name, verb="Mezclando")
+        self._load(lambda done, fail: self._catalog.artist_tracks(artist_id, done, fail), name, shuffle=True)
 
     def mix_artist(self, artist_id: str) -> None:
         def done(profile: dict) -> None:
             songs = profile.get("top_songs") or []
             if not songs:
-                self._notifier.warning("No hay canciones para empezar un mix.")
+                self._notifier.warning(t("artist.no_mix_songs"))
                 return
             self._playback.start_radio(random.choice(songs))
 
         def failed(exc: Exception) -> None:
             log.warning("Could not start a mix for %s: %s", artist_id, exc)
-            self._notifier.error("No se pudo cargar el contenido. Revisa tu conexión.")
+            self._notifier.error(t("library.collection.load_failed"))
 
         self._catalog.artist_profile(artist_id, done, failed)
 
@@ -82,18 +83,19 @@ class ItemOpener:
             return kind
         return "playlist" if item.get("playlistId") else ""
 
-    def _load(self, request: Callable, label: str, verb: str = "Abriendo") -> None:
+    def _load(self, request: Callable, label: str, shuffle: bool = False) -> None:
         if label:
-            self._notifier.info(f"{verb} «{label}»…")
+            self._notifier.info(t("library.collection.shuffling", title=label) if shuffle
+                                else t("library.collection.opening", title=label))
 
         def done(data: dict | None) -> None:
             if not data or not data.get("tracks"):
-                self._notifier.warning("No hay canciones reproducibles aquí.")
+                self._notifier.warning(t("library.collection.no_tracks"))
                 return
             self._playback.play_collection(data["tracks"])
 
         def failed(exc: Exception) -> None:
             log.warning("Could not open %r: %s", label, exc)
-            self._notifier.error("No se pudo cargar el contenido. Revisa tu conexión.")
+            self._notifier.error(t("library.collection.load_failed"))
 
         request(done, failed)

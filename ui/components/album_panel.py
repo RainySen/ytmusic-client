@@ -2,12 +2,13 @@ import qtawesome as qta
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
+from core.i18n import t
 from domain.models import artist_list, thumbnail_url
 from ui import imaging, theme
 from ui.components.lazy_thumbnail import LazyThumbnail
 from ui.components.page_parts import MessagePage, back_button
 from ui.components.section_feed import CardsSection
-from ui.components.track_actions import COLLECTION_ACTIONS, ActionsButton
+from ui.components.track_actions import ActionsButton, collection_actions
 from ui.components.track_list import TrackList
 
 COVER_SIZE = 300
@@ -70,7 +71,7 @@ class AlbumPanel(QWidget):
         self._scroll.verticalScrollBar().valueChanged.connect(self._maybe_load_more)
 
     def set_loading(self):
-        self._scroll.setWidget(MessagePage("Cargando…", self.back_requested.emit))
+        self._scroll.setWidget(MessagePage(t("album.loading"), self.back_requested.emit))
 
     def release(self):
         self.tracks = None
@@ -142,7 +143,7 @@ class AlbumPanel(QWidget):
         column.addLayout(body)
 
         if data.get("more"):
-            more = CardsSection("Lanzamientos para ti", data["more"], thumbnails, title_px=22)
+            more = CardsSection(t("album.more"), data["more"], thumbnails, title_px=22)
             more.item_clicked.connect(self.item_clicked)
             more.collection_action_requested.connect(self.collection_action_requested)
             column.addWidget(more)
@@ -187,7 +188,7 @@ class AlbumPanel(QWidget):
         kind = " • ".join(p for p in (data.get("kind"), data.get("year")) if p)
         layout.addWidget(self._muted(kind, center=True))
         count = data.get("track_count") or len(data["tracks"])
-        extras = f"{count} {'canción' if count == 1 else 'canciones'}"
+        extras = t("album.count.song", count=count) if count == 1 else t("album.count.songs", count=count)
         if data.get("duration"):
             extras += f" • {data['duration']}"
         layout.addWidget(self._muted(extras, center=True, wrap=True))
@@ -201,11 +202,11 @@ class AlbumPanel(QWidget):
         buttons = QHBoxLayout()
         buttons.setAlignment(Qt.AlignHCenter)
         buttons.setSpacing(14)
-        self.shuffle_button = _round_button("fa5s.random", 44, _ROUND_QSS, "Reproducir en orden aleatorio")
+        self.shuffle_button = _round_button("fa5s.random", 44, _ROUND_QSS, t("album.shuffle"))
         self.shuffle_button.clicked.connect(self.shuffle_requested)
-        self.play_button = _round_button("fa5s.play", 56, _PLAY_QSS, "Reproducir")
+        self.play_button = _round_button("fa5s.play", 56, _PLAY_QSS, t("album.play"))
         self.play_button.clicked.connect(self.play_requested)
-        self.menu_button = ActionsButton(COLLECTION_ACTIONS, style=_ROUND_QSS, size=44, icon_color="white")
+        self.menu_button = ActionsButton(collection_actions(), style=_ROUND_QSS, size=44, icon_color="white")
         self.menu_button.set_revealed(True)
         self.menu_button.action_chosen.connect(lambda key: self.collection_action_requested.emit(key, item))
         for widget in (self.shuffle_button, self.play_button, self.menu_button):

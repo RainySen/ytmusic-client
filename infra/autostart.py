@@ -11,15 +11,17 @@ VALUE_NAME = "YTMusicClient"
 BACKGROUND_FLAG = "--background"
 
 
-def launch_command(frozen: bool | None = None, executable: str | None = None, script: str | None = None) -> str:
+def launch_command(frozen: bool | None = None, executable: str | None = None, script: str | None = None,
+                   background: bool = True) -> str:
     frozen = getattr(sys, "frozen", False) if frozen is None else frozen
     executable = executable or sys.executable
     if frozen:
-        return f'"{executable}" {BACKGROUND_FLAG}'
+        return f'"{executable}" {BACKGROUND_FLAG}' if background else f'"{executable}"'
     windowless = os.path.join(os.path.dirname(executable), "pythonw.exe")
     interpreter = windowless if os.path.exists(windowless) else executable
     script = script or os.path.abspath(sys.argv[0])
-    return f'"{interpreter}" "{script}" {BACKGROUND_FLAG}'
+    command = f'"{interpreter}" "{script}"'
+    return f"{command} {BACKGROUND_FLAG}" if background else command
 
 
 class Autostart:
