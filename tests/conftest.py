@@ -42,6 +42,13 @@ def wait_until(qapp):
 
 
 @pytest.fixture(autouse=True)
+def spanish_ui():
+    from core import i18n
+    # existing assertions check the spanish texts
+    i18n.set_language("es", i18n.load(i18n.locales_dir()))
+
+
+@pytest.fixture(autouse=True)
 def no_real_quit(monkeypatch):
     monkeypatch.setattr(QApplication, "quit", staticmethod(lambda: None))
 

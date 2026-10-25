@@ -1,3 +1,4 @@
+from core.i18n import t
 from infra.listen_again_pins import ListenAgainPins
 from presenters.home_presenter import HomePresenter
 from presenters.player_presenter import artist_id_of
@@ -29,12 +30,12 @@ class SongMenuPresenter:
         if artist_id:
             self._navigator.artist_requested.emit(artist_id)
         else:
-            self._notifier.warning("No se encontró el artista de esta canción.")
+            self._notifier.warning(t("menus.artist_missing"))
 
     def toggle_pin(self, song: dict) -> None:
         title = song.get("title", "")
         if self._pins.toggle(song):
-            self._notifier.info(f"«{title}» fijada en Volver a escucharlo.")
+            self._notifier.info(t("menus.pinned", title=title))
         else:
-            self._notifier.info(f"«{title}» ya no está fijada.")
+            self._notifier.info(t("menus.unpinned", title=title))
         self._home.refresh_pins()

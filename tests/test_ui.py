@@ -421,12 +421,16 @@ def test_home_replaces_previous_sections(qapp):
 
 
 def test_mood_chip_selection_emits_and_highlights(qapp):
+    from core.i18n import t
     panel = HomePanel()
     spy = QSignalSpy(panel.mood_selected)
-    chip = next(c for c in panel._chips if c.text() == "Fiesta")
+    # Find chip by internal mood ID (Spanish for API compatibility)
+    chip = next(c for c in panel._chips if c.property("mood_id") == "Fiesta")
     chip.click()
+    # Signal emits internal ID (Spanish for API)
     assert spy.count() == 1 and spy.at(0) == ["Fiesta"]
-    assert [c.text() for c in panel._chips if c.isChecked()] == ["Fiesta"]
+    # Checked chip shows translated label
+    assert [c.text() for c in panel._chips if c.isChecked()] == [t("mood.party")]
 
 
 def test_play_all_emits_the_section_songs(qapp):

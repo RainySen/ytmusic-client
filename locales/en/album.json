@@ -1,0 +1,9 @@
+{
+  "album.loading": "Loading…",
+  "album.more": "Releases for you",
+  "album.count.song": "{count} song",
+  "album.count.songs": "{count} songs",
+  "album.shuffle": "Shuffle play",
+  "album.play": "Play",
+  "album.empty": "No songs available here."
+}

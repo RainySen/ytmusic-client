@@ -8,6 +8,8 @@ import threading
 import time
 from http.cookiejar import Cookie
 
+from core import i18n
+from core.i18n import t
 from domain.stream_cache import StreamInfo, expiry_from_url
 from infra.account_only_tracks import AccountOnlyTracks
 from infra.secure_store import read_secret_json
@@ -18,9 +20,22 @@ ACCOUNT_MARKERS = ("premium", "sign in to confirm", "members only", "join this c
 JS_RUNTIMES = (("deno", "deno"), ("node", "node"), ("bun", "bun"), ("quickjs", "qjs"))
 COOKIE_DOMAIN = ".youtube.com"
 COOKIE_TTL_S = 365 * 24 * 3600
-NO_RUNTIME_MESSAGE = ("Esta canción es solo para YouTube Music Premium y no se encontró el reproductor necesario "
-                      "para usar tu sesión. Reinstala la aplicación o instala Node.js o Deno.")
-NO_SESSION_MESSAGE = "Esta canción es solo para YouTube Music Premium. Inicia sesión con una cuenta Premium."
+
+_LEGACY_KEYS = {
+    "NO_RUNTIME_MESSAGE": "login.stream.no_runtime",
+    "NO_SESSION_MESSAGE": "login.stream.no_session",
+}
+
+
+# module constants kept for existing callers: resolved on access
+def __getattr__(name: str) -> str:
+    key = _LEGACY_KEYS.get(name)
+    if key is None:
+        raise AttributeError(name)
+    text = t(key)
+    if text != key:
+        return text
+    return i18n.load(i18n.locales_dir())[i18n.SOURCE].get(key, key)
 
 
 class StreamResolveError(Exception):
@@ -93,7 +108,7 @@ class YtDlpStreamResolver:
             return cached[1]
         runtimes = available_js_runtimes()
         if not runtimes:
-            raise StreamResolveError(NO_RUNTIME_MESSAGE)
+            raise StreamResolveError(t("login.stream.no_runtime"))
         import yt_dlp
 
         ydl = yt_dlp.YoutubeDL({**self._options(), "js_runtimes": runtimes})
@@ -124,18 +139,18 @@ class YtDlpStreamResolver:
                 info = self._resolve_with_session(url, exc)
         stream_url = (info or {}).get("url")
         if not stream_url:
-            raise StreamResolveError("yt-dlp no devolvió una URL de audio.")
+            raise StreamResolveError(t("login.stream.no_url"))
         return StreamInfo(
             video_id=video_id,
             url=stream_url,
-            title=info.get("title") or "Título Desconocido",
+            title=info.get("title") or t("login.stream.unknown_title"),
             expires_at=expiry_from_url(stream_url),
         )
 
     def _resolve_with_session(self, url: str, first: Exception | None) -> dict:
         cookie_header = self._cookie_header()
         if not cookie_header:
-            raise StreamResolveError(NO_SESSION_MESSAGE) from first
+            raise StreamResolveError(t("login.stream.no_session")) from first
         log.info("Account-only stream, retrying with the session: %s", url)
         try:
             return self._session_ydl(cookie_header).extract_info(url, download=False)

@@ -373,7 +373,7 @@ def test_library_ignores_stale_tab_results(rig):
     rig.window.library_requested.emit()
     assert rig.window.library_browser.isVisible()
     playlists_answer = rig.library.playlist_requests[-1]
-    rig.window.library_browser.chip_selected.emit("Canciones")
+    rig.window.library_browser.chip_selected.emit("songs")
     playlists_answer([{"playlistId": "p", "title": "P", "source": "local"}])
     assert "Cargando" in rig.window.library_browser._layout.itemAt(0).widget().text()
     rig.library.song_requests[-1]([song(1)])
@@ -382,8 +382,8 @@ def test_library_ignores_stale_tab_results(rig):
 
 def test_library_artists_are_synchronous(rig):
     rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier, rig.navigator))
-    rig.window.library_browser.chip_selected.emit("Artistas")
-    assert rig.window.library_browser._chips["Artistas"].isChecked()
+    rig.window.library_browser.chip_selected.emit("artists")
+    assert rig.window.library_browser._chips["artists"].isChecked()
 
 
 def test_library_playlist_activation_plays_it(rig):

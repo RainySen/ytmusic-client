@@ -3,6 +3,7 @@ from typing import Callable
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QWidget
 
+from core.i18n import t
 from presenters.home_presenter import HomePresenter
 from services.auth_service import AuthService
 from services.catalog_service import CatalogService
@@ -51,7 +52,8 @@ class AuthPresenter:
             self._login_window.activateWindow()
             return
         login = self._make_login_window()
-        login.login_success.connect(lambda: (self._close_login(), self._notifier.info("Sesión iniciada."), self._reset_asked()))
+        login.login_success.connect(lambda: (self._close_login(), self._notifier.info(t("login.toast.success")),
+                                             self._reset_asked()))
         login.login_skipped.connect(self._close_login)
         self._login_window = login
         login.show()
@@ -67,9 +69,9 @@ class AuthPresenter:
 
     def logout(self) -> None:
         if self._auth.logout():
-            self._notifier.info("Sesión cerrada.")
+            self._notifier.info(t("login.toast.logout"))
         else:
-            self._notifier.error("No se pudo cerrar la sesión.")
+            self._notifier.error(t("login.toast.logout_failed"))
 
     def _on_auth_changed(self, authenticated: bool) -> None:
         self._window.set_auth_state(authenticated)

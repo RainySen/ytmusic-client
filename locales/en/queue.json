@@ -1,0 +1,18 @@
+{
+  "queue.title": "Play queue",
+  "queue.save": "Save queue as playlist",
+  "queue.clear": "Clear queue",
+  "queue.autoplay": "Autoplay",
+  "queue.tab.up_next": "Up next",
+  "queue.tab.lyrics": "Lyrics",
+  "queue.tab.similar": "Similar",
+  "queue.unknown": "Unknown",
+  "queue.lyrics.credit": "Lyrics: {source}",
+  "queue.similar.loading": "Loading…",
+  "queue.similar.songs": "You might also like",
+  "queue.similar.playlists": "Playlists for you",
+  "queue.similar.artists": "Similar artists",
+  "queue.similar.empty": "No similar content for this song.",
+  "queue.similar.no_track": "Play a song to see similar content.",
+  "queue.similar.failed": "Could not load. Open the tab again to retry."
+}

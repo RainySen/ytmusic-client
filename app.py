@@ -15,6 +15,7 @@ from core.config import AppPaths
 from core.single_instance import SingleInstance
 from core.logging_setup import setup_logging
 from infra.autostart import BACKGROUND_FLAG
+from infra.restart import restart_app
 from ui.login_window import LoginWindow
 
 log = logging.getLogger("app")
@@ -50,10 +51,14 @@ def main() -> int:
 
     guard.activated.connect(bring_to_front)
 
+    def release():
+        services.session.save(wait=True)
+        guard.release()
+
     def start_main_application():
         if state["ui"] is not None:
             return
-        ui = build_ui(services, icon)
+        ui = build_ui(services, icon, restart=lambda: restart_app(release))
         state["ui"] = ui
         ui.start(services)
         ui.window.resize(1240, 750)

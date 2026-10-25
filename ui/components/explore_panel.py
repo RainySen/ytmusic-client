@@ -2,12 +2,14 @@ import qtawesome as qta
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
+from core.i18n import t
 from ui.components.section_feed import SectionFeed
 
+# label keys: translated when the panel is built, after the language is set
 _JUMP_BUTTONS = (
-    ("Nuevos lanzamientos", "fa5s.compact-disc"),
-    ("Rankings", "fa5s.chart-line"),
-    ("Estados de ánimo y géneros", "fa5s.smile"),
+    ("explore.jump.new_releases", "fa5s.compact-disc"),
+    ("explore.jump.charts", "fa5s.chart-line"),
+    ("explore.jump.moods_genres", "fa5s.smile"),
 )
 _BUTTON_QSS = """
     QPushButton { background: #212121; color: #f0f0f0; border: none; border-radius: 8px;
@@ -47,7 +49,7 @@ class ExplorePanel(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(16)
         for index, (label, icon) in enumerate(_JUMP_BUTTONS):
-            button = QPushButton("  " + label)
+            button = QPushButton("  " + t(label))
             button.setIcon(qta.icon(icon, color="#cfcfcf"))
             button.setFixedHeight(64)
             button.setCursor(Qt.PointingHandCursor)
@@ -56,7 +58,7 @@ class ExplorePanel(QWidget):
             row.addWidget(button, stretch=1)
         top_layout.addWidget(self._jump_row)
 
-        self._back = QPushButton("←  Explorar")
+        self._back = QPushButton("←  " + t("explore.back"))
         self._back.setCursor(Qt.PointingHandCursor)
         self._back.setStyleSheet(_BACK_QSS)
         self._back.clicked.connect(self.back_requested)

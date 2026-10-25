@@ -639,3 +639,56 @@ def test_settings_presenter_hands_the_cache_and_account_to_the_dialog(rig, tmp_p
     monkeypatch.setattr(rig.window, "account_action", lambda: asked.append(1))
     presenter._account_action()
     assert wait_until(lambda: asked == [1])
+
+
+@pytest.mark.parametrize("accepted, restarts", [(True, 1), (False, 0)])
+def test_app_language_combo_saves_and_offers_a_restart(rig, monkeypatch, accepted, restarts):
+    from ui.components import dialogs
+    asked, restarted = [], []
+    monkeypatch.setattr(dialogs, "confirm", lambda *a, **kw: asked.append(kw) or accepted)
+    dialog, changes = make_dialog(rig, on_restart=lambda: restarted.append(1))
+    assert [dialog.app_language.itemData(i) for i in range(dialog.app_language.count())] == ["", "es", "en", "pt"]
+    assert dialog.app_language.currentData() == ""
+    dialog.app_language.setCurrentIndex(dialog.app_language.findData("en"))
+    assert {"app_language": "en"} in changes and asked[0]["ok"] == "Reiniciar ahora"
+    assert len(restarted) == restarts
+    dialog.deleteLater()
+
+
+def test_restart_releases_the_app_before_launching_it_in_the_foreground():
+    from infra.autostart import BACKGROUND_FLAG
+    from infra.restart import restart_app
+    events = []
+    restart_app(lambda: events.append("release"), popen=lambda command: events.append(command))
+    assert events[0] == "release" and BACKGROUND_FLAG not in events[1]
+
+
+def test_format_size_uses_the_language_decimal_separator():
+    from core import i18n
+    i18n.set_language("en")
+    assert format_size(5 * 1024 * 1024 + 300 * 1024) == "5.3 MB"
+    i18n.set_language("es")
+
+
+def test_settings_scrollbar_is_always_visible_and_wide_enough_to_grab(rig):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QScrollArea
+    dialog, _ = make_dialog(rig)
+    scroll = dialog.findChild(QScrollArea)
+    assert scroll.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOn
+    assert "width: 12px" in scroll.styleSheet()
+    dialog.deleteLater()
+
+
+def test_app_language_also_sets_the_content_language_but_not_the_other_way(rig, monkeypatch):
+    from ui.components import dialogs
+    monkeypatch.setattr(dialogs, "confirm", lambda *a, **kw: False)
+    dialog, changes = make_dialog(rig, on_restart=lambda: None)
+    dialog.app_language.setCurrentIndex(dialog.app_language.findData("pt"))
+    assert dialog.language.currentData() == "pt" and {"content_language": "pt"} in changes
+    dialog.language.setCurrentIndex(dialog.language.findData("en"))
+    assert dialog.app_language.currentData() == "pt" and {"content_language": "en"} in changes
+    changes.clear()
+    dialog.app_language.setCurrentIndex(dialog.app_language.findData(""))
+    assert dialog.language.currentData() == "en" and not any("content_language" in c for c in changes)
+    dialog.deleteLater()

@@ -4,18 +4,29 @@ from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
-from ui import imaging
+from core.i18n import t
 from domain.models import LOCAL_SOURCES, thumbnail_url
+from ui import imaging
 from ui.components.chip import Chip
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
 from ui.components.track_list import TrackList
 
-CHIP_LABELS = ["Playlists", "Canciones", "Me gusta", "Artistas"]
+# (internal chip id, label key): the id drives the presenter, the label follows the language
+_CHIP_SPECS = (
+    ("playlists", "library.chip.playlists"),
+    ("songs", "library.chip.songs"),
+    ("liked", "library.chip.liked"),
+    ("artists", "library.chip.artists"),
+)
 GRID_COLUMNS = 4
 LOAD_MORE_MARGIN = 200
 
 _SEPARATOR = "background: #1a1a1a; max-height: 1px;"
+
+
+def chip_labels() -> tuple:
+    return tuple((key, t(label)) for key, label in _CHIP_SPECS)
 
 
 LibraryChip = Chip
@@ -47,13 +58,15 @@ class PlaylistCard(ClickableWidget):
         if playlist.get("pinned"):
             pin = QLabel()
             pin.setPixmap(qta.icon("fa5s.thumbtack", color="#aaa").pixmap(11, 11))
-            pin.setToolTip("Fijada")
+            pin.setToolTip(t("library.card.pinned"))
             title_row.addWidget(pin, alignment=Qt.AlignTop)
         layout.addLayout(title_row)
 
         local = playlist.get("source", "ytmusic") in LOCAL_SOURCES
         count = playlist.get("track_count", 0)
-        meta = QLabel(f"{'Local' if local else 'YouTube Music'}{f'  •  {count} pistas' if count else ''}")
+        source = t("library.card.local") if local else t("library.card.youtube_music")
+        tracks = t("library.card.tracks", count=count) if count else ""
+        meta = QLabel(f"{source}{'  •  ' + tracks if tracks else ''}")
         meta.setStyleSheet("font-size: 11px; color: #888;")
         meta.setWordWrap(True)
         meta.setMaximumWidth(152)
@@ -80,7 +93,7 @@ class ArtistRow(QWidget):
         name = QLabel(artist.get("name") or artist.get("title") or artist.get("artist", ""))
         name.setStyleSheet("font-size: 14px; font-weight: 500; color: #e0e0e0;")
         info.addWidget(name)
-        detail = f"{artist['count']} canciones" if artist.get("count") else artist.get("subscribers", "")
+        detail = t("library.artist.count", count=artist["count"]) if artist.get("count") else artist.get("subscribers", "")
         if detail:
             count = QLabel(detail)
             count.setStyleSheet("font-size: 12px; color: #888;")
@@ -115,12 +128,12 @@ class LibraryBrowserPanel(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 10, 16, 10)
         header_layout.setSpacing(8)
-        for label in CHIP_LABELS:
+        for key, label in chip_labels():
             chip = LibraryChip(label)
-            chip.setChecked(label == "Playlists")
-            chip.clicked.connect(lambda _=False, l=label: self._on_chip_clicked(l))
+            chip.setChecked(key == "playlists")
+            chip.clicked.connect(lambda _=False, l=key: self._on_chip_clicked(l))
             header_layout.addWidget(chip)
-            self._chips[label] = chip
+            self._chips[key] = chip
         header_layout.addStretch()
         outer.addWidget(header)
 
@@ -192,10 +205,10 @@ class LibraryBrowserPanel(QWidget):
         self._layout.insertWidget(0, label)
 
     def show_playlists(self, playlists, thumbnails):
-        self.set_active_chip("Playlists")
+        self.set_active_chip("playlists")
         self._clear()
         if not playlists:
-            self.show_message("Aún no tienes playlists. Guarda una desde una canción o desde la cola.")
+            self.show_message(t("library.empty.playlists"))
             return
         grid_widget = QWidget()
         grid = QGridLayout(grid_widget)
@@ -210,28 +223,28 @@ class LibraryBrowserPanel(QWidget):
 
     # append: songs is only the new page
     def show_songs(self, songs, thumbnails, has_more=False, append=False):
-        self.set_active_chip("Canciones")
+        self.set_active_chip("songs")
         if append:
             self._append_page(songs, thumbnails, has_more)
             return
         self._clear()
         if not songs:
-            self.show_message("No hay canciones guardadas todavía.")
+            self.show_message(t("library.empty.songs"))
             return
         self._can_load_more = has_more
         self._start_songs(songs, thumbnails)
 
     def show_liked(self, songs, thumbnails, has_more=False, append=False):
-        self.set_active_chip("Me gusta")
+        self.set_active_chip("liked")
         if append:
             self._append_page(songs, thumbnails, has_more)
             return
         self._clear()
         if songs is None:
-            self.show_message("Inicia sesión para ver las canciones a las que les diste Me gusta.")
+            self.show_message(t("library.empty.liked_signed_out"))
             return
         if not songs:
-            self.show_message("Todavía no le diste Me gusta a ninguna canción.")
+            self.show_message(t("library.empty.liked"))
             return
         self._can_load_more = has_more
         self._start_songs(songs, thumbnails)
@@ -245,10 +258,10 @@ class LibraryBrowserPanel(QWidget):
                 self.songs.append_tracks(songs, thumbnails)
 
     def show_artists(self, artists, thumbnails):
-        self.set_active_chip("Artistas")
+        self.set_active_chip("artists")
         self._clear()
         if not artists:
-            self.show_message("No hay artistas todavía.")
+            self.show_message(t("library.empty.artists"))
             return
         self._layout.insertWidget(0, self._list_of([ArtistRow(a, thumbnails) for a in artists]))
 

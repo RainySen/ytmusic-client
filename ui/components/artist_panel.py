@@ -2,6 +2,7 @@ from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPixmap
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QWidget
 
+from core.i18n import t
 from domain.models import thumbnail_url
 from ui import imaging, theme
 from ui.components.page_parts import MessagePage, back_button, heading, outline_button, pill_button
@@ -36,17 +37,17 @@ class _Banner(QWidget):
         name.setStyleSheet(f"font-size: 46px; font-weight: 800; color: {theme.TEXT}; background: transparent;")
         layout.addWidget(name)
         if profile.get("subscribers"):
-            subs = QLabel(f"{profile['subscribers']} suscriptores")
+            subs = QLabel(t("artist.subscribers", subscribers=profile["subscribers"]))
             subs.setStyleSheet(f"font-size: 14px; color: {theme.TEXT_SECONDARY}; background: transparent;")
             layout.addWidget(subs)
 
         buttons = QHBoxLayout()
         buttons.setSpacing(12)
-        self.shuffle_button = pill_button("Aleatorio", "primary", "fa5s.random")
-        self.shuffle_button.setToolTip("Reproducir toda su discografía en orden aleatorio")
+        self.shuffle_button = pill_button(t("artist.shuffle"), "primary", "fa5s.random")
+        self.shuffle_button.setToolTip(t("artist.shuffle_tooltip"))
         self.shuffle_button.clicked.connect(on_shuffle)
-        self.mix_button = pill_button("Mix", "tonal", "fa5s.broadcast-tower")
-        self.mix_button.setToolTip("Una radio a partir de una de sus canciones")
+        self.mix_button = pill_button(t("artist.mix"), "tonal", "fa5s.broadcast-tower")
+        self.mix_button.setToolTip(t("artist.mix_tooltip"))
         self.mix_button.clicked.connect(on_mix)
         buttons.addWidget(self.shuffle_button)
         buttons.addWidget(self.mix_button)
@@ -148,11 +149,11 @@ class ArtistPanel(QWidget):
             inner = QVBoxLayout(block)
             inner.setContentsMargins(SIDE_MARGIN, 12, SIDE_MARGIN, 0)
             inner.setSpacing(8)
-            inner.addWidget(heading(profile.get("songs_title") or "Canciones más populares"))
+            inner.addWidget(heading(profile.get("songs_title") or t("artist.top_songs")))
             self.songs = self._song_list(songs, thumbnails, show_album=True)
             inner.addWidget(self.songs)
             if profile.get("songs_browse_id") or len(profile.get("all_songs") or []) > len(songs):
-                self.show_all_button = outline_button("Mostrar todo")
+                self.show_all_button = outline_button(t("artist.show_all"))
                 self.show_all_button.clicked.connect(self.show_all_requested)
                 inner.addWidget(self.show_all_button, alignment=Qt.AlignLeft)
             column.addWidget(block)
@@ -162,7 +163,7 @@ class ArtistPanel(QWidget):
         self.feed.set_sections(profile.get("sections") or [], thumbnails, empty_message="")
         self.feed.scroll_to_top()
 
-    def show_all_songs(self, name, tracks, thumbnails, title="Canciones más populares"):
+    def show_all_songs(self, name, tracks, thumbnails, title=None):
         page = QWidget()
         column = QVBoxLayout(page)
         column.setContentsMargins(SIDE_MARGIN, 24, SIDE_MARGIN, 24)
@@ -170,7 +171,7 @@ class ArtistPanel(QWidget):
         button = back_button()
         button.clicked.connect(self.back_requested)
         column.addWidget(button, alignment=Qt.AlignLeft)
-        column.addWidget(heading(title, 34))
+        column.addWidget(heading(title or t("artist.top_songs"), 34))
         by = QLabel(name)
         by.setStyleSheet(f"font-size: 15px; color: {theme.TEXT_SECONDARY};")
         column.addWidget(by)

@@ -631,3 +631,17 @@ def test_library_artists_come_from_ytmusic_or_fall_back_to_local(library, wait_u
     fallback = []
     service.library_artists(fallback.append)
     assert wait_until(lambda: fallback) and fallback[0][0]["name"] == "Local"
+
+
+def test_mood_titles_show_the_translated_label_but_search_with_the_id(catalog, wait_until):
+    from core import i18n
+    service, gateway = catalog
+    gateway.search_result = [{"videoId": "s1", "title": "S", "playlistId": "PL1"}]
+    i18n.set_language("en")
+    out = []
+    service.load_mood("Relajación", out.append)
+    assert wait_until(lambda: out)
+    titles = " ".join(t for t, _ in out[0])
+    i18n.set_language("es")
+    assert "Relax" in titles and "Relajación" not in titles
+    assert any("Relajación" in str(c) for c in gateway.calls)

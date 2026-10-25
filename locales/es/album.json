@@ -1,0 +1,9 @@
+{
+  "album.loading": "Cargando…",
+  "album.more": "Lanzamientos para ti",
+  "album.count.song": "{count} canción",
+  "album.count.songs": "{count} canciones",
+  "album.shuffle": "Reproducir en orden aleatorio",
+  "album.play": "Reproducir",
+  "album.empty": "No hay canciones disponibles aquí."
+}

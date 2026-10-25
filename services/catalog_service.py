@@ -5,10 +5,12 @@ import os
 from typing import Any, Callable
 
 from core.config import HOME_SECTIONS
+from core.i18n import t
 from domain.models import (
     Track, normalize_artist_card, normalize_playlist_item, normalize_release, normalize_track, normalize_tracks,
     normalize_video, parse_home_section, playlist_id_of, release_label,
 )
+from domain.home_shelves import mood_label
 from domain.search_results import group_search_results
 from infra.concurrency import TaskHandle, TaskRunner
 from infra.json_store import read_json, write_json_atomic
@@ -41,10 +43,21 @@ DISCOVERY_KEY = "home-discovery"
 DISCOVERY_LIMIT = 30
 EXPLORE_TTL = 900
 
-NEW_RELEASES_TITLE = "Álbumes y sencillos nuevos"
-TRENDING_TITLE = "Tendencias"
-MOODS_TITLE = "Estados de ánimo y géneros"
-CHART_LISTS_TITLE = "Listas de éxitos"
+# built on use: the language is only known after startup
+def _new_releases_title() -> str:
+    return t("services.catalog.new_releases")
+
+
+def _trending_title() -> str:
+    return t("services.catalog.trending")
+
+
+def _moods_title() -> str:
+    return t("services.catalog.moods")
+
+
+def _chart_lists_title() -> str:
+    return t("services.catalog.chart_lists")
 
 
 class CatalogService:
@@ -134,7 +147,7 @@ class CatalogService:
         for raw in self._gateway.get_home(limit):
             items = parse_home_section(raw)
             if items:
-                sections.append((raw.get("title") or "Sección", items))
+                sections.append((raw.get("title") or t("services.home.fallback_section"), items))
         return sections
 
     def _fetch_extras(self) -> list[Section]:
@@ -144,12 +157,12 @@ class CatalogService:
             lists = [{"type": "playlist", "playlistId": v["playlistId"], "title": v.get("title", ""),
                       "thumbnails": v.get("thumbnails", [])}
                      for v in charts.get("videos") or [] if v.get("playlistId")]
-            extras.append((CHART_LISTS_TITLE, lists))
+            extras.append((_chart_lists_title(), lists))
         except Exception:
             log.info("Charts unavailable for the home extras", exc_info=True)
         try:
             for title, items in self._fetch_explore_sections():
-                if title == TRENDING_TITLE:
+                if title == _trending_title():
                     extras.append((title, items))
         except Exception:
             log.info("Explore unavailable for the home extras", exc_info=True)
@@ -165,18 +178,18 @@ class CatalogService:
 
         def songs():
             raw = self._gateway.search(f"{mood} canciones", filter="songs", limit=30)
-            found = [t for t in (normalize_track(r) for r in raw) if t]
+            found = [track for track in (normalize_track(r) for r in raw) if track]
             for track in found:
                 track["type"] = "song"
-            return (f"Canciones — {mood}", found[:12])
+            return (t("services.catalog.mood_songs", mood=mood_label(mood)), found[:12])
 
         def mixes():
             raw = self._gateway.search(f"{mood} mix", filter="playlists", limit=30)
-            return ("Mixes para ti", self._playlist_items(raw)[:10])
+            return (t("services.catalog.mood_mixes"), self._playlist_items(raw)[:10])
 
         def playlists():
             raw = self._gateway.search(f"playlist {mood}", filter="playlists", limit=30)
-            return (f"Playlists • {mood}", self._playlist_items(raw)[:10])
+            return (t("services.catalog.mood_playlists", mood=mood_label(mood)), self._playlist_items(raw)[:10])
 
         def finish(results: list[Any]) -> None:
             sections = [r for r in results if isinstance(r, tuple) and r[1]]
@@ -207,7 +220,7 @@ class CatalogService:
             track["type"] = "song"
         moods = [{"type": "mood", "title": m.get("title", ""), "params": m.get("params", "")}
                  for m in data.get("moods_and_genres") or [] if m.get("params")]
-        sections = [(NEW_RELEASES_TITLE, releases), (TRENDING_TITLE, trending), (MOODS_TITLE, moods)]
+        sections = [(_new_releases_title(), releases), (_trending_title(), trending), (_moods_title(), moods)]
         return [sec for sec in sections if sec[1]]
 
     def mood_playlists(self, params: str, on_done: Done, on_error: Fail | None = None) -> None:
@@ -312,7 +325,7 @@ class CatalogService:
             tracks = normalize_tracks(data.get("tracks") or [])
             if not tracks:
                 return None
-            return {"title": data.get("title") or "Playlist Importada", "tracks": tracks}
+            return {"title": data.get("title") or t("services.catalog.imported_playlist"), "tracks": tracks}
 
         def ok(result: dict | None) -> None:
             if result:
@@ -348,10 +361,12 @@ class CatalogService:
 
         songs = raw.get("songs") or {}
         shelves = [
-            ("Álbumes", [r for r in (normalize_release(a, "Álbum") for a in results("albums")) if r]),
-            ("Sencillos y EP", [r for r in (normalize_release(s, "Sencillo") for s in results("singles")) if r]),
-            ("Videos", [v for v in (normalize_video(v) for v in results("videos")) if v]),
-            ("Fans también escuchan", [a for a in (normalize_artist_card(a) for a in results("related")) if a]),
+            (t("services.artist.albums"), [r for r in (normalize_release(a) for a in results("albums")) if r]),
+            (t("services.artist.singles"),
+             [r for r in (normalize_release(s, release_label("single")) for s in results("singles")) if r]),
+            (t("services.artist.videos"), [v for v in (normalize_video(v) for v in results("videos")) if v]),
+            (t("services.artist.related"),
+             [a for a in (normalize_artist_card(a) for a in results("related")) if a]),
         ]
         return {
             "id": browse_id,
@@ -388,11 +403,11 @@ class CatalogService:
             "banner": [],
             "top_songs": tracks[:UPLOADER_SHOWN_VIDEOS],
             "all_songs": tracks,
-            "songs_title": "Videos",
+            "songs_title": t("services.artist.uploader_videos"),
             "songs_browse_id": "",
             "shuffle_id": "",
             "radio_id": "",
-            "sections": [("Playlists", playlists)] if playlists else [],
+            "sections": [(t("services.artist.playlists"), playlists)] if playlists else [],
         }
 
     def artist_tracks(self, browse_id: str, on_done: Done, on_error: Fail | None = None) -> None:
@@ -440,8 +455,8 @@ class CatalogService:
             total = raw.get("trackCount") or len(tracks)
             return {
                 "id": playlist_id,
-                "title": raw.get("title") or "Mix",
-                "kind": "Playlist",
+                "title": raw.get("title") or t("services.catalog.mix"),
+                "kind": t("services.catalog.playlist_kind"),
                 "year": str(raw.get("year") or ""),
                 "author": author.get("name") or "",
                 "author_id": author.get("id") or "",

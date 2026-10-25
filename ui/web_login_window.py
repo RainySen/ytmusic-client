@@ -5,6 +5,8 @@ from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngin
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from core import i18n
+from core.i18n import t
 from infra.web_session import WebSessionCookies, firefox_disguise_script, google_login_user_agent
 from ui import theme
 
@@ -24,14 +26,27 @@ SETTLE_MS = 1200
 HANDOFF_DELAY_MS = 1500
 MAX_HANDOFFS = 2
 DISGUISE_SCRIPT_NAME = "firefox-disguise"
-WAITING_HINT = "Terminando de iniciar sesión…"
-NO_SESSION_HINT = "Todavía no se detecta tu sesión de Google. Termina de iniciar sesión primero."
 REJECTED_PATH = "/signin/rejected"
 MAX_REJECT_RETRIES = 2
 RETRY_DELAY_MS = 1500
-RETRYING_HINT = "Google rechazó este intento (pasa a veces). Reintentando…"
-GAVE_UP_HINT = ("Google sigue rechazando el inicio desde esta ventana. Cierra y vuelve a intentar en unos minutos, "
-                "o usa «Pegar cURL o cookies».")
+
+_LEGACY_KEYS = {
+    "WAITING_HINT": "login.web.waiting",
+    "NO_SESSION_HINT": "login.web.no_session",
+    "RETRYING_HINT": "login.web.retrying",
+    "GAVE_UP_HINT": "login.web.gave_up",
+}
+
+
+# module constants kept for existing callers: resolved on access
+def __getattr__(name: str) -> str:
+    key = _LEGACY_KEYS.get(name)
+    if key is None:
+        raise AttributeError(name)
+    text = t(key)
+    if text != key:
+        return text
+    return i18n.load(i18n.locales_dir())[i18n.SOURCE].get(key, key)
 
 
 class LoginPage(QWebEnginePage):
@@ -60,7 +75,7 @@ class WebLoginWindow(QWidget):
         self._handoffs = 0
         self._rejections = 0
 
-        self.setWindowTitle("Iniciar sesión con Google")
+        self.setWindowTitle(t("login.web.title"))
         self.resize(520, 720)
         self.setStyleSheet(f"background: {theme.BG};")
 
@@ -79,15 +94,15 @@ class WebLoginWindow(QWidget):
         self._view = QWebEngineView(self)
         self._view.setPage(self._page)
 
-        self._status = QLabel("Cargando…")
+        self._status = QLabel(t("login.web.loading"))
         self._status.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px; padding: 6px 12px;")
-        self._continue = QPushButton("Ya inicié sesión, continuar")
+        self._continue = QPushButton(t("login.web.continue"))
         self._continue.setCursor(Qt.PointingHandCursor)
         self._continue.setStyleSheet(theme.button_qss("tonal", height=32))
         self._continue.clicked.connect(self.continue_manually)
         footer = QHBoxLayout()
         footer.setContentsMargins(12, 8, 12, 8)
-        hint = QLabel("¿Ya entraste pero no avanza?")
+        hint = QLabel(t("login.web.hint"))
         hint.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
         footer.addWidget(hint, stretch=1)
         footer.addWidget(self._continue)
@@ -113,7 +128,8 @@ class WebLoginWindow(QWidget):
         store.cookieRemoved.connect(self._on_cookie_removed)
         store.loadAllCookies()
         self._page.urlChanged.connect(self._on_url)
-        self._page.loadFinished.connect(lambda ok: self._status.setText("" if ok else "No se pudo cargar la página."))
+        self._page.loadFinished.connect(
+            lambda ok: self._status.setText("" if ok else t("login.web.load_failed")))
 
     def start(self) -> None:
         self._page.load(QUrl(LOGIN_URL))
@@ -140,10 +156,10 @@ class WebLoginWindow(QWidget):
     # google randomly rejects embedded browsers; a retry usually works
     def _on_rejected(self) -> None:
         if self._rejections >= MAX_REJECT_RETRIES:
-            self._status.setText(GAVE_UP_HINT)
+            self._status.setText(t("login.web.gave_up"))
             return
         self._rejections += 1
-        self._status.setText(RETRYING_HINT)
+        self._status.setText(t("login.web.retrying"))
         QTimer.singleShot(RETRY_DELAY_MS, self, lambda: self._page.load(QUrl(LOGIN_URL)))
 
     # signed in but stuck outside music: hand off
@@ -162,15 +178,15 @@ class WebLoginWindow(QWidget):
             return
         self._handoffs += 1
         log.info("login: signed in on %s, continuing to youtube music (%d)", host, self._handoffs)
-        self._status.setText(WAITING_HINT)
+        self._status.setText(t("login.web.waiting"))
         self._page.load(QUrl(LOGIN_URL))
 
     def continue_manually(self) -> None:
         if not self._cookies.has_google_session():
-            self._status.setText(NO_SESSION_HINT)
+            self._status.setText(t("login.web.no_session"))
             return
         log.info("login: manual continue from %s", self._page.url().host())
-        self._status.setText(WAITING_HINT)
+        self._status.setText(t("login.web.waiting"))
         self._page.load(QUrl(LOGIN_URL))
 
     def _finish_if_ready(self) -> None:

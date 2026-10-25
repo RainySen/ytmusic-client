@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from core.i18n import t
 from domain.models import Lyrics
 from ui.components.drop_queue_container import DroppableQueueContainer
 from ui.components.queue_widgets import ImprovedQueueItem
@@ -18,7 +19,10 @@ PANEL_WIDTH = 420
 QUEUE_BATCH = 40
 QUEUE_LOOKAHEAD_PX = 400
 TAB_QUEUE, TAB_LYRICS, TAB_SIMILAR = range(3)
-_TAB_LABELS = ("A continuación", "Letra", "Similares")
+
+
+def _tab_labels() -> tuple[str, str, str]:
+    return (t("queue.tab.up_next"), t("queue.tab.lyrics"), t("queue.tab.similar"))
 
 _ICON_BUTTON = """
     QPushButton { border: none; border-radius: 14px; background: transparent; }
@@ -80,7 +84,7 @@ class SidePanel(QWidget):
         layout.setSpacing(0)
         self._tab_group = QButtonGroup(self)
         self._tab_group.setExclusive(True)
-        for index, label in enumerate(_TAB_LABELS):
+        for index, label in enumerate(_tab_labels()):
             button = QPushButton(label.upper())
             button.setCheckable(True)
             button.setCursor(Qt.PointingHandCursor)
@@ -116,21 +120,21 @@ class SidePanel(QWidget):
         layout.setSpacing(12)
 
         header = QHBoxLayout()
-        title = QLabel("Cola de reproducción")
+        title = QLabel(t("queue.title"))
         title.setStyleSheet("font-weight: bold; font-size: 14px;")
         self._queue_count = QLabel("(0)")
         self._queue_count.setStyleSheet("color: #999; font-size: 12px;")
         header.addWidget(title)
         header.addWidget(self._queue_count)
         header.addStretch()
-        header.addWidget(self._icon_button("fa5s.save", "Guardar cola como playlist",
+        header.addWidget(self._icon_button("fa5s.save", t("queue.save"),
                                            "rgba(0,255,0,0.15)", self.save_requested.emit))
-        header.addWidget(self._icon_button("fa5s.broom", "Limpiar cola",
+        header.addWidget(self._icon_button("fa5s.broom", t("queue.clear"),
                                            "rgba(255,0,0,0.2)", self.clear_requested.emit))
         layout.addLayout(header)
 
         auto_row = QHBoxLayout()
-        auto_label = QLabel("Reproducción automática")
+        auto_label = QLabel(t("queue.autoplay"))
         auto_label.setStyleSheet("color: #ccc; font-size: 12px;")
         self._auto_queue_switch = Switch(True)
         self._auto_queue_switch.toggled.connect(self.auto_queue_toggled)
@@ -300,7 +304,7 @@ class SidePanel(QWidget):
                 self._render_lyric(index, lit=0, active=False)
                 item.setSizeHint(QSize(LYRICS_TEXT_WIDTH, label.heightForWidth(LYRICS_TEXT_WIDTH) + 16))
                 self._lyrics.setItemWidget(item, label)
-        self._lyrics_credit.setText(f"Letra: {lyrics.source}" if lyrics.source else "")
+        self._lyrics_credit.setText(t("queue.lyrics.credit", source=lyrics.source) if lyrics.source else "")
         self._lyrics_credit.setVisible(bool(lyrics.source))
 
     def _set_lyrics_plain(self, lyrics: Lyrics):
@@ -406,7 +410,7 @@ class SidePanel(QWidget):
         self._similar_layout.insertWidget(0, label)
 
     def set_similar_loading(self):
-        self.set_similar_message("Cargando…")
+        self.set_similar_message(t("queue.similar.loading"))
 
     def clear_similar(self):
         self._clear_similar()
@@ -415,7 +419,7 @@ class SidePanel(QWidget):
         self._clear_similar()
         sections = []
         if related.get("songs"):
-            songs = CompactSection("Esto también te va a gustar", related["songs"], thumbnails,
+            songs = CompactSection(t("queue.similar.songs"), related["songs"], thumbnails,
                                    columns=1, rows=4, play_all=False, peek=36, title_px=16)
             songs.item_clicked.connect(self.similar_item_chosen)
             songs.add_next_clicked.connect(self.similar_add_next)
@@ -423,14 +427,15 @@ class SidePanel(QWidget):
             songs.add_playlist_clicked.connect(self.similar_add_playlist)
             songs.item_hovered.connect(self.similar_item_hovered)
             sections.append(songs)
-        for key, title, size in (("playlists", "Playlists para ti", 150), ("artists", "Artistas similares", 130)):
+        for key, title, size in (("playlists", t("queue.similar.playlists"), 150),
+                                 ("artists", t("queue.similar.artists"), 130)):
             if related.get(key):
                 cards = CardsSection(title, related[key], thumbnails, card_size=size, title_px=16)
                 cards.item_clicked.connect(self.similar_item_chosen)
                 cards.collection_action_requested.connect(self.similar_collection_action)
                 sections.append(cards)
         if not sections:
-            self.set_similar_message("No hay contenido similar para esta canción.")
+            self.set_similar_message(t("queue.similar.empty"))
             return
         for position, section in enumerate(sections):
             self._similar_layout.insertWidget(position, section)

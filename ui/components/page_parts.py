@@ -2,6 +2,7 @@ import qtawesome as qta
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
+from core.i18n import t
 from ui import theme
 
 
@@ -10,7 +11,7 @@ def back_button() -> QPushButton:
     button.setIcon(qta.icon("fa5s.arrow-left", color="white"))
     button.setFixedSize(40, 40)
     button.setCursor(Qt.PointingHandCursor)
-    button.setToolTip("Volver")
+    button.setToolTip(t("button.back"))
     button.setStyleSheet("""
         QPushButton { background: rgba(0,0,0,0.45); border: none; border-radius: 20px; }
         QPushButton:hover { background: rgba(255,255,255,0.20); }
