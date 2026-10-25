@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath
 from PySide6.QtWidgets import QAbstractItemView, QLabel, QListView, QMenu, QStyledItemDelegate, QVBoxLayout, QWidget
 
 from core.config import HOVER_PREFETCH_MS
+from core.i18n import t
 from domain.models import artist_names, thumbnail_url
 from ui import imaging, theme
 from ui.components.track_actions import MENU_QSS, song_entries, song_hub
@@ -270,7 +271,7 @@ class TrackList(QWidget):
         self.view.setItemDelegate(_TrackDelegate(self))
         self.view.setFixedHeight(0)
         layout.addWidget(self.view)
-        self._loading = QLabel("Cargando más…")
+        self._loading = QLabel(t("player.loading_more"))
         self._loading.setAlignment(Qt.AlignCenter)
         self._loading.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px; padding: 12px;")
         self._loading.hide()

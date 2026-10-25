@@ -5,26 +5,49 @@ from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
+from core.i18n import t
 from domain.settings import (
-    CONTENT_LANGUAGES, FREE_MEMORY_OPTIONS, LYRICS_PROVIDER_NAMES, RADIO_SIZE_OPTIONS, REWIND_OPTIONS, Settings,
+    APP_LANGUAGES, CONTENT_LANGUAGES, FREE_MEMORY_OPTIONS, LYRICS_PROVIDER_NAMES, RADIO_SIZE_OPTIONS, REWIND_OPTIONS, Settings,
     THUMBNAIL_CACHE_OPTIONS, THUMBNAIL_QUALITY_OPTIONS,
 )
 from ui import theme
+from ui.components import dialogs
 from ui.components.dialogs import Modal
 from ui.components.icon_button import icon_button
 from ui.components.no_scroll_combo import NoScrollComboBox
 from ui.components.switch import Switch
 
-RADIO_LABELS = {size: f"{size} canciones" for size in RADIO_SIZE_OPTIONS}
-RADIO_LABELS[0] = "Ilimitada (se extiende sola)"
-REWIND_LABELS = {seconds: f"{seconds} segundos" for seconds in REWIND_OPTIONS}
-MEMORY_LABELS = {10: "10 segundos", 20: "20 segundos", 60: "1 minuto", 180: "3 minutos"}
-QUALITY_LABELS = {"low": "Baja (ahorra memoria y datos)", "auto": "Automática (recomendada)",
-                  "high": "Alta (pantallas grandes o 4K)"}
-CACHE_LIMIT_LABELS = {100: "100 (menos RAM)", 200: "200", 400: "400 (recomendado)", 800: "800 (menos recargas)"}
 PROVIDER_LABELS = {"betterlyrics": "Better Lyrics", "lrclib": "LRCLIB", "youtube": "YouTube Music"}
-PROVIDER_HINTS = {"betterlyrics": "Sincronizada por palabra", "lrclib": "Sincronizada por línea",
-                  "youtube": "Suele ser texto sin sincronizar"}
+APP_LANGUAGE_NAMES = {"es": "Español", "en": "English", "pt": "Português"}
+
+
+# built on use: the language is only known after startup
+def _radio_labels() -> dict:
+    labels = {size: t("settings.radio.option", n=size) for size in RADIO_SIZE_OPTIONS}
+    labels[0] = t("settings.radio.unlimited")
+    return labels
+
+
+def _rewind_labels() -> dict:
+    return {seconds: t("settings.rewind.option", n=seconds) for seconds in REWIND_OPTIONS}
+
+
+def _memory_labels() -> dict:
+    return {10: t("settings.memory.seconds_10"), 20: t("settings.memory.seconds_20"),
+            60: t("settings.memory.minute_1"), 180: t("settings.memory.minutes_3")}
+
+
+def _quality_labels() -> dict:
+    return {"low": t("settings.quality.low"), "auto": t("settings.quality.auto"), "high": t("settings.quality.high")}
+
+
+def _cache_limit_labels() -> dict:
+    return {100: t("settings.cache_limit.low"), 200: "200", 400: t("settings.cache_limit.recommended"),
+            800: t("settings.cache_limit.high")}
+
+
+def _app_language_labels() -> dict:
+    return {"": t("settings.language.automatic"), **APP_LANGUAGE_NAMES}
 
 _COMBO_QSS = f"""
     QComboBox {{ background: rgba(255,255,255,0.08); color: {theme.TEXT}; border: 1px solid {theme.BORDER};
@@ -35,11 +58,12 @@ _COMBO_QSS = f"""
 """
 
 
+# always visible and easy to grab: usable without a mouse wheel
 _SCROLL_QSS = """
     QScrollArea { background: transparent; border: none; }
-    QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
-    QScrollBar::handle:vertical { background: rgba(255,255,255,0.25); border-radius: 3px; min-height: 30px; }
-    QScrollBar::handle:vertical:hover { background: rgba(255,255,255,0.4); }
+    QScrollBar:vertical { background: rgba(255,255,255,0.06); width: 12px; margin: 2px; border-radius: 5px; }
+    QScrollBar::handle:vertical { background: rgba(255,255,255,0.45); border-radius: 5px; min-height: 40px; }
+    QScrollBar::handle:vertical:hover { background: rgba(255,255,255,0.65); }
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 DIALOG_HEIGHT = 560
@@ -50,8 +74,8 @@ def format_size(size: int) -> str:
     if size < 1024 * 1024:
         return f"{max(0, size) // 1024} KB"
     if size < 1024 ** 3:
-        return f"{size / 1024 ** 2:.1f} MB".replace(".", ",")
-    return f"{size / 1024 ** 3:.2f} GB".replace(".", ",")
+        return f"{size / 1024 ** 2:.1f} MB".replace(".", t("format.decimal"))
+    return f"{size / 1024 ** 3:.2f} GB".replace(".", t("format.decimal"))
 
 
 def _dialog_height() -> int:
@@ -114,14 +138,15 @@ def _separator() -> QFrame:
 class SettingsDialog(Modal):
     def __init__(self, parent, settings: Settings, tray_available: bool, on_change, on_free=None, *,
                  cache_size=None, clear_cache=None, logged_in: bool = False, on_account=None,
-                 autostart_available: bool = True, on_open_log=None):
-        super().__init__(parent, "Configuración", width=540, height=_dialog_height())
+                 autostart_available: bool = True, on_open_log=None, on_restart=None):
+        super().__init__(parent, t("settings.title"), width=540, height=_dialog_height())
         self._on_change = on_change
         self._on_free = on_free
         self._cache_size = cache_size
         self._clear_cache = clear_cache
         self._on_account = on_account
         self._on_open_log = on_open_log
+        self._on_restart = on_restart
         content = QWidget()
         content.setStyleSheet("background: transparent;")
         body = QVBoxLayout(content)
@@ -143,36 +168,32 @@ class SettingsDialog(Modal):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         scroll.setStyleSheet(_SCROLL_QSS)
         scroll.setWidget(content)
         self.body.addWidget(scroll)
-        self.add_button("Listo", "primary", self.accept, default=True)
+        self.add_button(t("settings.done"), "primary", self.accept, default=True)
 
     def _build_background(self, body, settings: Settings, tray_available: bool, autostart_available: bool) -> None:
-        body.addWidget(_title("Segundo plano"))
+        body.addWidget(_title(t("settings.background.section")))
         self.background = Switch(settings.background_on_close and tray_available)
         self.background.setEnabled(tray_available)
-        hint = ("Al cerrar la ventana la música sigue sonando y la app queda en la bandeja del sistema. Si lo apagas, "
-                "cerrar la ventana cierra la app.")
-        if not tray_available:
-            hint = "No disponible: este sistema no tiene bandeja del sistema."
-        body.addWidget(_row("Seguir en segundo plano al cerrar", hint, self.background, tray_available))
+        hint = t("settings.background.hint") if tray_available else t("settings.background.no_tray")
+        body.addWidget(_row(t("settings.background.title"), hint, self.background, tray_available))
         self._mini_choice = settings.mini_player
         self.mini = Switch(settings.mini_player and self.background.isChecked())
         self.mini.setEnabled(self.background.isChecked())
-        self._mini_label = _row("Mini reproductor", "Ventana pequeña con los controles cuando minimizas o cierras la app. "
-                                "Requiere seguir en segundo plano.", self.mini, self.background.isChecked())
+        self._mini_label = _row(t("settings.mini.title"), t("settings.mini.hint"), self.mini, self.background.isChecked())
         body.addWidget(self._mini_label)
-        self.rewind = _combo(REWIND_OPTIONS, REWIND_LABELS, settings.mini_rewind_seconds)
+        self.rewind = _combo(REWIND_OPTIONS, _rewind_labels(), settings.mini_rewind_seconds)
         self.rewind.setEnabled(self.mini.isChecked())
-        body.addWidget(_row("Retroceder en el mini reproductor", "Cuánto vuelve atrás el botón de retroceso.",
-                            self.rewind))
+        body.addWidget(_row(t("settings.rewind.title"), t("settings.rewind.hint"), self.rewind))
         self.rewind.currentIndexChanged.connect(
             lambda _i: self._on_change(mini_rewind_seconds=self.rewind.currentData()))
         self.autostart = Switch(settings.start_with_windows and autostart_available)
         self.autostart.setEnabled(autostart_available)
-        body.addWidget(_row("Iniciar con Windows", "Se abre al encender el equipo, minimizada en la bandeja y sin "
-                            "mostrar la ventana." if autostart_available else "No disponible en este sistema.",
+        body.addWidget(_row(t("settings.autostart.title"), t("settings.autostart.hint") if autostart_available
+                            else t("settings.autostart.unavailable"),
                             self.autostart, autostart_available))
         body.addWidget(_separator())
         self.background.toggled.connect(self._on_background)
@@ -180,35 +201,29 @@ class SettingsDialog(Modal):
         self.autostart.toggled.connect(lambda v: self._on_change(start_with_windows=v))
 
     def _build_radio(self, body, settings: Settings) -> None:
-        body.addWidget(_title("Cola automática"))
+        body.addWidget(_title(t("settings.queue.section")))
         self.auto_queue = Switch(settings.auto_queue)
-        body.addWidget(_row("Cola automática", "Al elegir una canción, la cola se llena sola con recomendaciones y "
-                            "se sigue extendiendo al llegar al final. Apagada, solo suena lo que elijas.",
-                            self.auto_queue))
-        self.radio = _combo(RADIO_SIZE_OPTIONS, RADIO_LABELS, settings.radio_size)
+        body.addWidget(_row(t("settings.queue.title"), t("settings.queue.hint"), self.auto_queue))
+        self.radio = _combo(RADIO_SIZE_OPTIONS, _radio_labels(), settings.radio_size)
         self.radio.setEnabled(settings.auto_queue)
-        body.addWidget(_row("Canciones al elegir una canción",
-                            "La primera tanda llega junto con la canción y el resto se carga en segundo plano hasta "
-                            "completar el tamaño elegido. Una cola grande no consume memoria de forma apreciable.",
-                            self.radio))
+        body.addWidget(_row(t("settings.radio.title"), t("settings.radio.hint"), self.radio))
         body.addWidget(_separator())
         self.auto_queue.toggled.connect(self._on_auto_queue)
         self.radio.currentIndexChanged.connect(lambda _i: self._on_change(radio_size=self.radio.currentData()))
 
     def _build_memory(self, body, settings: Settings) -> None:
-        body.addWidget(_title("Memoria"))
+        body.addWidget(_title(t("settings.memory.section")))
         self.free_memory = Switch(settings.free_memory)
-        body.addWidget(_row("Liberar memoria en segundo plano", "Descarta miniaturas y listas cuando la ventana está "
-                            "cerrada o minimizada; se recargan al volver.", self.free_memory))
-        self.free_seconds = _combo(FREE_MEMORY_OPTIONS, MEMORY_LABELS, settings.free_memory_seconds)
-        body.addWidget(_row("Esperar antes de liberar", "", self.free_seconds))
+        body.addWidget(_row(t("settings.memory.title"), t("settings.memory.hint"), self.free_memory))
+        self.free_seconds = _combo(FREE_MEMORY_OPTIONS, _memory_labels(), settings.free_memory_seconds)
+        body.addWidget(_row(t("settings.memory.wait"), "", self.free_seconds))
         self.free_result = _note("")
-        self.free_button = QPushButton("Liberar RAM ahora")
+        self.free_button = QPushButton(t("settings.memory.free_button"))
         self.free_button.setCursor(Qt.PointingHandCursor)
         self.free_button.setStyleSheet(theme.button_qss("tonal", height=34))
         self.free_button.setEnabled(self._on_free is not None)
         self.free_button.clicked.connect(self._free_now)
-        body.addWidget(_row("Liberar memoria ahora", "Devuelve al sistema la memoria que la app no está usando. Crece de nuevo solo lo que necesite.", self.free_button))
+        body.addWidget(_row(t("settings.memory.free_title"), t("settings.memory.free_hint"), self.free_button))
         body.addWidget(self.free_result)
         body.addWidget(_separator())
         self.free_memory.toggled.connect(lambda v: self._on_change(free_memory=v))
@@ -216,18 +231,18 @@ class SettingsDialog(Modal):
             lambda _i: self._on_change(free_memory_seconds=self.free_seconds.currentData()))
 
     def _build_playback(self, body, settings: Settings) -> None:
-        body.addWidget(_title("Reproducción"))
+        body.addWidget(_title(t("settings.playback.section")))
         self.remember_volume = Switch(settings.remember_volume)
-        body.addWidget(_row("Recordar el volumen", "", self.remember_volume))
+        body.addWidget(_row(t("settings.playback.remember_volume"), "", self.remember_volume))
         self.restore_queue = Switch(settings.restore_queue)
-        body.addWidget(_row("Restaurar la cola al abrir", "Recupera la cola y la canción de la última vez.",
+        body.addWidget(_row(t("settings.playback.restore_queue"), t("settings.playback.restore_queue_hint"),
                             self.restore_queue))
         self.media_keys = Switch(settings.media_keys)
-        body.addWidget(_row("Teclas multimedia", "Pausa, siguiente y anterior desde el teclado, incluso con la app en "
-                            "segundo plano. Si otra aplicación ya las usa, se apaga sola.", self.media_keys))
+        body.addWidget(_row(t("settings.playback.media_keys"), t("settings.playback.media_keys_hint"),
+                            self.media_keys))
         self.notifications = Switch(settings.notifications)
-        body.addWidget(_row("Aviso al cambiar de canción", "Muestra una notificación cuando la ventana está oculta o "
-                            "minimizada.", self.notifications))
+        body.addWidget(_row(t("settings.playback.notifications"), t("settings.playback.notifications_hint"),
+                            self.notifications))
         body.addWidget(_separator())
         self.remember_volume.toggled.connect(lambda v: self._on_change(remember_volume=v))
         self.restore_queue.toggled.connect(lambda v: self._on_change(restore_queue=v))
@@ -235,22 +250,22 @@ class SettingsDialog(Modal):
         self.notifications.toggled.connect(lambda v: self._on_change(notifications=v))
 
     def _build_language(self, body, settings: Settings) -> None:
-        body.addWidget(_title("Idioma"))
+        body.addWidget(_title(t("settings.language.section")))
+        self.app_language = _combo(APP_LANGUAGES, _app_language_labels(), settings.app_language)
+        body.addWidget(_row(t("settings.language.app_title"), t("settings.language.app_hint"), self.app_language))
+        self.app_language.currentIndexChanged.connect(lambda _i: self._on_app_language(self.app_language.currentData()))
         self.language = _combo(tuple(CONTENT_LANGUAGES), CONTENT_LANGUAGES, settings.content_language)
-        body.addWidget(_row("Idioma del contenido", "Textos que entrega YouTube Music en el inicio, Explorar y las "
-                            "búsquedas. Los menús de la app siguen en español.", self.language))
+        body.addWidget(_row(t("settings.language.content_title"), t("settings.language.content_hint"), self.language))
         body.addWidget(_separator())
         self.language.currentIndexChanged.connect(lambda _i: self._on_change(content_language=self.language.currentData()))
 
     def _build_thumbnails(self, body, settings: Settings) -> None:
-        body.addWidget(_title("Miniaturas"))
-        self.thumbnail_quality = _combo(THUMBNAIL_QUALITY_OPTIONS, QUALITY_LABELS, settings.thumbnail_quality)
-        body.addWidget(_row("Calidad de las miniaturas y la portada", "«Automática» ya se ajusta a la resolución de "
-                            "tu pantalla. «Alta» pide imágenes más grandes en monitores grandes o 4K; «Baja» las "
-                            "reduce para ahorrar memoria y datos.", self.thumbnail_quality))
-        self.thumbnail_cache_limit = _combo(THUMBNAIL_CACHE_OPTIONS, CACHE_LIMIT_LABELS, settings.thumbnail_cache_limit)
-        body.addWidget(_row("Miniaturas en memoria", "Cuántas se guardan listas para no volver a descargarlas al "
-                            "hacer scroll. Un número más bajo usa menos RAM pero recarga más seguido.",
+        body.addWidget(_title(t("settings.thumbnails.section")))
+        self.thumbnail_quality = _combo(THUMBNAIL_QUALITY_OPTIONS, _quality_labels(), settings.thumbnail_quality)
+        body.addWidget(_row(t("settings.thumbnails.quality_title"), t("settings.thumbnails.quality_hint"),
+                            self.thumbnail_quality))
+        self.thumbnail_cache_limit = _combo(THUMBNAIL_CACHE_OPTIONS, _cache_limit_labels(), settings.thumbnail_cache_limit)
+        body.addWidget(_row(t("settings.thumbnails.cache_title"), t("settings.thumbnails.cache_hint"),
                             self.thumbnail_cache_limit))
         body.addWidget(_separator())
         self.thumbnail_quality.currentIndexChanged.connect(
@@ -259,9 +274,8 @@ class SettingsDialog(Modal):
             lambda _i: self._on_change(thumbnail_cache_limit=self.thumbnail_cache_limit.currentData()))
 
     def _build_lyrics(self, body, settings: Settings) -> None:
-        body.addWidget(_title("Letras"))
-        body.addWidget(_note("Se prueban en este orden y se usa la primera letra sincronizada; si ninguna lo está, la "
-                             "primera que responda."))
+        body.addWidget(_title(t("settings.lyrics.section")))
+        body.addWidget(_note(t("settings.lyrics.order_note")))
         chosen = [name for name in settings.lyrics_providers if name in LYRICS_PROVIDER_NAMES]
         self._provider_order = chosen + [name for name in LYRICS_PROVIDER_NAMES if name not in chosen]
         self._provider_on = {name: name in chosen for name in self._provider_order}
@@ -272,51 +286,47 @@ class SettingsDialog(Modal):
         self._render_providers()
         self.lyrics_key = QLineEdit(settings.better_lyrics_key)
         self.lyrics_key.setEchoMode(QLineEdit.Password)
-        self.lyrics_key.setPlaceholderText("Opcional")
+        self.lyrics_key.setPlaceholderText(t("settings.lyrics.key_placeholder"))
         self.lyrics_key.setFixedWidth(220)
         self.lyrics_key.setStyleSheet(theme.input_qss("QLineEdit") + "QLineEdit { padding: 6px 12px; font-size: 13px; }")
         self._saved_key = settings.better_lyrics_key
         self.lyrics_key.editingFinished.connect(self._commit_key)
-        body.addWidget(_row("Clave de Better Lyrics", "Sin clave solo responde lo que ya tiene guardado. La entregan "
-                            "sus autores por proyecto.", self.lyrics_key))
+        body.addWidget(_row(t("settings.lyrics.key_title"), t("settings.lyrics.key_hint"), self.lyrics_key))
         self.romanized_lyrics = Switch(settings.romanized_lyrics)
-        body.addWidget(_row("Romanización (romaji, etc.)", "Muestra una segunda línea con la letra transcrita a "
-                            "alfabeto latino cuando el idioma original no lo usa, vía la API de Unison "
-                            "(unison.boidu.dev). Se aplica a la siguiente letra que se pida.", self.romanized_lyrics))
+        body.addWidget(_row(t("settings.lyrics.romanized_title"), t("settings.lyrics.romanized_hint"),
+                            self.romanized_lyrics))
         body.addWidget(_separator())
         self.romanized_lyrics.toggled.connect(lambda v: self._on_change(romanized_lyrics=v))
 
     def _build_cache(self, body) -> None:
-        body.addWidget(_title("Caché"))
+        body.addWidget(_title(t("settings.cache.section")))
         self.cache_label = _note("")
-        self.cache_button = QPushButton("Vaciar caché")
+        self.cache_button = QPushButton(t("settings.cache.button"))
         self.cache_button.setCursor(Qt.PointingHandCursor)
         self.cache_button.setStyleSheet(theme.button_qss("tonal", height=34))
         self.cache_button.setEnabled(self._clear_cache is not None)
         self.cache_button.clicked.connect(self._empty_cache)
-        body.addWidget(_row("Miniaturas y datos temporales", "Se vuelven a descargar cuando hacen falta. No borra tu "
-                            "sesión, tus playlists ni tu cola.", self.cache_button))
+        body.addWidget(_row(t("settings.cache.title"), t("settings.cache.hint"), self.cache_button))
         body.addWidget(self.cache_label)
         self._show_cache_size()
         body.addWidget(_separator())
 
     def _build_account(self, body, logged_in: bool) -> None:
-        body.addWidget(_title("Cuenta"))
-        self.account_button = QPushButton("Cerrar sesión" if logged_in else "Iniciar sesión")
+        body.addWidget(_title(t("settings.account.section")))
+        self.account_button = QPushButton(t("settings.account.logout") if logged_in else t("settings.account.login"))
         self.account_button.setCursor(Qt.PointingHandCursor)
         self.account_button.setStyleSheet(theme.button_qss("tonal", height=34))
         self.account_button.setEnabled(self._on_account is not None)
         self.account_button.clicked.connect(self._account)
-        hint = ("Con la sesión iniciada ves tu biblioteca y tus playlists de YouTube Music." if logged_in
-                else "Sin sesión puedes escuchar, pero no ves tu biblioteca ni tus playlists.")
-        body.addWidget(_row("Sesión iniciada" if logged_in else "Sin sesión", hint, self.account_button))
-        self.log_button = QPushButton("Abrir registro")
+        hint = t("settings.account.signed_in_hint") if logged_in else t("settings.account.signed_out_hint")
+        body.addWidget(_row(t("settings.account.signed_in") if logged_in else t("settings.account.signed_out"), hint,
+                            self.account_button))
+        self.log_button = QPushButton(t("settings.log.button"))
         self.log_button.setCursor(Qt.PointingHandCursor)
         self.log_button.setStyleSheet(theme.button_qss("tonal", height=34))
         self.log_button.setEnabled(self._on_open_log is not None)
         self.log_button.clicked.connect(lambda: self._on_open_log())
-        body.addWidget(_row("Registro de errores", "Si algo falla, envía este archivo para ayudar a encontrar el "
-                            "problema. No incluye tu sesión ni tus datos.", self.log_button))
+        body.addWidget(_row(t("settings.log.title"), t("settings.log.hint"), self.log_button))
 
     def _on_background(self, enabled: bool) -> None:
         self._on_change(background_on_close=enabled)
@@ -340,7 +350,8 @@ class SettingsDialog(Modal):
     def _free_now(self) -> None:
         before, after = self._on_free()
         freed = max(0, before - after)
-        self.free_result.setText(f"Liberados {freed} MB (de {before} MB a {after} MB)." if before else "Memoria liberada.")
+        self.free_result.setText(t("settings.memory.freed", freed=freed, before=before, after=after) if before
+                                 else t("settings.memory.freed_unknown"))
 
     def provider_order(self) -> list[str]:
         return list(self._provider_order)
@@ -373,11 +384,11 @@ class SettingsDialog(Modal):
             layout = QHBoxLayout(line)
             layout.setContentsMargins(0, 2, 0, 2)
             label = QLabel(f"{PROVIDER_LABELS[name]}  <span style='color:{theme.TEXT_SECONDARY}; font-size:12px;'>"
-                           f"{PROVIDER_HINTS[name]}</span>")
+                           f"{t('settings.lyrics.' + name + '_hint')}</span>")
             label.setTextFormat(Qt.RichText)
             label.setStyleSheet(f"color: {theme.TEXT}; font-size: 14px; font-weight: 600; background: transparent;")
-            up = icon_button("fa5s.chevron-up", 28, "Subir")
-            down = icon_button("fa5s.chevron-down", 28, "Bajar")
+            up = icon_button("fa5s.chevron-up", 28, t("settings.lyrics.move_up"))
+            down = icon_button("fa5s.chevron-down", 28, t("settings.lyrics.move_down"))
             up.setEnabled(index > 0)
             down.setEnabled(index < last)
             up.clicked.connect(lambda _c=False, n=name: self.move_provider(n, -1))
@@ -406,12 +417,23 @@ class SettingsDialog(Modal):
         if self._cache_size is None:
             self.cache_label.setText("")
             return
-        self.cache_label.setText(f"Ocupa {format_size(self._cache_size())}.")
+        self.cache_label.setText(t("settings.cache.size", size=format_size(self._cache_size())))
 
     def _empty_cache(self) -> None:
         freed = self._clear_cache()
         self._show_cache_size()
-        self.cache_label.setText(f"{self.cache_label.text()} Liberados {format_size(freed)}.")
+        self.cache_label.setText(self.cache_label.text() + " " + t("settings.cache.freed", size=format_size(freed)))
+
+    def _on_app_language(self, language: str) -> None:
+        self._on_change(app_language=language)
+        # one-way: content follows a chosen app language, never the reverse
+        if language and self.language.findData(language) >= 0:
+            self.language.setCurrentIndex(self.language.findData(language))
+        if self._on_restart is None:
+            return
+        if dialogs.confirm(self, t("settings.language.restart_title"), t("settings.language.restart_message"),
+                           ok=t("settings.language.restart_now"), cancel=t("settings.language.restart_later")):
+            self._on_restart()
 
     def _account(self) -> None:
         self.accept()

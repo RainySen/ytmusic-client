@@ -1,3 +1,4 @@
+from core.i18n import t
 from presenters.playlist_presenter import PlaylistPresenter
 from services.collection_actions import CollectionActions
 from services.notifier import Notifier
@@ -18,6 +19,6 @@ class CollectionPresenter:
             self._actions.tracks_of(item, self._playlists.save_tracks)
         elif action == "share":
             self._window.copy_text(self._actions.share_url(item))
-            self._notifier.info("Enlace copiado al portapapeles.")
+            self._notifier.info(t("library.link_copied"))
         else:
             self._actions.perform(action, item)

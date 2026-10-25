@@ -2,6 +2,7 @@ import qtawesome as qta
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFrame
 
+from core.i18n import t
 from ui.components.search_history_popup import SearchHistoryPopup
 
 
@@ -31,7 +32,7 @@ class TopBar(QWidget):
 
         self.menu_button = QPushButton()
         self.menu_button.setIcon(qta.icon("fa5s.bars", color="white"))
-        self.menu_button.setToolTip("Mostrar tus playlists")
+        self.menu_button.setToolTip(t("main.playlists.tooltip"))
         self.menu_button.setCheckable(True)
         self.menu_button.setFixedSize(36, 36)
         self.menu_button.setCursor(Qt.PointingHandCursor)
@@ -45,7 +46,7 @@ class TopBar(QWidget):
 
         yt_icon = QLabel()
         yt_icon.setPixmap(qta.icon('fa5b.youtube', color='#FF0000').pixmap(24, 24))
-        logo_text = QLabel("Music")
+        logo_text = QLabel(t("topbar.logo"))
         logo_text.setObjectName("logo_label")
 
         logo_l.addWidget(yt_icon)
@@ -72,7 +73,7 @@ class TopBar(QWidget):
         sw_layout.setSpacing(4)
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Buscar canciones, artistas, álbumes...")
+        self.search_box.setPlaceholderText(t("main.search.placeholder"))
         self.search_box.setStyleSheet("""
             QLineEdit {
                 background: transparent;
@@ -105,7 +106,7 @@ class TopBar(QWidget):
 
         self.login_button = QPushButton()
         self.login_button.setIcon(self.icon_login)
-        self.login_button.setToolTip("Iniciar sesión")
+        self.login_button.setToolTip(t("main.login"))
         self.login_button.setFixedSize(40, 40)
         self.login_button.setCursor(Qt.PointingHandCursor)
         self.login_button.setStyleSheet("""
@@ -124,7 +125,7 @@ class TopBar(QWidget):
         top_layout.addStretch()
         self.settings_button = QPushButton()
         self.settings_button.setIcon(qta.icon("fa5s.cog", color="white"))
-        self.settings_button.setToolTip("Configuración")
+        self.settings_button.setToolTip(t("main.settings"))
         self.settings_button.setFixedSize(40, 40)
         self.settings_button.setCursor(Qt.PointingHandCursor)
         self.settings_button.setStyleSheet("""
@@ -147,7 +148,7 @@ class TopBar(QWidget):
 
     def set_login_state(self, is_logged_in):
         self.login_button.setIcon(self.icon_login_active if is_logged_in else self.icon_login)
-        self.login_button.setToolTip("Cerrar sesión" if is_logged_in else "Iniciar sesión")
+        self.login_button.setToolTip(t("main.logout") if is_logged_in else t("main.login"))
         if is_logged_in:
             self.login_button.setStyleSheet("""
                 QPushButton {

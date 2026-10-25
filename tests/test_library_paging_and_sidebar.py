@@ -56,7 +56,7 @@ def test_active_nav_style_survives_expand_and_collapse(rig):
 
 def test_songs_chip_prefetches_the_next_page_from_what_is_shown(rig):
     make_lib(rig)
-    rig.window.library_browser.chip_selected.emit("Canciones")
+    rig.window.library_browser.chip_selected.emit("songs")
     assert rig.library.limits == [SONGS_PAGE]
     rig.library.song_requests[-1]([song(n) for n in range(200)])
     assert rig.window.library_browser._can_load_more is True
@@ -66,7 +66,7 @@ def test_songs_chip_prefetches_the_next_page_from_what_is_shown(rig):
 def test_scrolling_uses_the_prefetched_page_without_asking_again(rig):
     make_lib(rig)
     browser = rig.window.library_browser
-    browser.chip_selected.emit("Canciones")
+    browser.chip_selected.emit("songs")
     rig.library.song_requests[-1]([song(n) for n in range(100)])
     rig.library.song_requests[-1]([song(n) for n in range(200)])
     asked = len(rig.library.song_requests)
@@ -78,7 +78,7 @@ def test_scrolling_uses_the_prefetched_page_without_asking_again(rig):
 def test_scrolling_before_the_prefetch_arrives_shows_it_on_arrival(rig):
     make_lib(rig)
     browser = rig.window.library_browser
-    browser.chip_selected.emit("Me gusta")
+    browser.chip_selected.emit("liked")
     rig.library.liked_requests[-1]([song(n) for n in range(100)])
     pending = rig.library.liked_requests[-1]
     browser.load_more_requested.emit()
@@ -91,7 +91,7 @@ def test_paging_stops_at_the_cap(rig):
     from services.library_service import PAGE_CAP
 
     make_lib(rig)
-    rig.window.library_browser.chip_selected.emit("Canciones")
+    rig.window.library_browser.chip_selected.emit("songs")
     rig.library.song_requests[-1]([song(n) for n in range(PAGE_CAP + 50)])
     assert rig.window.library_browser._can_load_more is False
     assert len(rig.library.song_requests) == 1
@@ -99,19 +99,19 @@ def test_paging_stops_at_the_cap(rig):
 
 def test_liked_chip_ignores_stale_pages_from_a_dropped_chip(rig):
     make_lib(rig)
-    rig.window.library_browser.chip_selected.emit("Me gusta")
+    rig.window.library_browser.chip_selected.emit("liked")
     on_liked = rig.library.liked_requests[-1]
-    rig.window.library_browser.chip_selected.emit("Canciones")
+    rig.window.library_browser.chip_selected.emit("songs")
     on_liked([song(n) for n in range(LIKED_PAGE)])
     assert rig.window.library_browser._can_load_more is False
 
 
 def test_switching_away_and_back_restarts_the_page_from_zero(rig):
     make_lib(rig)
-    rig.window.library_browser.chip_selected.emit("Canciones")
+    rig.window.library_browser.chip_selected.emit("songs")
     rig.library.song_requests[-1]([song(n) for n in range(SONGS_PAGE)])
-    rig.window.library_browser.chip_selected.emit("Playlists")
-    rig.window.library_browser.chip_selected.emit("Canciones")
+    rig.window.library_browser.chip_selected.emit("playlists")
+    rig.window.library_browser.chip_selected.emit("songs")
     assert rig.library.limits[-1] == SONGS_PAGE
     rig.library.song_requests[-1]([song(n) for n in range(SONGS_PAGE)])
     assert rig.window.library_browser._can_load_more is True
@@ -127,7 +127,7 @@ def test_opening_a_ytmusic_playlist_navigates_instead_of_loading_it_all(rig):
 
 def test_no_session_liked_songs_never_offers_to_load_more(rig):
     make_lib(rig)
-    rig.window.library_browser.chip_selected.emit("Me gusta")
+    rig.window.library_browser.chip_selected.emit("liked")
     rig.library.liked_requests[-1](None)
     assert rig.window.library_browser._can_load_more is False
 
@@ -258,3 +258,12 @@ def test_fresh_feed_after_reload_keeps_the_new_order(rig):
     presenter.reload()
     rig.catalog.home_calls[-1]["on_done"]([("A", [song(1)]), ("B", [song(2)]), ("C", [song(3)])])
     assert shown[-1] == ["B", "A", "C"]
+
+
+def test_clicking_a_real_library_tab_loads_it_and_the_default_tab_is_highlighted(rig):
+    make_lib(rig)
+    browser = rig.window.library_browser
+    rig.window.library_requested.emit()
+    assert browser._chips["playlists"].isChecked()
+    browser._chips["songs"].click()
+    assert rig.library.limits == [SONGS_PAGE] and browser._chips["songs"].isChecked()

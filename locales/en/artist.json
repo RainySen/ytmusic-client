@@ -1,0 +1,12 @@
+{
+  "artist.subscribers": "{subscribers} subscribers",
+  "artist.shuffle": "Shuffle",
+  "artist.shuffle_tooltip": "Play their whole discography in random order",
+  "artist.mix": "Mix",
+  "artist.mix_tooltip": "A radio from one of their songs",
+  "artist.top_songs": "Popular songs",
+  "artist.show_all": "Show all",
+  "artist.empty_songs": "No songs to show.",
+  "artist.no_songs": "No songs to play.",
+  "artist.no_mix_songs": "No songs to start a mix."
+}

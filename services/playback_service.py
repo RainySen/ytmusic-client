@@ -9,6 +9,7 @@ from core.config import (
     EXTEND_BATCH, EXTEND_BATCH_UNLIMITED, MAX_CONSECUTIVE_PLAY_FAILURES, PREFETCH_AHEAD, QUEUE_HISTORY_LIMIT, STREAM_RETRIES,
     RADIO_EXHAUSTED_RATIO, RADIO_FETCH, RADIO_STAGE_START,
 )
+from core.i18n import t
 from domain.models import Track
 from domain.volume import gain
 from domain.play_queue import LOOP_QUEUE, LOOP_SONG, PlayQueue
@@ -95,7 +96,7 @@ class PlaybackService(QObject):
     def play_track(self, song: Track | None) -> None:
         video_id = song.get("videoId") if song else None
         if not song or not video_id:
-            self._notifier.error("Esta canción no está disponible.")
+            self._notifier.error(t("player.error.unavailable"))
             return
         if video_id != self._retry_video:
             self._retry_video = None
@@ -272,7 +273,7 @@ class PlaybackService(QObject):
         except Exception:
             log.exception("Audio backend failed to start playback")
             self.playing_changed.emit(False)
-            self._notifier.error("No se pudo iniciar el reproductor de audio. ¿Está VLC instalado?")
+            self._notifier.error(t("player.error.audio_start"))
             return
         self._current_video = video_id
         self.track_started.emit(song)
@@ -286,7 +287,7 @@ class PlaybackService(QObject):
             return
         self._pending = None
         self.playing_changed.emit(False)
-        self._notifier.error(f"No se pudo reproducir «{song.get('title', video_id)}»: {message}")
+        self._notifier.error(t("player.error.play_failed", title=song.get('title', video_id), message=message))
         self._skip_after_failure()
 
     def _on_audio_failed(self) -> None:
@@ -304,7 +305,7 @@ class PlaybackService(QObject):
         self._retry_video = None
         self._retries = 0
         self.playing_changed.emit(False)
-        self._notifier.error(f"Error de audio en «{song.get('title', video_id)}».")
+        self._notifier.error(t("player.error.audio", title=song.get('title', video_id)))
         self._skip_after_failure()
 
     def _on_audio_finished(self) -> None:
@@ -325,7 +326,7 @@ class PlaybackService(QObject):
     def _skip_after_failure(self) -> None:
         self._failures += 1
         if self._failures >= MAX_CONSECUTIVE_PLAY_FAILURES:
-            self._notifier.warning("Se detuvo la reproducción tras varios errores seguidos.")
+            self._notifier.warning(t("player.error.stopped"))
             self._failures = 0
             return
         song = self._queue.next()

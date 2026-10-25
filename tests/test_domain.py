@@ -212,3 +212,13 @@ def test_other_urls_and_non_square_art_are_left_alone():
     assert thumbnail_url(banner, 400) == f"{GOOGLE}=w1060-h175-l90-rj"
     assert thumbnail_url({"videoId": "abc"}, 100) == "https://i.ytimg.com/vi/abc/hqdefault.jpg"
     assert thumbnail_url({}, 100) == ""
+
+
+def test_portuguese_youtube_shelves_are_recognised():
+    from presenters.home_presenter import LISTEN_AGAIN_KEYS
+    for title in ("Bom dia", "Boa tarde, Rainy", "Boa noite"):
+        assert is_greeting(title), title
+    for title in ("Suas descobertas diárias", "Lançamentos"):
+        assert shelf_layout(title) == CARDS_LAYOUT, title
+    assert any(key in "ouvir de novo" for key in LISTEN_AGAIN_KEYS)
+    assert not is_greeting("Bossa nova") and shelf_layout("Mixes personalizados") is None

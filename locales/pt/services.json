@@ -1,0 +1,19 @@
+{
+  "services.catalog.new_releases": "Novos álbuns e singles",
+  "services.catalog.trending": "Tendências",
+  "services.catalog.moods": "Estados de ânimo e gêneros",
+  "services.catalog.chart_lists": "Paradas de sucesso",
+  "services.home.fallback_section": "Seção",
+  "services.catalog.mood_songs": "Músicas — {mood}",
+  "services.catalog.mood_mixes": "Mixes para você",
+  "services.catalog.mood_playlists": "Playlists • {mood}",
+  "services.catalog.imported_playlist": "Playlist importada",
+  "services.catalog.mix": "Mix",
+  "services.catalog.playlist_kind": "Playlist",
+  "services.artist.albums": "Álbuns",
+  "services.artist.singles": "Singles e EP",
+  "services.artist.videos": "Vídeos",
+  "services.artist.related": "Fãs também ouvem",
+  "services.artist.uploader_videos": "Vídeos",
+  "services.artist.playlists": "Playlists"
+}

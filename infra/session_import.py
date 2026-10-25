@@ -4,6 +4,8 @@ import json
 import re
 import shlex
 
+from core import i18n
+from core.i18n import t
 from infra.auth_headers import headers_from_cookies, parse_cookie_string, session_id
 
 _GOOGLE_DOMAIN = re.compile(r"youtube|google", re.IGNORECASE)
@@ -12,11 +14,21 @@ _BARE_COOKIE = re.compile(r"^[\w.%-]+=[^\r\n]*$")
 _CURL_STRING_ESCAPE = re.compile(r"\$'")
 _CURL_BODY = re.compile(r"\s(?:--data(?:-raw|-binary|-ascii|-urlencode)?|-d)[\s=]")
 
-NO_COOKIE = ("No se encontró ninguna cookie en lo que pegaste. Copia la petición completa (cURL) de una "
-             "solicitud a music.youtube.com con tu sesión iniciada, o exporta tus cookies con la extensión "
-             "Cookie-Editor (JSON).")
-NO_SESSION = ("Las cookies no incluyen tu sesión de YouTube (falta «__Secure-3PAPISID»). Asegúrate de haber "
-              "iniciado sesión en music.youtube.com y copia de nuevo.")
+_LEGACY_KEYS = {
+    "NO_COOKIE": "login.session.no_cookie",
+    "NO_SESSION": "login.session.no_session",
+}
+
+
+# module constants kept for existing callers: resolved on access
+def __getattr__(name: str) -> str:
+    key = _LEGACY_KEYS.get(name)
+    if key is None:
+        raise AttributeError(name)
+    text = t(key)
+    if text != key:
+        return text
+    return i18n.load(i18n.locales_dir())[i18n.SOURCE].get(key, key)
 
 
 class SessionImportError(Exception):
@@ -142,14 +154,14 @@ _READERS = (_from_json, _from_netscape, _from_powershell, _from_curl, _from_head
 
 def cookies_to_headers(cookies: dict[str, str], *, user_agent: str | None = None, authuser: str = "0") -> dict[str, str]:
     if not session_id(cookies):
-        raise SessionImportError(NO_SESSION)
+        raise SessionImportError(t("login.session.no_session"))
     return headers_from_cookies(cookies, user_agent=user_agent, authuser=authuser)
 
 
 def session_headers(text: str | None) -> dict[str, str]:
     text = (text or "").strip()
     if not text:
-        raise SessionImportError("No pegaste nada.")
+        raise SessionImportError(t("login.session.empty"))
     headers: dict[str, str] = {}
     for reader in _READERS:
         found = reader(text)
@@ -158,6 +170,6 @@ def session_headers(text: str | None) -> dict[str, str]:
             break
     cookie = headers.get("cookie", "")
     if not cookie:
-        raise SessionImportError(NO_COOKIE)
+        raise SessionImportError(t("login.session.no_cookie"))
     return cookies_to_headers(parse_cookie_string(cookie), user_agent=headers.get("user-agent"),
                               authuser=headers.get("x-goog-authuser") or "0")

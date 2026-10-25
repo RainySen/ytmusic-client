@@ -333,7 +333,7 @@ def test_library_presenter_wires_the_liked_chip(rig):
     from presenters.library_presenter import LibraryPresenter
 
     rig.keep(LibraryPresenter(rig.window, rig.library, rig.playback, rig.opener, rig.notifier, rig.navigator))
-    rig.window.library_browser.chip_selected.emit("Me gusta")
+    rig.window.library_browser.chip_selected.emit("liked")
     assert len(rig.library.liked_requests) == 1
     rig.library.liked_requests[0](None)
 

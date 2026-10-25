@@ -4,6 +4,7 @@ import qtawesome as qta
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QProgressBar, QVBoxLayout, QWidget
 
+from core.i18n import t
 from ui import theme
 from ui.components.elided_label import ElidedLabel
 from ui.components.icon_button import icon_button
@@ -42,7 +43,7 @@ class MiniPlayer(QWidget):
         row.setSpacing(6)
         texts = QVBoxLayout()
         texts.setSpacing(0)
-        self._title = ElidedLabel("Nada en reproducción")
+        self._title = ElidedLabel(t("player.mini.empty"))
         self._title.setStyleSheet(f"color: {theme.TEXT}; font-size: 13px; font-weight: 600;")
         self._artist = ElidedLabel("")
         self._artist.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 11px;")
@@ -52,12 +53,12 @@ class MiniPlayer(QWidget):
         texts.addStretch(1)
         row.addLayout(texts, 1)
 
-        self.rewind = icon_button("fa5s.undo-alt", 32, "Retroceder")
-        self._previous = icon_button("fa5s.step-backward", 32, "Anterior")
-        self._toggle = icon_button("fa5s.play", 38, "Reproducir o pausar")
-        self._next = icon_button("fa5s.step-forward", 32, "Siguiente")
-        self._expand = icon_button("fa5s.expand-alt", 32, "Abrir la ventana principal")
-        self._close = icon_button("fa5s.times", 28, "Cerrar el mini reproductor")
+        self.rewind = icon_button("fa5s.undo-alt", 32, t("player.mini.rewind"))
+        self._previous = icon_button("fa5s.step-backward", 32, t("player.mini.previous"))
+        self._toggle = icon_button("fa5s.play", 38, t("player.mini.play_pause"))
+        self._next = icon_button("fa5s.step-forward", 32, t("player.mini.next"))
+        self._expand = icon_button("fa5s.expand-alt", 32, t("player.mini.expand"))
+        self._close = icon_button("fa5s.times", 28, t("player.mini.close"))
         self.rewind.clicked.connect(self.rewind_requested)
         self._previous.clicked.connect(self.previous_requested)
         self._toggle.clicked.connect(self.toggle_requested)
@@ -79,16 +80,18 @@ class MiniPlayer(QWidget):
         column.addWidget(self._progress)
 
     def set_track(self, title: str, artist: str) -> None:
-        self._title.setText(title or "Nada en reproducción")
+        self._title.setText(title or t("player.mini.empty"))
         self._artist.setText(artist)
         self._progress.setValue(0)
 
     def set_neighbors(self, previous: str, following: str) -> None:
-        self._previous.setToolTip(f"Anterior: {previous}" if previous else "Anterior")
-        self._next.setToolTip(f"Siguiente: {following}" if following else "Siguiente")
+        self._previous.setToolTip(t("player.mini.previous_named", title=previous) if previous
+                                  else t("player.mini.previous"))
+        self._next.setToolTip(t("player.mini.next_named", title=following) if following
+                              else t("player.mini.next"))
 
     def set_rewind_seconds(self, seconds: int) -> None:
-        self.rewind.setToolTip(f"Retroceder {seconds} segundos")
+        self.rewind.setToolTip(t("player.mini.rewind_seconds", seconds=seconds))
 
     def set_playing(self, playing: bool) -> None:
         self._toggle.setIcon(qta.icon("fa5s.pause" if playing else "fa5s.play", color=theme.TEXT))

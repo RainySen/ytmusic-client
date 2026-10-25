@@ -5,6 +5,7 @@ from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSplitter, QSystemTrayIcon, QVBoxLayout, QWidget
 
+from core.i18n import t
 from domain.models import format_seconds
 from ui.components import dialogs
 from ui.components.album_panel import AlbumPanel
@@ -25,8 +26,10 @@ from ui.components.track_actions import MENU_QSS
 from ui.imaging import scale_cover
 from ui.styles import APP_STYLESHEET
 
-_VIEW_NAV_LABELS = {"home": "Inicio", "explore": "Explorar", "search": "", "library": "Biblioteca",
-                    "artist": "", "album": ""}
+# built on use: the language is only known after startup
+def _view_nav_labels() -> dict:
+    return {"home": t("main.nav.home"), "explore": t("main.nav.explore"), "search": "",
+            "library": t("main.nav.library"), "artist": "", "album": ""}
 
 
 class MainWindow(QWidget):
@@ -205,7 +208,7 @@ class MainWindow(QWidget):
         return self.player_panel
 
     def _setup_shortcuts(self):
-        quit_action = QAction("Salir", self)
+        quit_action = QAction(t("main.exit"), self)
         quit_action.setShortcut(QKeySequence("Ctrl+Q"))
         quit_action.triggered.connect(QApplication.instance().quit)
         self.addAction(quit_action)
@@ -214,14 +217,14 @@ class MainWindow(QWidget):
         self.tray_icon = QSystemTrayIcon(self._app_icon, self)
         self.tray_icon.setToolTip("PyMusic Client")
         menu = QMenu(self)
-        menu.addAction("Mostrar").triggered.connect(self.bring_to_front)
+        menu.addAction(t("main.tray.show")).triggered.connect(self.bring_to_front)
         menu.addSeparator()
-        self._tray_play_action = menu.addAction("▶ Reproducir")
+        self._tray_play_action = menu.addAction(t("main.tray.play"))
         self._tray_play_action.triggered.connect(self.play_pause_clicked)
-        menu.addAction(self.icons["prev"], "Anterior").triggered.connect(self.previous_clicked)
-        menu.addAction(self.icons["next"], "Siguiente").triggered.connect(self.next_clicked)
+        menu.addAction(self.icons["prev"], t("main.tray.previous")).triggered.connect(self.previous_clicked)
+        menu.addAction(self.icons["next"], t("main.tray.next")).triggered.connect(self.next_clicked)
         menu.addSeparator()
-        menu.addAction("Salir").triggered.connect(QApplication.instance().quit)
+        menu.addAction(t("main.exit")).triggered.connect(QApplication.instance().quit)
         self.tray_icon.setContextMenu(menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
@@ -247,7 +250,7 @@ class MainWindow(QWidget):
         if self._close_to_tray and QSystemTrayIcon.isSystemTrayAvailable():
             event.ignore()
             self.hide()
-            self.tray_icon.showMessage("Minimizado", "Reproduciendo en 2do plano.",
+            self.tray_icon.showMessage(t("main.tray.minimized_title"), t("main.tray.minimized_message"),
                                        QSystemTrayIcon.MessageIcon.Information, 2000)
             return
         event.accept()
@@ -292,7 +295,7 @@ class MainWindow(QWidget):
         self.now_playing_panel.hide()
         self.side_panel.hide()
         self.player_panel.set_expanded(False)
-        self.sidebar.set_active(_VIEW_NAV_LABELS[name])
+        self.sidebar.set_active(_view_nav_labels()[name])
         self.view_shown.emit(name)
 
     def toggle_now_playing(self):
@@ -342,13 +345,13 @@ class MainWindow(QWidget):
     def set_playing(self, is_playing):
         self.player_panel.set_playing(is_playing)
         self.player_panel.play_button.setIcon(self.icons["pause"] if is_playing else self.icons["play"])
-        self._tray_play_action.setText("⏸ Pausar" if is_playing else "▶ Reproducir")
+        self._tray_play_action.setText(t("main.tray.pause") if is_playing else t("main.tray.play"))
 
     def set_loop_mode(self, mode):
         icons = {0: self.icons["loop_off"], 1: self.icons["loop_queue"], 2: self.icons["loop_song"]}
-        tips = {0: "Repetir (Apagado)", 1: "Repetir Cola", 2: "Repetir Canción"}
+        tips = {0: t("main.loop.off"), 1: t("main.loop.queue"), 2: t("main.loop.song")}
         self.player_panel.loop_button.setIcon(icons.get(mode, self.icons["loop_off"]))
-        self.player_panel.loop_button.setToolTip(tips.get(mode, "Repetir"))
+        self.player_panel.loop_button.setToolTip(tips.get(mode, t("main.loop.default")))
 
     def set_progress(self, fraction):
         slider = self.player_panel.progress_slider
@@ -376,9 +379,8 @@ class MainWindow(QWidget):
         self.player_panel.like_button.setEnabled(logged_in)
 
     def ask_relogin(self):
-        return dialogs.confirm(self, "Tu sesión caducó", "YouTube Music cerró tu sesión. Inicia sesión de nuevo para ver tu biblioteca y tus playlists.\n\n"
-                               "Si esto se repite, envía el registro desde Configuración → Cuenta → Abrir registro.",
-                               ok="Iniciar sesión", cancel="Ahora no")
+        return dialogs.confirm(self, t("main.relogin.title"), t("main.relogin.message"),
+                               ok=t("main.relogin.ok"), cancel=t("main.relogin.cancel"))
 
     @property
     def logged_in(self) -> bool:
@@ -390,10 +392,10 @@ class MainWindow(QWidget):
             return
         menu = QMenu(self)
         menu.setStyleSheet(MENU_QSS)
-        menu.addAction(qta.icon("fa5s.user-circle", color="#e0e0e0"), "Tu canal").triggered.connect(
+        menu.addAction(qta.icon("fa5s.user-circle", color="#e0e0e0"), t("main.account.channel")).triggered.connect(
             self.channel_requested)
         menu.addSeparator()
-        menu.addAction(qta.icon("fa5s.sign-out-alt", color="#e0e0e0"), "Cerrar sesión").triggered.connect(
+        menu.addAction(qta.icon("fa5s.sign-out-alt", color="#e0e0e0"), t("main.account.logout")).triggered.connect(
             self._confirm_logout)
         self._show_account_menu(menu)
 
@@ -403,21 +405,21 @@ class MainWindow(QWidget):
         menu.exec(pos)
 
     def _confirm_logout(self) -> None:
-        if dialogs.confirm(self, "¿Cerrar sesión?", "Dejarás de ver tu biblioteca y tus playlists de YouTube Music.",
-                           ok="Cerrar sesión"):
+        if dialogs.confirm(self, t("main.logout.title"), t("main.logout.message"), ok=t("main.logout.ok")):
             self.logout_requested.emit()
 
     def show_toast(self, level, text):
         self._toast.show_message(level, text)
 
     def _confirm_clear_queue(self):
-        if dialogs.confirm(self, "¿Limpiar la cola?", "Se quitarán todas las canciones excepto la que suena ahora.",
-                           ok="Limpiar"):
+        if dialogs.confirm(self, t("main.queue.clear_title"), t("main.queue.clear_message"),
+                           ok=t("main.queue.clear_ok")):
             self.queue_clear_confirmed.emit()
 
     def _prompt_queue_name(self):
-        title = dialogs.prompt_text(self, "Guardar cola como playlist", "Ponle un nombre a tu playlist.",
-                                    text="Mi Cola", ok="Guardar", placeholder="Título")
+        title = dialogs.prompt_text(self, t("main.queue.save_title"), t("main.queue.save_label"),
+                                    text=t("main.queue.default_name"), ok=t("main.queue.save_ok"),
+                                    placeholder=t("main.queue.name_placeholder"))
         if title:
             self.queue_save_requested.emit(title)
 

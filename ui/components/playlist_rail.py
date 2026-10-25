@@ -4,6 +4,7 @@ import qtawesome as qta
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from core.i18n import t
 from domain.models import LOCAL_SOURCES, thumbnail_url
 from ui import imaging, theme
 from ui.components.clickable import ClickableWidget
@@ -17,12 +18,12 @@ THUMB_PX = 30
 
 def _entries_for(playlist: dict) -> tuple:
     entries = [
-        ("next", "Reproducir a continuación", "fa5s.step-forward"),
-        ("queue", "Agregar a la cola", "fa5s.list"),
-        ("pin", "Quitar de fijadas" if playlist.get("pinned") else "Fijar playlist", "fa5s.thumbtack"),
+        ("next", t("menus.song.next"), "fa5s.step-forward"),
+        ("queue", t("menus.song.queue"), "fa5s.list"),
+        ("pin", t("playlist.menu.unpin") if playlist.get("pinned") else t("playlist.menu.pin"), "fa5s.thumbtack"),
     ]
     if playlist.get("source") in LOCAL_SOURCES:
-        entries.append(("delete", "Eliminar playlist", "fa5s.trash"))
+        entries.append(("delete", t("playlist.menu.delete"), "fa5s.trash"))
     return tuple(entries)
 
 
@@ -84,7 +85,7 @@ class PlaylistRail(QWidget):
         outer.setContentsMargins(0, 8, 0, 8)
         outer.setSpacing(2)
 
-        header = QLabel("TUS PLAYLISTS")
+        header = QLabel(t("playlist.rail.header"))
         header.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 1px; "
                              f"padding: 4px 10px; background: transparent;")
         outer.addWidget(header)
@@ -93,7 +94,7 @@ class PlaylistRail(QWidget):
         self._rows_layout.setContentsMargins(0, 0, 0, 0)
         self._rows_layout.setSpacing(1)
         outer.addLayout(self._rows_layout)
-        self._message = QLabel("Aún no tienes playlists.")
+        self._message = QLabel(t("playlist.rail.empty"))
         self._message.setWordWrap(True)
         self._message.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 12px; padding: 4px 10px; "
                                     f"background: transparent;")
@@ -103,13 +104,13 @@ class PlaylistRail(QWidget):
 
     def set_loading(self) -> None:
         self._set_rows([])
-        self._message.setText("Cargando…")
+        self._message.setText(t("playlist.rail.loading"))
         self._message.show()
 
     def set_playlists(self, playlists: list[dict], thumbnails) -> None:
         self._set_rows(playlists, thumbnails)
         self._message.setVisible(not playlists)
-        self._message.setText("Aún no tienes playlists.")
+        self._message.setText(t("playlist.rail.empty"))
 
     def _set_rows(self, playlists, thumbnails=None) -> None:
         while self._rows_layout.count():

@@ -43,8 +43,9 @@ def test_home_button_reloads_feed_resets_mood_and_scrolls_to_top(rig):
     assert rig.window.home_panel.isVisible()
     assert home._mood == "Todos" and rig.catalog.home_calls[-1]["force"] is True
     assert len(rig.catalog.home_calls) == before + 1
+    from core.i18n import t
     checked = [c.text() for c in rig.window.home_panel._chips if c.isChecked()]
-    assert checked == ["Todos"]
+    assert checked == [t("mood.all")]
     assert rig.window.home_panel.feed._built
     rig.catalog.home_calls[-1]["on_done"](FRESH)
     assert rig.window.home_panel.feed._built

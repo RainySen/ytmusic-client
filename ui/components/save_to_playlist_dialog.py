@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
+from core.i18n import t
 from domain.models import LOCAL_SOURCES, thumbnail_url
 from ui import imaging, theme
 from ui.components import dialogs
@@ -35,7 +36,8 @@ class _RecentTile(ClickableWidget):
         thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(self.WIDTH)), thumbnails)
         layout.addWidget(thumb)
         for text, style in ((playlist.get("title", ""), "font-size: 12px; font-weight: 600; color: #e8e8e8;"),
-                            (_count_text(playlist, "canción", "canciones"), "font-size: 11px; color: #999;")):
+                            (_count_text(playlist, t("playlist.count.song"), t("playlist.count.songs")),
+                             "font-size: 11px; color: #999;")):
             label = QLabel()
             label.setStyleSheet(style)
             label.setText(label.fontMetrics().elidedText(text, Qt.ElideRight, self.WIDTH))
@@ -63,7 +65,8 @@ class _PlaylistRow(ClickableWidget):
         title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         info.addWidget(title)
         local = playlist.get("source", "ytmusic") in LOCAL_SOURCES
-        parts = [p for p in (_count_text(playlist, "pista", "pistas"), "Local" if local else "") if p]
+        parts = [p for p in (_count_text(playlist, t("playlist.count.track"), t("playlist.count.tracks")),
+                             t("library.card.local") if local else "") if p]
         if parts:
             meta = QLabel("  •  ".join(parts))
             meta.setStyleSheet("font-size: 13px; color: #aaa;")
@@ -73,7 +76,7 @@ class _PlaylistRow(ClickableWidget):
 
 class SaveToPlaylistDialog(dialogs.Modal):
     def __init__(self, targets, thumbnails, parent=None):
-        super().__init__(parent, "Guardar en una playlist", width=DIALOG_SIZE[0], height=DIALOG_SIZE[1])
+        super().__init__(parent, t("playlist.save.title"), width=DIALOG_SIZE[0], height=DIALOG_SIZE[1])
         self.choice = None
         self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(0)
@@ -83,7 +86,7 @@ class SaveToPlaylistDialog(dialogs.Modal):
         self.body.addWidget(line)
         self.body.addWidget(self._build_body(targets, thumbnails), stretch=1)
         self.footer.setContentsMargins(20, 10, 20, 18)
-        self.new_button = self.add_button("Nueva playlist", "primary", self._ask_new, icon="fa5s.plus")
+        self.new_button = self.add_button(t("playlist.save.new"), "primary", self._ask_new, icon="fa5s.plus")
 
     def _build_body(self, targets, thumbnails):
         scroll = QScrollArea()
@@ -99,7 +102,7 @@ class SaveToPlaylistDialog(dialogs.Modal):
 
         recent, everything = targets.get("recent", []), targets.get("all", [])
         if recent:
-            self.list_layout.addWidget(self._section("Recientes"))
+            self.list_layout.addWidget(self._section(t("playlist.save.recent")))
             tiles = QHBoxLayout()
             tiles.setSpacing(4)
             for playlist in recent:
@@ -110,13 +113,13 @@ class SaveToPlaylistDialog(dialogs.Modal):
             self.list_layout.addLayout(tiles)
             self.list_layout.addSpacing(14)
         if everything:
-            self.list_layout.addWidget(self._section("Todas las playlists"))
+            self.list_layout.addWidget(self._section(t("playlist.save.all")))
             for playlist in everything:
                 row = _PlaylistRow(playlist, thumbnails)
                 row.activated.connect(lambda p=playlist: self._choose(p))
                 self.list_layout.addWidget(row)
         else:
-            empty = QLabel("Aún no tienes playlists. Crea la primera con «Nueva playlist».")
+            empty = QLabel(t("playlist.save.empty"))
             empty.setWordWrap(True)
             empty.setAlignment(Qt.AlignCenter)
             empty.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 14px; padding: 40px 10px;")
@@ -136,8 +139,8 @@ class SaveToPlaylistDialog(dialogs.Modal):
         self.accept()
 
     def _ask_new(self):
-        title = dialogs.prompt_text(self, "Nueva playlist", "Ponle un nombre a tu playlist.",
-                                    ok="Crear", placeholder="Título")
+        title = dialogs.prompt_text(self, t("playlist.save.new"), t("playlist.save.name_label"),
+                                    ok=t("playlist.save.create"), placeholder=t("playlist.save.title_placeholder"))
         if title:
             self.choice = ("new", title)
             self.accept()
