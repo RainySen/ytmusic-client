@@ -60,6 +60,11 @@
   "settings.language.restart_later": "Later",
   "settings.language.content_title": "Content language",
   "settings.language.content_hint": "Text that YouTube Music returns on Home, Explore and searches.",
+  "settings.theme.title": "Theme",
+  "settings.theme.hint": "Applies on restart.",
+  "settings.theme.classic": "Classic",
+  "settings.theme.aero": "Aero night",
+  "settings.theme.cyberpunk": "Cyberpunk",
   "settings.thumbnails.section": "Thumbnails",
   "settings.thumbnails.quality_title": "Thumbnail and cover quality",
   "settings.thumbnails.quality_hint": "“Automatic” already matches your screen resolution. “High” requests larger images on large or 4K monitors; “Low” shrinks them to save memory and data.",
@@ -89,5 +94,7 @@
   "settings.account.signed_out": "Not signed in",
   "settings.log.button": "Open log",
   "settings.log.title": "Error log",
-  "settings.log.hint": "If something fails, send this file to help find the problem. It does not include your session or your data."
+  "settings.log.hint": "If something fails, send this file to help find the problem. It does not include your session or your data.",
+  "settings.theme.restart_title": "Change theme",
+  "settings.theme.restart_message": "The new theme will be applied when the app restarts. Your queue is kept."
 }

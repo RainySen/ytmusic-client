@@ -42,7 +42,7 @@ class PlaylistRailRow(ClickableWidget):
         layout.setContentsMargins(8, 4, 4, 4)
         layout.setSpacing(10)
 
-        thumb = LazyThumbnail(THUMB_PX, radius=4, icon="fa5s.list", background="#222")
+        thumb = LazyThumbnail(THUMB_PX, radius=4, icon="fa5s.list", background=theme.SURFACE)
         thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(THUMB_PX)), thumbnails)
         layout.addWidget(thumb)
 

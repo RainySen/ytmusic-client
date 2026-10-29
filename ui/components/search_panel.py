@@ -6,8 +6,8 @@ from PySide6.QtWidgets import (
 
 from core.config import HOVER_PREFETCH_MS
 from core.i18n import t
-from ui import imaging
 from domain.models import artist_names, primary_artist, thumbnail_url
+from ui import imaging, theme
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
 from ui.components.page_parts import pill_button
@@ -31,11 +31,13 @@ SCOPE_LIBRARY = "library"
 def _search_scopes() -> tuple:
     return ((SCOPE_YTMUSIC, t("search.scope.ytmusic")), (SCOPE_LIBRARY, t("search.scope.library")))
 
-_TAB_QSS = """
-    QPushButton { background: transparent; border: none; border-bottom: 2px solid transparent;
-                  color: #aaa; font-size: 13px; font-weight: 600; padding: 8px 0; }
-    QPushButton:hover { color: #ddd; }
-    QPushButton:checked { color: white; border-bottom: 2px solid white; }
+
+def _tab_qss() -> str:
+    return f"""
+    QPushButton {{ background: transparent; border: none; border-bottom: 2px solid transparent;
+                  color: {theme.TEXT_SECONDARY}; font-size: 13px; font-weight: 600; padding: 8px 0; }}
+    QPushButton:hover {{ color: {theme.TEXT}; }}
+    QPushButton:checked {{ color: {theme.TEXT}; border-bottom: 2px solid {theme.TEXT}; }}
 """
 
 
@@ -54,14 +56,14 @@ class _ArtistHero(QFrame):
         self.setObjectName("artist_hero")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet("QFrame#artist_hero { background: #1e1e1e; border-radius: 12px; }"
-                           "QFrame#artist_hero:hover { background: #262626; }")
+        self.setStyleSheet(f"QFrame#artist_hero {{ background: {theme.SURFACE}; border-radius: {theme.radius(12)}px; }}"
+                           f"QFrame#artist_hero:hover {{ background: {theme.SURFACE_RAISED}; }}")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(28, 22, 28, 22)
         layout.setSpacing(20)
 
-        image = LazyThumbnail(96, circle=True, icon="fa5s.user", background="#333")
+        image = LazyThumbnail(96, circle=True, icon="fa5s.user", background=theme.SURFACE_RAISED)
         image.set_source(thumbnail_url(data, imaging.thumb_px(96)), thumbnails)
         layout.addWidget(image)
 
@@ -70,13 +72,13 @@ class _ArtistHero(QFrame):
         info.setContentsMargins(0, 0, 0, 0)
 
         name = QLabel(_result_title(data) or t("search.artist.label"))
-        name.setStyleSheet("font-size: 22px; font-weight: 700; color: white; background: transparent;")
+        name.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {theme.TEXT}; background: transparent;")
         info.addWidget(name)
 
         subscribers = data.get("subscribers", "")
         subtitle = QLabel(f"{t('search.artist.label')}  •  {t('search.artist.subscribers', n=subscribers)}"
                           if subscribers else t("search.artist.label"))
-        subtitle.setStyleSheet("font-size: 12px; color: #aaa; background: transparent;")
+        subtitle.setStyleSheet(f"font-size: 12px; color: {theme.TEXT_SECONDARY}; background: transparent;")
         info.addWidget(subtitle)
         info.addSpacing(10)
 
@@ -94,7 +96,7 @@ class _ArtistHero(QFrame):
         layout.addLayout(info, stretch=1)
 
         chevron = QLabel()
-        chevron.setPixmap(qta.icon("fa5s.chevron-right", color="#aaa").pixmap(14, 14))
+        chevron.setPixmap(qta.icon("fa5s.chevron-right", color=theme.TEXT_SECONDARY).pixmap(14, 14))
         chevron.setStyleSheet("background: transparent;")
         layout.addWidget(chevron, alignment=Qt.AlignTop)
 
@@ -115,14 +117,14 @@ class _TopResultHero(QFrame):
         self.setObjectName("top_hero")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet("QFrame#top_hero { background: #1e1e1e; border-radius: 12px; }"
-                           "QFrame#top_hero:hover { background: #262626; }")
+        self.setStyleSheet(f"QFrame#top_hero {{ background: {theme.SURFACE}; border-radius: {theme.radius(12)}px; }}"
+                           f"QFrame#top_hero:hover {{ background: {theme.SURFACE_RAISED}; }}")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(28, 22, 28, 22)
         layout.setSpacing(22)
 
-        image = LazyThumbnail(112, radius=8, icon="fa5s.music", background="#333")
+        image = LazyThumbnail(112, radius=8, icon="fa5s.music", background=theme.SURFACE_RAISED)
         image.set_source(thumbnail_url(data, imaging.thumb_px(112)), thumbnails)
         layout.addWidget(image)
 
@@ -130,11 +132,12 @@ class _TopResultHero(QFrame):
         info.setSpacing(4)
         info.setContentsMargins(0, 0, 0, 0)
         label = QLabel(t("search.top.label"))
-        label.setStyleSheet("font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #888; background: transparent;")
+        label.setStyleSheet(f"font-size: 11px; font-weight: 700; letter-spacing: 1px; color: {theme.TEXT_MUTED}; "
+                            f"background: transparent;")
         info.addWidget(label)
         name = QLabel(_result_title(data))
         name.setWordWrap(True)
-        name.setStyleSheet("font-size: 24px; font-weight: 700; color: white; background: transparent;")
+        name.setStyleSheet(f"font-size: 24px; font-weight: 700; color: {theme.TEXT}; background: transparent;")
         info.addWidget(name)
 
         parts = [_type_labels().get(kind, kind.title())] if kind else []
@@ -144,7 +147,7 @@ class _TopResultHero(QFrame):
         if data.get("duration"):
             parts.append(data["duration"])
         subtitle = QLabel("  •  ".join(parts))
-        subtitle.setStyleSheet("font-size: 12px; color: #aaa; background: transparent;")
+        subtitle.setStyleSheet(f"font-size: 12px; color: {theme.TEXT_SECONDARY}; background: transparent;")
         info.addWidget(subtitle)
         info.addSpacing(10)
 
@@ -197,7 +200,7 @@ class _ResultRow(ClickableWidget):
         info.setContentsMargins(0, 0, 0, 0)
         info.setSpacing(3)
         title = QLabel(_result_title(item))
-        title.setStyleSheet("font-size: 13px; font-weight: 600; color: #e8e8e8;")
+        title.setStyleSheet(f"font-size: 13px; font-weight: 600; color: {theme.TEXT};")
         info.addWidget(title)
 
         parts = []
@@ -210,7 +213,7 @@ class _ResultRow(ClickableWidget):
             parts.append(item["duration"])
         if parts:
             subtitle = QLabel("  •  ".join(parts))
-            subtitle.setStyleSheet("font-size: 11px; color: #888;")
+            subtitle.setStyleSheet(f"font-size: 11px; color: {theme.TEXT_MUTED};")
             info.addWidget(subtitle)
         layout.addLayout(info, stretch=1)
 
@@ -253,7 +256,7 @@ class SearchPanel(QWidget):
             tab = QPushButton(label)
             tab.setCheckable(True)
             tab.setCursor(Qt.PointingHandCursor)
-            tab.setStyleSheet(_TAB_QSS)
+            tab.setStyleSheet(_tab_qss())
             tab.clicked.connect(lambda _=False, s=scope: self._on_tab(s))
             tabs.addWidget(tab)
             self._tabs[scope] = tab
@@ -309,7 +312,7 @@ class SearchPanel(QWidget):
         self._clear()
         label = QLabel(text)
         label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("color: #888; font-size: 14px; padding: 60px;")
+        label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 14px; padding: 60px;")
         self._layout.insertWidget(0, label)
 
     def show_results(self, grouped, thumbnails):
@@ -350,7 +353,7 @@ class SearchPanel(QWidget):
     @staticmethod
     def _header(text):
         label = QLabel(text)
-        label.setStyleSheet("font-size: 18px; font-weight: 700; color: white; padding: 12px 0 8px 0;")
+        label.setStyleSheet(f"font-size: 18px; font-weight: 700; color: {theme.TEXT}; padding: 12px 0 8px 0;")
         return label
 
     @staticmethod

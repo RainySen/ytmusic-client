@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMenu, QPushButton
 
 from core.i18n import t
+from ui import theme
 from ui.components.jump_slider import JumpSlider
 from ui.components.link_label import LinkLabel
 from ui.components.marquee_label import MarqueeLabel
@@ -12,11 +13,14 @@ VOLUME_STEP_ICONS = ((1, "fa5s.volume-mute"), (34, "fa5s.volume-off"), (67, "fa5
 DEFAULT_UNMUTE = 50
 INFO_WIDTH = 380
 
-_SLIM_SLIDER_QSS = """
-    QSlider::groove:horizontal { height: 3px; background: rgba(255,255,255,0.16); border-radius: 1px; }
-    QSlider::sub-page:horizontal { background: #FF0033; border-radius: 1px; }
-    QSlider::handle:horizontal { width: 11px; height: 11px; margin: -4px 0; border-radius: 5px; background: #FF0033; }
-    QSlider::handle:horizontal:hover { background: #ff3355; }
+
+def _slim_slider_qss() -> str:
+    return f"""
+    QSlider::groove:horizontal {{ height: 3px; background: {theme.overlay(0.16)}; border-radius: {theme.radius(1)}px; }}
+    QSlider::sub-page:horizontal {{ background: {theme.ACCENT}; border-radius: {theme.radius(1)}px; }}
+    QSlider::handle:horizontal {{ width: 11px; height: 11px; margin: -4px 0; border-radius: {theme.radius(5)}px;
+                                  background: {theme.ACCENT}; }}
+    QSlider::handle:horizontal:hover {{ background: {theme.ACCENT}; }}
 """
 
 
@@ -58,7 +62,7 @@ class PlayerPanel(QWidget):
         self.cover_label = QLabel()
         self.cover_label.setFixedSize(52, 52)
         self.cover_label.setAlignment(Qt.AlignCenter)
-        self.cover_label.setStyleSheet("border-radius: 6px; background: #2a2a2a;")
+        self.cover_label.setStyleSheet(f"border-radius: {theme.radius(6)}px; background: {theme.SURFACE_RAISED};")
 
         text_col = QWidget()
         text_l = QVBoxLayout(text_col)
@@ -73,7 +77,7 @@ class PlayerPanel(QWidget):
         self.artist_label.clicked.connect(self.artist_clicked)
         self.album_label.clicked.connect(self.album_clicked)
         self._separator = QLabel("·")
-        self._separator.setStyleSheet("font-size: 11px; color: #aaa; background: transparent;")
+        self._separator.setStyleSheet(f"font-size: 11px; color: {theme.TEXT_SECONDARY}; background: transparent;")
         meta = QHBoxLayout()
         meta.setContentsMargins(0, 0, 0, 0)
         meta.setSpacing(4)
@@ -103,9 +107,9 @@ class PlayerPanel(QWidget):
         self.prev_button.setIcon(self.icons["prev"])
         self.prev_button.setFixedSize(36, 36)
         self.prev_button.setCursor(Qt.PointingHandCursor)
-        self.prev_button.setStyleSheet("""
-            QPushButton { background: transparent; border: none; border-radius: 18px; }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
+        self.prev_button.setStyleSheet(f"""
+            QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(18)}px; }}
+            QPushButton:hover {{ background: {theme.overlay(0.10)}; }}
         """)
 
         self.play_button = QPushButton()
@@ -114,14 +118,16 @@ class PlayerPanel(QWidget):
         self.play_button.setFixedSize(40, 40)
         self.play_button.setCursor(Qt.PointingHandCursor)
         self.play_button.setObjectName("play_button")
+        self._play_glow = theme.glow_effect()
+        self.play_button.setGraphicsEffect(self._play_glow)
 
         self.next_button = QPushButton()
         self.next_button.setIcon(self.icons["next"])
         self.next_button.setFixedSize(36, 36)
         self.next_button.setCursor(Qt.PointingHandCursor)
-        self.next_button.setStyleSheet("""
-            QPushButton { background: transparent; border: none; border-radius: 18px; }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
+        self.next_button.setStyleSheet(f"""
+            QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(18)}px; }}
+            QPushButton:hover {{ background: {theme.overlay(0.10)}; }}
         """)
 
         ctrl_row.addStretch()
@@ -139,9 +145,9 @@ class PlayerPanel(QWidget):
         right_l.setContentsMargins(0, 0, 0, 0)
         right_l.setSpacing(2)
 
-        _aux_style = """
-            QPushButton { background: transparent; border: none; border-radius: 17px; }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
+        _aux_style = f"""
+            QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(17)}px; }}
+            QPushButton:hover {{ background: {theme.overlay(0.10)}; }}
         """
 
         self.like_button = QPushButton()
@@ -152,7 +158,7 @@ class PlayerPanel(QWidget):
         self.set_liked(False)
 
         self.shuffle_button = QPushButton()
-        self.shuffle_button.setIcon(qta.icon('fa5s.random', color='#aaa'))
+        self.shuffle_button.setIcon(qta.icon('fa5s.random', color=theme.TEXT_SECONDARY))
         self.shuffle_button.setToolTip(t("player.tooltip.shuffle"))
         self.shuffle_button.setFixedSize(34, 34)
         self.shuffle_button.setCursor(Qt.PointingHandCursor)
@@ -181,11 +187,11 @@ class PlayerPanel(QWidget):
         self.volume_label = QLabel()
         self.volume_label.setFixedWidth(34)
         self.volume_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.volume_label.setStyleSheet("font-size: 11px; color: #aaa;")
+        self.volume_label.setStyleSheet(f"font-size: 11px; color: {theme.TEXT_SECONDARY};")
         self._on_volume(self.volume_slider.value())
 
         self._expand_btn = QPushButton()
-        self._expand_btn.setIcon(qta.icon('fa5s.chevron-up', color='#aaa'))
+        self._expand_btn.setIcon(qta.icon('fa5s.chevron-up', color=theme.TEXT_SECONDARY))
         self._expand_btn.setToolTip(t("player.tooltip.expand"))
         self._expand_btn.setFixedSize(34, 34)
         self._expand_btn.setCursor(Qt.PointingHandCursor)
@@ -212,17 +218,17 @@ class PlayerPanel(QWidget):
         self.time_label = QLabel("0:00")
         self.time_label.setFixedWidth(36)
         self.time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.time_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        self.time_label.setStyleSheet(f"font-size: 10px; color: {theme.TEXT_SECONDARY};")
 
         self.progress_slider = JumpSlider(Qt.Horizontal)
         self.progress_slider.setRange(0, 1000)
         self.progress_slider.setValue(0)
         self.progress_slider.setFixedHeight(14)
-        self.progress_slider.setStyleSheet(_SLIM_SLIDER_QSS)
+        self.progress_slider.setStyleSheet(_slim_slider_qss())
 
         self.total_time_label = QLabel("0:00")
         self.total_time_label.setFixedWidth(36)
-        self.total_time_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        self.total_time_label.setStyleSheet(f"font-size: 10px; color: {theme.TEXT_SECONDARY};")
 
         prog_row.addWidget(self.time_label)
         prog_row.addWidget(self.progress_slider, stretch=1)
@@ -245,7 +251,7 @@ class PlayerPanel(QWidget):
     def build_menu(self) -> QMenu:
         menu = QMenu(self)
         menu.setStyleSheet(MENU_QSS)
-        light = "#e0e0e0"
+        light = theme.TEXT
         menu.addAction(qta.icon("fa5s.pause" if self._playing else "fa5s.play", color=light),
                        t("player.menu.pause") if self._playing else t("player.menu.play")
                        ).triggered.connect(self.play_button.click)
@@ -283,7 +289,7 @@ class PlayerPanel(QWidget):
 
     def _on_volume(self, value: int) -> None:
         icon = next(name for limit, name in VOLUME_STEP_ICONS if value < limit)
-        self.mute_button.setIcon(qta.icon(icon, color="#dddddd"))
+        self.mute_button.setIcon(qta.icon(icon, color=theme.TEXT))
         self.mute_button.setToolTip(t("player.tooltip.unmute") if value == 0 else t("player.tooltip.mute"))
         self.volume_label.setText(f"{value}%")
         self.volume_slider.setToolTip(t("player.tooltip.volume", value=value))
@@ -298,14 +304,14 @@ class PlayerPanel(QWidget):
         self._separator.setVisible(bool(album) and bool(artist))
 
     def set_liked(self, liked: bool, available: bool = True) -> None:
-        self.like_button.setIcon(qta.icon("fa5s.heart", color="#ff3b5c" if liked else "#aaa"))
+        self.like_button.setIcon(qta.icon("fa5s.heart", color=theme.ACCENT if liked else theme.TEXT_SECONDARY))
         self.like_button.setToolTip(t("player.tooltip.unlike") if liked else t("player.tooltip.like"))
         self.like_button.setEnabled(available)
 
     def set_expanded(self, expanded: bool):
         self._is_expanded = expanded
         icon = 'fa5s.chevron-down' if expanded else 'fa5s.chevron-up'
-        self._expand_btn.setIcon(qta.icon(icon, color='#aaa'))
+        self._expand_btn.setIcon(qta.icon(icon, color=theme.TEXT_SECONDARY))
 
     def set_cover_placeholder(self, pixmap):
         self.cover_label.setPixmap(pixmap)

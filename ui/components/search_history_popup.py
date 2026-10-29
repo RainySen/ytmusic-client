@@ -11,8 +11,10 @@ from ui.components.elided_label import ElidedLabel
 MAX_VISIBLE = 8
 ROW_HEIGHT = 38
 
-_POPUP_QSS = f"""
-    QFrame#history_card {{ background: {theme.SURFACE_RAISED}; border: 1px solid {theme.BORDER}; border-radius: 14px; }}
+
+def _popup_qss() -> str:
+    return f"""
+    QFrame#history_card {{ background: {theme.SURFACE_RAISED}; border: 1px solid {theme.BORDER}; border-radius: {theme.radius(14)}px; }}
 """
 
 
@@ -27,13 +29,13 @@ class _Row(QWidget):
         self.setFixedHeight(ROW_HEIGHT)
         self.setCursor(Qt.PointingHandCursor)
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("QWidget { background: transparent; border-radius: 8px; } "
-                           "QWidget:hover { background: rgba(255,255,255,0.08); }")
+        self.setStyleSheet(f"QWidget {{ background: transparent; border-radius: {theme.radius(8)}px; }} "
+                           f"QWidget:hover {{ background: {theme.overlay(0.08)}; }}")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 6, 0)
         layout.setSpacing(10)
         icon = QLabel()
-        icon.setPixmap(qta.icon("fa5s.search" if suggestion else "fa5s.history", color="#888").pixmap(13, 13))
+        icon.setPixmap(qta.icon("fa5s.search" if suggestion else "fa5s.history", color=theme.TEXT_MUTED).pixmap(13, 13))
         icon.setStyleSheet("background: transparent;")
         text = ElidedLabel(query)
         text.setStyleSheet(f"color: {theme.TEXT}; font-size: 13px; background: transparent;")
@@ -44,12 +46,12 @@ class _Row(QWidget):
             layout.addSpacing(26)
             return
         self.remove_button = QPushButton()
-        self.remove_button.setIcon(qta.icon("fa5s.times", color="#999"))
+        self.remove_button.setIcon(qta.icon("fa5s.times", color=theme.TEXT_SECONDARY))
         self.remove_button.setFixedSize(26, 26)
         self.remove_button.setToolTip(t("search.history.remove"))
         self.remove_button.setCursor(Qt.PointingHandCursor)
-        self.remove_button.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 13px; } "
-                                         "QPushButton:hover { background: rgba(255,255,255,0.15); }")
+        self.remove_button.setStyleSheet(f"QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(13)}px; }} "
+                                         f"QPushButton:hover {{ background: {theme.overlay(0.15)}; }}")
         self.remove_button.clicked.connect(lambda: self.removed.emit(self._query))
         layout.addWidget(self.remove_button)
 
@@ -79,7 +81,7 @@ class SearchHistoryPopup(QFrame):
         outer.setContentsMargins(0, 0, 0, 0)
         card = QFrame()
         card.setObjectName("history_card")
-        card.setStyleSheet(_POPUP_QSS)
+        card.setStyleSheet(_popup_qss())
         outer.addWidget(card)
         self._rows = QVBoxLayout(card)
         self._rows.setContentsMargins(6, 6, 6, 6)

@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QLabel
 
+from ui import theme
 from ui.imaging import circle_pixmap, round_pixmap, scale_cover
 
 _PLACEHOLDERS: dict[tuple[str, int], QPixmap] = {}
@@ -12,7 +13,7 @@ def _placeholder(icon: str, size: int) -> QPixmap:
     key = (icon, size)
     pixmap = _PLACEHOLDERS.get(key)
     if pixmap is None:
-        pixmap = qta.icon(icon, color="#555").pixmap(size, size)
+        pixmap = qta.icon(icon, color=theme.TEXT_MUTED).pixmap(size, size)
         _PLACEHOLDERS[key] = pixmap
     return pixmap
 
@@ -20,13 +21,13 @@ def _placeholder(icon: str, size: int) -> QPixmap:
 # painted background instead of per-widget stylesheet (ram)
 class LazyThumbnail(QLabel):
     def __init__(self, size: int, radius: int = 4, circle: bool = False,
-                 icon: str = "fa5s.music", background: str = "#2a2a2a", parent=None):
+                 icon: str = "fa5s.music", background: str = "", parent=None):
         super().__init__(parent)
         self._size = size
         self._radius = radius
         self._circle = circle
         self._shape = size // 2 if circle else radius
-        self._background = QColor(background)
+        self._background = QColor(background or theme.SURFACE_RAISED)
         self._loaded = False
         self._url = ""
         self._cache = None

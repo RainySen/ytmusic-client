@@ -50,9 +50,16 @@ def test_new_settings_have_safe_defaults_and_ignore_garbage():
     settings = Settings()
     assert not settings.start_with_windows and settings.media_keys and settings.notifications
     assert settings.content_language == "es" and settings.lyrics_providers == LYRICS_PROVIDER_NAMES
+    assert settings.theme == "classic"
     garbage = Settings.from_dict({"content_language": "klingon", "lyrics_providers": "youtube", "better_lyrics_key": 7,
                                   "media_keys": "si", "start_with_windows": 1, "notifications": None})
     assert garbage == Settings()
+
+
+def test_theme_setting_accepts_only_the_known_themes():
+    assert all(Settings.from_dict({"theme": name}).theme == name for name in ("classic", "aero", "cyberpunk"))
+    assert Settings.from_dict({"theme": "klingon"}).theme == "classic"
+    assert Settings.from_dict({"theme": 7}).theme == "classic"
 
 
 def test_new_settings_roundtrip_and_sanitise():
@@ -655,6 +662,20 @@ def test_app_language_combo_saves_and_offers_a_restart(rig, monkeypatch, accepte
     dialog.deleteLater()
 
 
+@pytest.mark.parametrize("accepted, restarts", [(True, 1), (False, 0)])
+def test_theme_combo_saves_and_offers_a_restart(rig, monkeypatch, accepted, restarts):
+    from ui.components import dialogs
+    asked, restarted = [], []
+    monkeypatch.setattr(dialogs, "confirm", lambda *a, **kw: asked.append(kw) or accepted)
+    dialog, changes = make_dialog(rig, on_restart=lambda: restarted.append(1))
+    assert [dialog.theme_combo.itemData(i) for i in range(dialog.theme_combo.count())] == ["classic", "aero", "cyberpunk"]
+    assert dialog.theme_combo.currentData() == "classic"
+    dialog.theme_combo.setCurrentIndex(dialog.theme_combo.findData("aero"))
+    assert {"theme": "aero"} in changes and asked[0]["ok"] == "Reiniciar ahora"
+    assert len(restarted) == restarts
+    dialog.deleteLater()
+
+
 def test_restart_releases_the_app_before_launching_it_in_the_foreground():
     from infra.autostart import BACKGROUND_FLAG
     from infra.restart import restart_app
@@ -691,4 +712,15 @@ def test_app_language_also_sets_the_content_language_but_not_the_other_way(rig, 
     changes.clear()
     dialog.app_language.setCurrentIndex(dialog.app_language.findData(""))
     assert dialog.language.currentData() == "en" and not any("content_language" in c for c in changes)
+    dialog.deleteLater()
+
+
+def test_theme_restart_prompt_talks_about_the_theme_not_the_language(rig, monkeypatch):
+    from core.i18n import t
+    from ui.components import dialogs
+    asked = []
+    monkeypatch.setattr(dialogs, "confirm", lambda _parent, title, message, **kw: asked.append((title, message)) or False)
+    dialog, _ = make_dialog(rig, on_restart=lambda: None)
+    dialog.theme_combo.setCurrentIndex(dialog.theme_combo.findData("aero"))
+    assert asked == [(t("settings.theme.restart_title"), t("settings.theme.restart_message"))]
     dialog.deleteLater()

@@ -60,6 +60,11 @@
   "settings.language.restart_later": "Mais tarde",
   "settings.language.content_title": "Idioma do conteúdo",
   "settings.language.content_hint": "Textos que o YouTube Music envia no início, em Explorar e nas buscas.",
+  "settings.theme.title": "Tema",
+  "settings.theme.hint": "Aplica-se ao reiniciar.",
+  "settings.theme.classic": "Clássico",
+  "settings.theme.aero": "Aero noturno",
+  "settings.theme.cyberpunk": "Cyberpunk",
   "settings.thumbnails.section": "Miniaturas",
   "settings.thumbnails.quality_title": "Qualidade das miniaturas e da capa",
   "settings.thumbnails.quality_hint": "«Automática» já se ajusta à resolução da sua tela. «Alta» pede imagens maiores em monitores grandes ou 4K; «Baixa» as reduz para economizar memória e dados.",
@@ -89,5 +94,7 @@
   "settings.account.signed_out": "Sem sessão",
   "settings.log.button": "Abrir registro",
   "settings.log.title": "Registro de erros",
-  "settings.log.hint": "Se algo falhar, envie este arquivo para ajudar a encontrar o problema. Não inclui sua sessão nem seus dados."
+  "settings.log.hint": "Se algo falhar, envie este arquivo para ajudar a encontrar o problema. Não inclui sua sessão nem seus dados.",
+  "settings.theme.restart_title": "Mudar tema",
+  "settings.theme.restart_message": "O novo tema será aplicado ao reiniciar o app. A fila é mantida."
 }

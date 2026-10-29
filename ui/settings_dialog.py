@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from core.i18n import t
 from domain.settings import (
     APP_LANGUAGES, CONTENT_LANGUAGES, FREE_MEMORY_OPTIONS, LYRICS_PROVIDER_NAMES, RADIO_SIZE_OPTIONS, REWIND_OPTIONS, Settings,
-    THUMBNAIL_CACHE_OPTIONS, THUMBNAIL_QUALITY_OPTIONS,
+    THEME_NAMES, THUMBNAIL_CACHE_OPTIONS, THUMBNAIL_QUALITY_OPTIONS,
 )
 from ui import theme
 from ui.components import dialogs
@@ -49,22 +49,30 @@ def _cache_limit_labels() -> dict:
 def _app_language_labels() -> dict:
     return {"": t("settings.language.automatic"), **APP_LANGUAGE_NAMES}
 
-_COMBO_QSS = f"""
-    QComboBox {{ background: rgba(255,255,255,0.08); color: {theme.TEXT}; border: 1px solid {theme.BORDER};
-                 border-radius: 8px; padding: 6px 12px; min-width: 190px; font-size: 13px; }}
-    QComboBox:hover {{ border-color: rgba(255,255,255,0.4); }}
+
+def _theme_labels() -> dict:
+    return {"classic": t("settings.theme.classic"), "aero": t("settings.theme.aero"),
+            "cyberpunk": t("settings.theme.cyberpunk")}
+
+
+def _combo_qss() -> str:
+    return f"""
+    QComboBox {{ background: {theme.overlay(0.08)}; color: {theme.TEXT}; border: 1px solid {theme.BORDER};
+                 border-radius: {theme.radius(8)}px; padding: 6px 12px; min-width: 190px; font-size: 13px; }}
+    QComboBox:hover {{ border-color: {theme.overlay(0.4)}; }}
     QComboBox QAbstractItemView {{ background: {theme.SURFACE_RAISED}; color: {theme.TEXT}; border: 1px solid {theme.BORDER};
-                                   selection-background-color: rgba(255,255,255,0.14); outline: none; }}
+                                   selection-background-color: {theme.SELECTION}; outline: none; }}
 """
 
 
 # always visible and easy to grab: usable without a mouse wheel
-_SCROLL_QSS = """
-    QScrollArea { background: transparent; border: none; }
-    QScrollBar:vertical { background: rgba(255,255,255,0.06); width: 12px; margin: 2px; border-radius: 5px; }
-    QScrollBar::handle:vertical { background: rgba(255,255,255,0.45); border-radius: 5px; min-height: 40px; }
-    QScrollBar::handle:vertical:hover { background: rgba(255,255,255,0.65); }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+def _scroll_qss() -> str:
+    return f"""
+    QScrollArea {{ background: transparent; border: none; }}
+    QScrollBar:vertical {{ background: {theme.overlay(0.06)}; width: 12px; margin: 2px; border-radius: {theme.radius(5)}px; }}
+    QScrollBar::handle:vertical {{ background: {theme.overlay(0.45)}; border-radius: {theme.radius(5)}px; min-height: 40px; }}
+    QScrollBar::handle:vertical:hover {{ background: {theme.overlay(0.65)}; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 """
 DIALOG_HEIGHT = 560
 SCREEN_MARGIN = 0.85
@@ -121,7 +129,7 @@ def _row(title: str, hint: str, control: QWidget, enabled: bool = True) -> QWidg
 
 def _combo(options, labels, current) -> NoScrollComboBox:
     box = NoScrollComboBox()
-    box.setStyleSheet(_COMBO_QSS)
+    box.setStyleSheet(_combo_qss())
     for option in options:
         box.addItem(labels[option], option)
     box.setCurrentIndex(max(0, box.findData(current)))
@@ -169,7 +177,7 @@ class SettingsDialog(Modal):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        scroll.setStyleSheet(_SCROLL_QSS)
+        scroll.setStyleSheet(_scroll_qss())
         scroll.setWidget(content)
         self.body.addWidget(scroll)
         self.add_button(t("settings.done"), "primary", self.accept, default=True)
@@ -256,8 +264,11 @@ class SettingsDialog(Modal):
         self.app_language.currentIndexChanged.connect(lambda _i: self._on_app_language(self.app_language.currentData()))
         self.language = _combo(tuple(CONTENT_LANGUAGES), CONTENT_LANGUAGES, settings.content_language)
         body.addWidget(_row(t("settings.language.content_title"), t("settings.language.content_hint"), self.language))
+        self.theme_combo = _combo(THEME_NAMES, _theme_labels(), settings.theme)
+        body.addWidget(_row(t("settings.theme.title"), t("settings.theme.hint"), self.theme_combo))
         body.addWidget(_separator())
         self.language.currentIndexChanged.connect(lambda _i: self._on_change(content_language=self.language.currentData()))
+        self.theme_combo.currentIndexChanged.connect(lambda _i: self._on_theme(self.theme_combo.currentData()))
 
     def _build_thumbnails(self, body, settings: Settings) -> None:
         body.addWidget(_title(t("settings.thumbnails.section")))
@@ -429,9 +440,16 @@ class SettingsDialog(Modal):
         # one-way: content follows a chosen app language, never the reverse
         if language and self.language.findData(language) >= 0:
             self.language.setCurrentIndex(self.language.findData(language))
+        self._confirm_restart("settings.language")
+
+    def _on_theme(self, name: str) -> None:
+        self._on_change(theme=name)
+        self._confirm_restart("settings.theme")
+
+    def _confirm_restart(self, area: str) -> None:
         if self._on_restart is None:
             return
-        if dialogs.confirm(self, t("settings.language.restart_title"), t("settings.language.restart_message"),
+        if dialogs.confirm(self, t(f"{area}.restart_title"), t(f"{area}.restart_message"),
                            ok=t("settings.language.restart_now"), cancel=t("settings.language.restart_later")):
             self._on_restart()
 

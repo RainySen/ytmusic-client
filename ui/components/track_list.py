@@ -92,9 +92,9 @@ class _TrackDelegate(QStyledItemDelegate):
         self._muted_font.setPixelSize(13)
         self._number_font = QFont(owner.font())
         self._number_font.setPixelSize(14)
-        self._placeholder = qta.icon("fa5s.music", color="#555").pixmap(22, 22)
-        self._dots = qta.icon("fa5s.ellipsis-v", color="#ccc").pixmap(16, 16)
-        self._heart = qta.icon("fa5s.heart", color="#ff3b5c").pixmap(13, 13)
+        self._placeholder = qta.icon("fa5s.music", color=theme.TEXT_MUTED).pixmap(22, 22)
+        self._dots = qta.icon("fa5s.ellipsis-v", color=theme.TEXT_SECONDARY).pixmap(16, 16)
+        self._heart = qta.icon("fa5s.heart", color=theme.ACCENT).pixmap(13, 13)
         self._text = QColor(theme.TEXT)
         self._muted = QColor(theme.TEXT_SECONDARY)
 
@@ -111,7 +111,9 @@ class _TrackDelegate(QStyledItemDelegate):
         painter.setRenderHint(QPainter.Antialiasing)
         if hovered:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(255, 255, 255, 15))
+            hover = QColor(theme.TEXT)
+            hover.setAlpha(15)
+            painter.setBrush(hover)
             painter.drawRoundedRect(rect.adjusted(0, 0, 0, -1), 6, 6)
         cells = _cells(rect, track, owner.options)
         middle = Qt.AlignVCenter
@@ -132,7 +134,9 @@ class _TrackDelegate(QStyledItemDelegate):
             actions = cells["actions"]
             if owner.view.over_actions:
                 painter.setPen(Qt.NoPen)
-                painter.setBrush(QColor(255, 255, 255, 38))
+                hover = QColor(theme.TEXT)
+                hover.setAlpha(38)
+                painter.setBrush(hover)
                 center = actions.center()
                 painter.drawEllipse(center, 14, 14)
             self._centered(painter, actions, self._dots)
@@ -157,7 +161,7 @@ class _TrackDelegate(QStyledItemDelegate):
             return
         path = QPainterPath()
         path.addRoundedRect(box, 4, 4)
-        painter.fillPath(path, QColor("#1e1e1e"))
+        painter.fillPath(path, QColor(theme.SURFACE))
         self._centered(painter, box, self._placeholder)
 
 
@@ -341,7 +345,7 @@ class TrackList(QWidget):
         menu.setStyleSheet(MENU_QSS)
         signals = {"next": self.add_next_clicked, "queue": self.add_queue_clicked,
                    "playlist": self.add_playlist_clicked}
-        actions = {menu.addAction(qta.icon(icon, color="#e0e0e0"), label): key
+        actions = {menu.addAction(qta.icon(icon, color=theme.TEXT), label): key
                    for key, label, icon in song_entries(track)}
         if align_right:
             global_pos = QPoint(global_pos.x() - menu.sizeHint().width(), global_pos.y())

@@ -1,3 +1,6 @@
+import os
+import time
+
 import pytest
 import requests
 from PySide6.QtCore import QObject, Signal
@@ -67,6 +70,11 @@ class RotatingClient(FakeClient):
         self._auth_headers = {"cookie": cookie}
 
 
+def age(path, seconds=3600):
+    stamp = time.time() - seconds
+    os.utime(path, (stamp, stamp))
+
+
 def rotation_response(**cookies):
     response = requests.Response()
     response.status_code = 200
@@ -78,6 +86,7 @@ def rotation_response(**cookies):
 def test_checking_the_session_rotates_and_saves_the_cookies(tmp_path, monkeypatch):
     path = str(tmp_path / "oauth.json")
     write_secret_json(path, {"cookie": "SID=s; __Secure-3PAPISID=k; __Secure-3PSIDTS=old", "user-agent": "UA"})
+    age(path)
     client = RotatingClient("SID=s; __Secure-3PAPISID=k; __Secure-3PSIDTS=old")
     gateway = YTMusicGateway(path)
     gateway._ytm, gateway._authenticated = client, True
@@ -96,6 +105,7 @@ def test_checking_the_session_rotates_and_saves_the_cookies(tmp_path, monkeypatc
 def test_a_failed_rotation_still_checks_the_session(tmp_path, monkeypatch):
     path = str(tmp_path / "oauth.json")
     write_secret_json(path, {"cookie": "__Secure-3PAPISID=k; __Secure-3PSIDTS=old"})
+    age(path)
     client = RotatingClient("__Secure-3PAPISID=k; __Secure-3PSIDTS=old")
     gateway = YTMusicGateway(path)
     gateway._ytm, gateway._authenticated = client, True
@@ -108,6 +118,20 @@ def test_a_failed_rotation_still_checks_the_session(tmp_path, monkeypatch):
 
     assert client.calls == 1 and gateway.is_authenticated
     assert read_secret_json(path)["cookie"] == "__Secure-3PAPISID=k; __Secure-3PSIDTS=old"
+
+
+def test_a_recent_rotation_is_not_repeated(tmp_path, monkeypatch):
+    path = str(tmp_path / "oauth.json")
+    write_secret_json(path, {"cookie": "__Secure-3PAPISID=k; __Secure-3PSIDTS=old"})
+    client = RotatingClient("__Secure-3PAPISID=k; __Secure-3PSIDTS=old")
+    gateway = YTMusicGateway(path)
+    gateway._ytm, gateway._authenticated = client, True
+    sent = []
+    monkeypatch.setattr(requests, "post", lambda url, **kw: sent.append(url) or rotation_response())
+
+    gateway.verify_session()
+
+    assert sent == [] and client.calls == 1
 
 
 def test_network_errors_do_not_sign_the_user_out():
