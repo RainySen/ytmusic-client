@@ -60,6 +60,11 @@
   "settings.language.restart_later": "Más tarde",
   "settings.language.content_title": "Idioma del contenido",
   "settings.language.content_hint": "Textos que entrega YouTube Music en el inicio, Explorar y las búsquedas.",
+  "settings.theme.title": "Tema",
+  "settings.theme.hint": "Se aplica al reiniciar.",
+  "settings.theme.classic": "Clásico",
+  "settings.theme.aero": "Aero nocturno",
+  "settings.theme.cyberpunk": "Cyberpunk",
   "settings.thumbnails.section": "Miniaturas",
   "settings.thumbnails.quality_title": "Calidad de las miniaturas y la portada",
   "settings.thumbnails.quality_hint": "«Automática» ya se ajusta a la resolución de tu pantalla. «Alta» pide imágenes más grandes en monitores grandes o 4K; «Baja» las reduce para ahorrar memoria y datos.",
@@ -89,5 +94,7 @@
   "settings.account.signed_out": "Sin sesión",
   "settings.log.button": "Abrir registro",
   "settings.log.title": "Registro de errores",
-  "settings.log.hint": "Si algo falla, envía este archivo para ayudar a encontrar el problema. No incluye tu sesión ni tus datos."
+  "settings.log.hint": "Si algo falla, envía este archivo para ayudar a encontrar el problema. No incluye tu sesión ni tus datos.",
+  "settings.theme.restart_title": "Cambiar tema",
+  "settings.theme.restart_message": "El nuevo tema se aplicará al reiniciar la app. La cola se conserva."
 }

@@ -16,25 +16,33 @@ INFO_WIDTH = 340
 DESCRIPTION_CHARS = 220
 LOAD_MORE_MARGIN = 200
 
-_PLAY_QSS = """
-    QPushButton { background: white; border: none; border-radius: 28px; }
-    QPushButton:hover { background: #e6e6e6; }
-    QPushButton:pressed { background: #cccccc; }
-"""
-_ROUND_QSS = """
-    QPushButton { background: rgba(255,255,255,0.12); border: none; border-radius: 22px; }
-    QPushButton:hover { background: rgba(255,255,255,0.22); }
-"""
-_LINK_QSS = f"""
-    QPushButton {{ background: transparent; border: none; color: {theme.TEXT}; font-size: 15px;
-                   font-weight: 600; padding: 0; text-align: left; }}
-    QPushButton:hover {{ text-decoration: underline; }}
-"""
+
+def _play_qss() -> str:
+    return f"""
+        QPushButton {{ background: {theme.BUTTON_BG}; border: none; border-radius: {theme.radius(28)}px; }}
+        QPushButton:hover {{ background: {theme.HOVER}; }}
+        QPushButton:pressed {{ background: {theme.PRESSED}; }}
+    """
 
 
-def _round_button(icon, size, style, tooltip):
+def _round_qss() -> str:
+    return f"""
+        QPushButton {{ background: {theme.overlay(0.12)}; border: none; border-radius: {theme.radius(22)}px; }}
+        QPushButton:hover {{ background: {theme.overlay(0.22)}; }}
+    """
+
+
+def _link_qss() -> str:
+    return f"""
+        QPushButton {{ background: transparent; border: none; color: {theme.TEXT}; font-size: 15px;
+                       font-weight: 600; padding: 0; text-align: left; }}
+        QPushButton:hover {{ text-decoration: underline; }}
+    """
+
+
+def _round_button(icon, size, style, tooltip, icon_color):
     button = QPushButton()
-    button.setIcon(qta.icon(icon, color=theme.BG if style is _PLAY_QSS else "white"))
+    button.setIcon(qta.icon(icon, color=icon_color))
     button.setFixedSize(size, size)
     button.setCursor(Qt.PointingHandCursor)
     button.setStyleSheet(style)
@@ -156,7 +164,7 @@ class AlbumPanel(QWidget):
         row.setAlignment(Qt.AlignHCenter)
         for position, artist in enumerate(artists[:3]):
             link = QPushButton(artist.get("name", ""))
-            link.setStyleSheet(_LINK_QSS)
+            link.setStyleSheet(_link_qss())
             if str(artist.get("id", "")).startswith("UC"):
                 link.setCursor(Qt.PointingHandCursor)
                 link.clicked.connect(lambda _=False, i=artist["id"]: self.artist_clicked.emit(i))
@@ -172,7 +180,7 @@ class AlbumPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        cover = LazyThumbnail(COVER_SIZE, radius=10, background="#1e1e1e")
+        cover = LazyThumbnail(COVER_SIZE, radius=10, background=theme.SURFACE)
         cover.set_source(thumbnail_url(data, imaging.thumb_px(COVER_SIZE)), thumbnails)
         layout.addWidget(cover, alignment=Qt.AlignHCenter)
         layout.addSpacing(10)
@@ -202,11 +210,12 @@ class AlbumPanel(QWidget):
         buttons = QHBoxLayout()
         buttons.setAlignment(Qt.AlignHCenter)
         buttons.setSpacing(14)
-        self.shuffle_button = _round_button("fa5s.random", 44, _ROUND_QSS, t("album.shuffle"))
+        self.shuffle_button = _round_button("fa5s.random", 44, _round_qss(), t("album.shuffle"), theme.TEXT)
         self.shuffle_button.clicked.connect(self.shuffle_requested)
-        self.play_button = _round_button("fa5s.play", 56, _PLAY_QSS, t("album.play"))
+        self.play_button = _round_button("fa5s.play", 56, _play_qss(), t("album.play"), theme.BG)
         self.play_button.clicked.connect(self.play_requested)
-        self.menu_button = ActionsButton(collection_actions(), style=_ROUND_QSS, size=44, icon_color="white")
+        self.menu_button = ActionsButton(collection_actions(), style=_round_qss(), size=44,
+                                         icon_color=theme.TEXT)
         self.menu_button.set_revealed(True)
         self.menu_button.action_chosen.connect(lambda key: self.collection_action_requested.emit(key, item))
         for widget in (self.shuffle_button, self.play_button, self.menu_button):

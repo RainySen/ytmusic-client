@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 
 from core.i18n import t
 from domain.models import LOCAL_SOURCES, thumbnail_url
-from ui import imaging
+from ui import imaging, theme
 from ui.components.chip import Chip
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
@@ -22,7 +22,9 @@ _CHIP_SPECS = (
 GRID_COLUMNS = 4
 LOAD_MORE_MARGIN = 200
 
-_SEPARATOR = "background: #1a1a1a; max-height: 1px;"
+
+def _separator_qss() -> str:
+    return f"background: {theme.BORDER}; max-height: 1px;"
 
 
 def chip_labels() -> tuple:
@@ -43,7 +45,7 @@ class PlaylistCard(ClickableWidget):
         layout.setContentsMargins(8, 8, 8, 10)
         layout.setSpacing(6)
 
-        thumb = LazyThumbnail(152, radius=6, icon="fa5s.list", background="#1e1e1e")
+        thumb = LazyThumbnail(152, radius=6, icon="fa5s.list", background=theme.SURFACE)
         thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(152)), thumbnails)
         layout.addWidget(thumb)
 
@@ -51,13 +53,13 @@ class PlaylistCard(ClickableWidget):
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(4)
         title = QLabel(playlist.get("title", ""))
-        title.setStyleSheet("font-size: 13px; font-weight: 600; color: #e0e0e0;")
+        title.setStyleSheet(f"font-size: 13px; font-weight: 600; color: {theme.TEXT};")
         title.setWordWrap(True)
         title.setMaximumWidth(140 if playlist.get("pinned") else 152)
         title_row.addWidget(title, 1)
         if playlist.get("pinned"):
             pin = QLabel()
-            pin.setPixmap(qta.icon("fa5s.thumbtack", color="#aaa").pixmap(11, 11))
+            pin.setPixmap(qta.icon("fa5s.thumbtack", color=theme.TEXT_SECONDARY).pixmap(11, 11))
             pin.setToolTip(t("library.card.pinned"))
             title_row.addWidget(pin, alignment=Qt.AlignTop)
         layout.addLayout(title_row)
@@ -67,7 +69,7 @@ class PlaylistCard(ClickableWidget):
         source = t("library.card.local") if local else t("library.card.youtube_music")
         tracks = t("library.card.tracks", count=count) if count else ""
         meta = QLabel(f"{source}{'  •  ' + tracks if tracks else ''}")
-        meta.setStyleSheet("font-size: 11px; color: #888;")
+        meta.setStyleSheet(f"font-size: 11px; color: {theme.TEXT_MUTED};")
         meta.setWordWrap(True)
         meta.setMaximumWidth(152)
         layout.addWidget(meta)
@@ -91,12 +93,12 @@ class ArtistRow(QWidget):
         info.setContentsMargins(0, 0, 0, 0)
         info.setSpacing(3)
         name = QLabel(artist.get("name") or artist.get("title") or artist.get("artist", ""))
-        name.setStyleSheet("font-size: 14px; font-weight: 500; color: #e0e0e0;")
+        name.setStyleSheet(f"font-size: 14px; font-weight: 500; color: {theme.TEXT};")
         info.addWidget(name)
         detail = t("library.artist.count", count=artist["count"]) if artist.get("count") else artist.get("subscribers", "")
         if detail:
             count = QLabel(detail)
-            count.setStyleSheet("font-size: 12px; color: #888;")
+            count.setStyleSheet(f"font-size: 12px; color: {theme.TEXT_MUTED};")
             info.addWidget(count)
         layout.addLayout(info, stretch=1)
 
@@ -124,7 +126,7 @@ class LibraryBrowserPanel(QWidget):
         header = QWidget()
         header.setObjectName("lib_header")
         header.setFixedHeight(56)
-        header.setStyleSheet("#lib_header { background: #0b0b0b; }")
+        header.setStyleSheet(f"#lib_header {{ background: {theme.BG}; }}")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 10, 16, 10)
         header_layout.setSpacing(8)
@@ -139,7 +141,7 @@ class LibraryBrowserPanel(QWidget):
 
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet(_SEPARATOR)
+        separator.setStyleSheet(_separator_qss())
         outer.addWidget(separator)
 
         self._scroll = QScrollArea()
@@ -201,7 +203,7 @@ class LibraryBrowserPanel(QWidget):
         self._clear()
         label = QLabel(text)
         label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("color: #888; font-size: 14px; padding: 60px;")
+        label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 14px; padding: 60px;")
         self._layout.insertWidget(0, label)
 
     def show_playlists(self, playlists, thumbnails):
@@ -276,6 +278,6 @@ class LibraryBrowserPanel(QWidget):
             if index < len(rows) - 1:
                 separator = QFrame()
                 separator.setFrameShape(QFrame.HLine)
-                separator.setStyleSheet(_SEPARATOR)
+                separator.setStyleSheet(_separator_qss())
                 layout.addWidget(separator)
         return container

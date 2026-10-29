@@ -4,6 +4,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QMenu, QPushButton
 
 from core.i18n import t
+from ui import theme
 
 # (key, label key, icon); the label is resolved on use: the language is set after imports
 _SONG_SPECS = (
@@ -70,20 +71,36 @@ def song_actions() -> tuple:
 def collection_actions() -> tuple:
     return _labeled(_COLLECTION_SPECS)
 
-MENU_QSS = """
-    QMenu { background: #282828; border: 1px solid #383838; border-radius: 8px; padding: 6px; }
-    QMenu::item { padding: 9px 20px 9px 14px; border-radius: 4px; color: #e0e0e0; }
-    QMenu::item:selected { background: rgba(255,255,255,0.10); }
+
+def menu_qss() -> str:
+    return f"""
+    QMenu {{ background: {theme.SURFACE_RAISED}; border: 1px solid {theme.BORDER}; border-radius: {theme.radius(8)}px;
+             padding: 6px; }}
+    QMenu::item {{ padding: 9px 20px 9px 14px; border-radius: {theme.radius(4)}px; color: {theme.TEXT}; }}
+    QMenu::item:selected {{ background: {theme.overlay(0.10)}; }}
 """
-_BUTTON_QSS = """
-    QPushButton { background: transparent; border: none; border-radius: 14px; }
-    QPushButton:hover { background: rgba(255,255,255,0.15); }
-    QPushButton:disabled { background: transparent; }
+
+
+def _button_qss() -> str:
+    return f"""
+    QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(14)}px; }}
+    QPushButton:hover {{ background: {theme.overlay(0.15)}; }}
+    QPushButton:disabled {{ background: transparent; }}
 """
-_OVERLAY_QSS = """
-    QPushButton { background: rgba(0,0,0,0.60); border: none; border-radius: 16px; }
-    QPushButton:hover { background: rgba(0,0,0,0.85); }
+
+
+def _overlay_qss() -> str:
+    return f"""
+    QPushButton {{ background: {theme.shade(0.60)}; border: none; border-radius: {theme.radius(16)}px; }}
+    QPushButton:hover {{ background: {theme.shade(0.85)}; }}
 """
+
+
+# legacy constant name: other panels still import it at module level
+def __getattr__(name: str):
+    if name == "MENU_QSS":
+        return menu_qss()
+    raise AttributeError(name)
 
 
 class ActionsButton(QPushButton):
@@ -91,15 +108,15 @@ class ActionsButton(QPushButton):
     menu_opened = Signal()
     menu_closed = Signal()
 
-    def __init__(self, entries, parent=None, *, style=_BUTTON_QSS, size=28, icon_color="#ccc"):
+    def __init__(self, entries, parent=None, *, style=None, size=28, icon_color=None):
         super().__init__(parent)
         self._entries = tuple(entries)
-        self._icon = qta.icon("fa5s.ellipsis-v", color=icon_color)
+        self._icon = qta.icon("fa5s.ellipsis-v", color=icon_color or theme.TEXT_SECONDARY)
         self._revealed = False
         self._menu_open = False
         self.setFixedSize(size, size)
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(style)
+        self.setStyleSheet(style or _button_qss())
         self.clicked.connect(lambda: self.show_menu())
         self._apply(False)
 
@@ -120,8 +137,8 @@ class ActionsButton(QPushButton):
         if self.isHidden() or self._menu_open:
             return
         menu = QMenu(self.window())
-        menu.setStyleSheet(MENU_QSS)
-        actions = {menu.addAction(qta.icon(icon, color="#e0e0e0"), label): key
+        menu.setStyleSheet(menu_qss())
+        actions = {menu.addAction(qta.icon(icon, color=theme.TEXT), label): key
                    for key, label, icon in self._current_entries()}
         if global_pos is None:
             global_pos = self.mapToGlobal(self.rect().bottomRight())
@@ -148,7 +165,7 @@ class TrackActionsButton(ActionsButton):
     add_playlist = Signal()
 
     def __init__(self, parent=None, *, overlay: bool = False):
-        style = dict(style=_OVERLAY_QSS, size=32, icon_color="white") if overlay else {}
+        style = dict(style=_overlay_qss(), size=32, icon_color=theme.TEXT) if overlay else {}
         super().__init__(song_actions(), parent, **style)
         self.song: dict | None = None
         self.action_chosen.connect(self._relay)
@@ -164,7 +181,7 @@ class TrackActionsButton(ActionsButton):
 
 class CollectionActionsButton(ActionsButton):
     def __init__(self, parent=None):
-        super().__init__(collection_actions(), parent, style=_OVERLAY_QSS, size=32, icon_color="white")
+        super().__init__(collection_actions(), parent, style=_overlay_qss(), size=32, icon_color=theme.TEXT)
         self._revealed = True
         self._apply(True)
 

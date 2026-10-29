@@ -14,12 +14,13 @@ class UpdateBanner(QWidget):
         super().__init__(parent)
         self._bottom_offset = bottom_offset
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("UpdateBanner { background: #2a2a2a; border: 1px solid #444; border-radius: 8px; }")
+        self.setStyleSheet(f"UpdateBanner {{ background: {theme.SURFACE_RAISED}; border: 1px solid {theme.BORDER}; "
+                           f"border-radius: {theme.radius(8)}px; }}")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 8, 8, 8)
         layout.setSpacing(10)
         self._label = QLabel()
-        self._label.setStyleSheet("color: #e6e6e6; font-size: 13px; background: transparent;")
+        self._label.setStyleSheet(f"color: {theme.TEXT}; font-size: 13px; background: transparent;")
         layout.addWidget(self._label)
         self.open_button = QPushButton(t("main.update.open"))
         self.open_button.setCursor(Qt.PointingHandCursor)

@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 
 from core.i18n import t
 from domain.models import Lyrics
+from ui import theme
 from ui.components.drop_queue_container import DroppableQueueContainer
 from ui.components.queue_widgets import ImprovedQueueItem
 from ui.components.section_feed import CardsSection, CompactSection
@@ -28,16 +29,24 @@ _ICON_BUTTON = """
     QPushButton { border: none; border-radius: 14px; background: transparent; }
     QPushButton:hover { background: %s; }
 """
-_TAB_QSS = """
-    QPushButton { background: transparent; color: #9a9a9a; border: none; border-bottom: 2px solid transparent;
-                  padding: 14px 4px; font-size: 12px; font-weight: 600; }
-    QPushButton:hover { color: #dddddd; }
-    QPushButton:checked { color: white; border-bottom: 2px solid white; }
-"""
+
+
+def _tab_qss() -> str:
+    return f"""
+        QPushButton {{ background: transparent; color: {theme.TEXT_SECONDARY}; border: none;
+                      border-bottom: 2px solid transparent; padding: 14px 4px; font-size: 12px;
+                      font-weight: 600; }}
+        QPushButton:hover {{ color: {theme.TEXT}; }}
+        QPushButton:checked {{ color: {theme.TEXT}; border-bottom: 2px solid {theme.TEXT}; }}
+    """
+
+
 LYRICS_TEXT_WIDTH = PANEL_WIDTH - 32 - 44
 LYRICS_FONT_PX = 17
-_SUNG, _ACTIVE_DIM, _OTHER_LINE = "#ffffff", "#a8a8a8", "#6c6c6c"
-_HINT_QSS = "color: #888; font-size: 13px; padding: 40px 12px;"
+
+
+def _hint_qss() -> str:
+    return f"color: {theme.TEXT_MUTED}; font-size: 13px; padding: 40px 12px;"
 
 
 def _song_key(song):
@@ -78,7 +87,7 @@ class SidePanel(QWidget):
     def _build_tab_row(self):
         row = QWidget()
         row.setObjectName("tab_row")
-        row.setStyleSheet("#tab_row { border-bottom: 1px solid #333; }")
+        row.setStyleSheet(f"#tab_row {{ border-bottom: 1px solid {theme.BORDER}; }}")
         layout = QHBoxLayout(row)
         layout.setContentsMargins(16, 6, 16, 0)
         layout.setSpacing(0)
@@ -88,7 +97,7 @@ class SidePanel(QWidget):
             button = QPushButton(label.upper())
             button.setCheckable(True)
             button.setCursor(Qt.PointingHandCursor)
-            button.setStyleSheet(_TAB_QSS)
+            button.setStyleSheet(_tab_qss())
             button.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             self._tab_group.addButton(button, index)
             layout.addWidget(button, stretch=1)
@@ -123,19 +132,19 @@ class SidePanel(QWidget):
         title = QLabel(t("queue.title"))
         title.setStyleSheet("font-weight: bold; font-size: 14px;")
         self._queue_count = QLabel("(0)")
-        self._queue_count.setStyleSheet("color: #999; font-size: 12px;")
+        self._queue_count.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
         header.addWidget(title)
         header.addWidget(self._queue_count)
         header.addStretch()
         header.addWidget(self._icon_button("fa5s.save", t("queue.save"),
-                                           "rgba(0,255,0,0.15)", self.save_requested.emit))
+                                           theme.overlay(0.15), self.save_requested.emit))
         header.addWidget(self._icon_button("fa5s.broom", t("queue.clear"),
-                                           "rgba(255,0,0,0.2)", self.clear_requested.emit))
+                                           theme.accent_soft(0.2), self.clear_requested.emit))
         layout.addLayout(header)
 
         auto_row = QHBoxLayout()
         auto_label = QLabel(t("queue.autoplay"))
-        auto_label.setStyleSheet("color: #ccc; font-size: 12px;")
+        auto_label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
         self._auto_queue_switch = Switch(True)
         self._auto_queue_switch.toggled.connect(self.auto_queue_toggled)
         auto_row.addWidget(auto_label)
@@ -168,7 +177,7 @@ class SidePanel(QWidget):
     @staticmethod
     def _icon_button(icon, tooltip, hover, on_click):
         button = QPushButton()
-        button.setIcon(qta.icon(icon, color="white"))
+        button.setIcon(qta.icon(icon, color=theme.TEXT))
         button.setToolTip(tooltip)
         button.setFixedSize(28, 28)
         button.setStyleSheet(_ICON_BUTTON % hover)
@@ -271,7 +280,7 @@ class SidePanel(QWidget):
         layout.addWidget(self._lyrics)
         self._lyrics_credit = QLabel()
         self._lyrics_credit.setAlignment(Qt.AlignCenter)
-        self._lyrics_credit.setStyleSheet("color: #6c6c6c; font-size: 11px; padding-top: 4px;")
+        self._lyrics_credit.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 11px; padding-top: 4px;")
         self._lyrics_credit.hide()
         layout.addWidget(self._lyrics_credit)
         self._lyric_words = {}
@@ -317,7 +326,7 @@ class SidePanel(QWidget):
             if not line.romanization:
                 item.setText(line.text)
                 continue
-            label = QLabel(f'{escape(line.text)}<br><span style="color:{_OTHER_LINE}; font-size: 12px;">'
+            label = QLabel(f'{escape(line.text)}<br><span style="color:{theme.TEXT_MUTED}; font-size: 12px;">'
                            f'{escape(line.romanization)}</span>')
             label.setWordWrap(True)
             label.setTextFormat(Qt.RichText)
@@ -369,14 +378,14 @@ class SidePanel(QWidget):
 
     def _render_lyric(self, index, lit, active):
         label, words = self._lyric_words[index]
-        dim = _ACTIVE_DIM if active else _OTHER_LINE
+        dim = theme.TEXT_SECONDARY if active else theme.TEXT_MUTED
         html = "".join(
-            f'<span style="color:{_SUNG if position < lit else dim}">{escape(word.text)}</span>'
+            f'<span style="color:{theme.CHIP_CHECKED if position < lit else dim}">{escape(word.text)}</span>'
             for position, word in enumerate(words))
         html = html.replace("  ", "&nbsp; ")
         romanization = self._lyric_romanization.get(index, "")
         if romanization:
-            html += f'<br><span style="color:{_OTHER_LINE}; font-size: 12px;">{escape(romanization)}</span>'
+            html += f'<br><span style="color:{theme.TEXT_MUTED}; font-size: 12px;">{escape(romanization)}</span>'
         label.setText(html)
 
     def _build_similar_tab(self):
@@ -406,7 +415,7 @@ class SidePanel(QWidget):
         label = QLabel(text)
         label.setAlignment(Qt.AlignCenter)
         label.setWordWrap(True)
-        label.setStyleSheet(_HINT_QSS)
+        label.setStyleSheet(_hint_qss())
         self._similar_layout.insertWidget(0, label)
 
     def set_similar_loading(self):

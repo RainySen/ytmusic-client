@@ -12,6 +12,20 @@ from ui.components.icon_button import icon_button
 PROGRESS_STEPS = 1000
 
 
+# own top-level window: the main stylesheet never reaches it, so the theme is applied here
+def _edge() -> str:
+    return {"aero": theme.overlay(0.35), "cyberpunk": theme.LINK}.get(theme.current(), theme.BORDER)
+
+
+def _progress_fill() -> str:
+    return {"aero": theme.gel(), "cyberpunk": theme.ACCENT}.get(theme.current(), theme.TEXT)
+
+
+def _toggle_qss() -> str:
+    fill = theme.gel() if theme.current() == "aero" else theme.BUTTON_BG
+    return f"QPushButton {{ background: {fill}; }} QPushButton:hover {{ background: {theme.HOVER}; }}"
+
+
 class MiniPlayer(QWidget):
     toggle_requested = Signal()
     next_requested = Signal()
@@ -31,8 +45,8 @@ class MiniPlayer(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         card = QFrame()
         card.setObjectName("mini_card")
-        card.setStyleSheet(f"#mini_card {{ background: {theme.SURFACE}; border: 1px solid {theme.BORDER}; "
-                           f"border-radius: 14px; }} QLabel {{ background: transparent; }}")
+        card.setStyleSheet(f"#mini_card {{ background: {theme.glass(theme.SURFACE)}; border: 1px solid {_edge()}; "
+                           f"border-radius: {theme.radius(14)}px; }} QLabel {{ background: transparent; }}")
         outer.addWidget(card)
 
         column = QVBoxLayout(card)
@@ -65,6 +79,10 @@ class MiniPlayer(QWidget):
         self._next.clicked.connect(self.next_requested)
         self._expand.clicked.connect(self.expand_requested)
         self._close.clicked.connect(self.close_requested)
+        if theme.current() != "classic":
+            self._toggle.setStyleSheet(self._toggle.styleSheet() + _toggle_qss())
+            self._toggle.setGraphicsEffect(theme.glow_effect())
+        self.set_playing(False)
         for button in (self.rewind, self._previous, self._toggle, self._next, self._expand, self._close):
             row.addWidget(button)
         column.addLayout(row, 1)
@@ -74,8 +92,8 @@ class MiniPlayer(QWidget):
         self._progress.setTextVisible(False)
         self._progress.setFixedHeight(3)
         self._progress.setStyleSheet(f"""
-            QProgressBar {{ background: rgba(255,255,255,0.2); border: none; border-radius: 1px; }}
-            QProgressBar::chunk {{ background: {theme.TEXT}; border-radius: 1px; }}
+            QProgressBar {{ background: {theme.overlay(0.2)}; border: none; border-radius: {theme.radius(1)}px; }}
+            QProgressBar::chunk {{ background: {_progress_fill()}; border-radius: {theme.radius(1)}px; }}
         """)
         column.addWidget(self._progress)
 
@@ -94,7 +112,8 @@ class MiniPlayer(QWidget):
         self.rewind.setToolTip(t("player.mini.rewind_seconds", seconds=seconds))
 
     def set_playing(self, playing: bool) -> None:
-        self._toggle.setIcon(qta.icon("fa5s.pause" if playing else "fa5s.play", color=theme.TEXT))
+        color = theme.TEXT if theme.current() == "classic" else theme.BUTTON_TEXT
+        self._toggle.setIcon(qta.icon("fa5s.pause" if playing else "fa5s.play", color=color))
 
     def set_position(self, fraction: float) -> None:
         self._progress.setValue(round(max(0.0, min(1.0, fraction)) * PROGRESS_STEPS))

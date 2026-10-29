@@ -10,7 +10,9 @@ from ui.components.lazy_thumbnail import LazyThumbnail
 
 DIALOG_SIZE = (480, 600)
 
-_SECTION_QSS = "font-size: 15px; font-weight: 700; color: white;"
+
+def _section_qss() -> str:
+    return f"font-size: 15px; font-weight: 700; color: {theme.TEXT};"
 
 
 def _count_text(playlist: dict, singular: str, plural: str) -> str:
@@ -32,12 +34,12 @@ class _RecentTile(ClickableWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 6)
         layout.setSpacing(4)
-        thumb = LazyThumbnail(self.WIDTH, radius=4, icon="fa5s.list", background="#1e1e1e")
+        thumb = LazyThumbnail(self.WIDTH, radius=4, icon="fa5s.list", background=theme.SURFACE)
         thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(self.WIDTH)), thumbnails)
         layout.addWidget(thumb)
-        for text, style in ((playlist.get("title", ""), "font-size: 12px; font-weight: 600; color: #e8e8e8;"),
+        for text, style in ((playlist.get("title", ""), f"font-size: 12px; font-weight: 600; color: {theme.TEXT};"),
                             (_count_text(playlist, t("playlist.count.song"), t("playlist.count.songs")),
-                             "font-size: 11px; color: #999;")):
+                             f"font-size: 11px; color: {theme.TEXT_SECONDARY};")):
             label = QLabel()
             label.setStyleSheet(style)
             label.setText(label.fontMetrics().elidedText(text, Qt.ElideRight, self.WIDTH))
@@ -53,7 +55,7 @@ class _PlaylistRow(ClickableWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(14)
-        thumb = LazyThumbnail(52, radius=4, icon="fa5s.list", background="#1e1e1e")
+        thumb = LazyThumbnail(52, radius=4, icon="fa5s.list", background=theme.SURFACE)
         thumb.set_source(thumbnail_url(playlist, imaging.thumb_px(52)), thumbnails)
         layout.addWidget(thumb)
 
@@ -61,7 +63,7 @@ class _PlaylistRow(ClickableWidget):
         info.setContentsMargins(0, 0, 0, 0)
         info.setSpacing(2)
         title = QLabel(playlist.get("title", ""))
-        title.setStyleSheet("font-size: 15px; font-weight: 600; color: #f1f1f1;")
+        title.setStyleSheet(f"font-size: 15px; font-weight: 600; color: {theme.TEXT};")
         title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         info.addWidget(title)
         local = playlist.get("source", "ytmusic") in LOCAL_SOURCES
@@ -69,7 +71,7 @@ class _PlaylistRow(ClickableWidget):
                              t("library.card.local") if local else "") if p]
         if parts:
             meta = QLabel("  •  ".join(parts))
-            meta.setStyleSheet("font-size: 13px; color: #aaa;")
+            meta.setStyleSheet(f"font-size: 13px; color: {theme.TEXT_SECONDARY};")
             info.addWidget(meta)
         layout.addLayout(info, stretch=1)
 
@@ -131,7 +133,7 @@ class SaveToPlaylistDialog(dialogs.Modal):
     @staticmethod
     def _section(text):
         label = QLabel(text)
-        label.setStyleSheet(_SECTION_QSS + " padding: 4px 0;")
+        label.setStyleSheet(_section_qss() + " padding: 4px 0;")
         return label
 
     def _choose(self, playlist):

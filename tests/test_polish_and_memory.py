@@ -14,7 +14,7 @@ from tests.test_presenters import Rig
 from ui.components.no_scroll_combo import NoScrollComboBox
 from ui.components.sidebar import _spaced_icon
 from ui.settings_dialog import SettingsDialog
-from ui.styles import APP_STYLESHEET
+from ui.styles import app_stylesheet
 
 
 @pytest.fixture(autouse=True)
@@ -54,8 +54,8 @@ def test_expanded_nav_text_is_bigger_than_collapsed(rig):
 
 
 def test_top_bar_and_sidebar_no_longer_have_a_divider_border():
-    assert "border-bottom: 1px solid #333" not in APP_STYLESHEET
-    assert "border-right: 1px solid #333" not in APP_STYLESHEET
+    assert "border-bottom: 1px solid #333" not in app_stylesheet()
+    assert "border-right: 1px solid #333" not in app_stylesheet()
 
 
 def test_new_music_videos_shelf_was_removed_from_explore_and_home(qapp, wait_until):
@@ -215,3 +215,13 @@ def test_release_rail_does_nothing_while_the_sidebar_is_expanded(rig):
     rig.window.sidebar.release_rail()
     assert rig.window.sidebar.rail._rows_layout.count() == 1
     rig.window.sidebar.set_expanded(False)
+
+
+def test_expanding_the_sidebar_lays_out_the_nav_buttons_at_once(rig):
+    rig.window.resize(1200, 700)
+    rig.window.show()
+    rig.window.top_bar.menu_button.click()
+    # no event loop turn: a lost deferred pass must not leave the collapsed positions
+    assert [b.x() for b in rig.window.sidebar.nav_buttons.values()] == [8, 8, 8]
+    assert rig.window.sidebar.parentWidget().sizes()[0] == 240
+    rig.window.top_bar.menu_button.click()

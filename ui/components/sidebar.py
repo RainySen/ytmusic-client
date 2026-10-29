@@ -3,6 +3,7 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QFrame, QScrollArea, QVBoxLayout, QToolButton, QWidget
 
 from core.i18n import t
+from ui import theme
 from ui.components.playlist_rail import PlaylistRail
 
 COLLAPSED_WIDTH = 90
@@ -22,60 +23,70 @@ def _spaced_icon(icon: QIcon, size: int, gap: int) -> QIcon:
     painter.end()
     return QIcon(pixmap)
 
-_ACTIVE_STACKED = """
-    QToolButton {
-        background: rgba(255,255,255,0.12);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        font-size: 11px;
-        font-weight: 700;
-        padding-top: 6px;
-    }
-"""
-_INACTIVE_STACKED = """
-    QToolButton {
-        background: transparent;
-        color: #aaa;
-        border: none;
-        border-radius: 10px;
-        font-size: 11px;
-        font-weight: 500;
-        padding-top: 6px;
-    }
-    QToolButton:hover {
-        background: rgba(255,255,255,0.08);
-        color: #e0e0e0;
-    }
-"""
-_ACTIVE_INLINE = """
-    QToolButton {
-        background: rgba(255,255,255,0.12);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        font-size: 15px;
-        font-weight: 700;
-        padding-left: 14px;
-        text-align: left;
-    }
-"""
-_INACTIVE_INLINE = """
-    QToolButton {
-        background: transparent;
-        color: #aaa;
-        border: none;
-        border-radius: 10px;
-        font-size: 15px;
-        font-weight: 500;
-        padding-left: 14px;
-        text-align: left;
-    }
-    QToolButton:hover {
-        background: rgba(255,255,255,0.08);
-        color: #e0e0e0;
-    }
-"""
+def _active_stacked_qss() -> str:
+    return f"""
+        QToolButton {{
+            background: {theme.overlay(0.12)};
+            color: {theme.TEXT};
+            border: none;
+            border-radius: {theme.radius(10)}px;
+            font-size: 11px;
+            font-weight: 700;
+            padding-top: 6px;
+        }}
+    """
+
+
+def _inactive_stacked_qss() -> str:
+    return f"""
+        QToolButton {{
+            background: transparent;
+            color: {theme.TEXT_SECONDARY};
+            border: none;
+            border-radius: {theme.radius(10)}px;
+            font-size: 11px;
+            font-weight: 500;
+            padding-top: 6px;
+        }}
+        QToolButton:hover {{
+            background: {theme.overlay(0.08)};
+            color: {theme.TEXT};
+        }}
+    """
+
+
+def _active_inline_qss() -> str:
+    return f"""
+        QToolButton {{
+            background: {theme.overlay(0.12)};
+            color: {theme.TEXT};
+            border: none;
+            border-radius: {theme.radius(10)}px;
+            font-size: 15px;
+            font-weight: 700;
+            padding-left: 14px;
+            text-align: left;
+        }}
+    """
+
+
+def _inactive_inline_qss() -> str:
+    return f"""
+        QToolButton {{
+            background: transparent;
+            color: {theme.TEXT_SECONDARY};
+            border: none;
+            border-radius: {theme.radius(10)}px;
+            font-size: 15px;
+            font-weight: 500;
+            padding-left: 14px;
+            text-align: left;
+        }}
+        QToolButton:hover {{
+            background: {theme.overlay(0.08)};
+            color: {theme.TEXT};
+        }}
+    """
 
 
 class Sidebar(QWidget):
@@ -90,6 +101,8 @@ class Sidebar(QWidget):
         self.setFixedWidth(COLLAPSED_WIDTH)
         self._expanded = False
         self._active = t("main.nav.home")
+        self._glow_target = None
+        self._glow_effect = None
 
         self._nav_layout = layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 20, 8, 12)
@@ -130,10 +143,25 @@ class Sidebar(QWidget):
 
     def set_active(self, name: str):
         self._active = name
-        active_qss = _ACTIVE_INLINE if self._expanded else _ACTIVE_STACKED
-        inactive_qss = _INACTIVE_INLINE if self._expanded else _INACTIVE_STACKED
+        active_qss = _active_inline_qss() if self._expanded else _active_stacked_qss()
+        inactive_qss = _inactive_inline_qss() if self._expanded else _inactive_stacked_qss()
         for btn_name, btn in self.nav_buttons.items():
             btn.setStyleSheet(active_qss if btn_name == name else inactive_qss)
+        self._move_glow(self.nav_buttons.get(name))
+
+    def _move_glow(self, button) -> None:
+        if button is not self._glow_target:
+            if self._glow_target is not None:
+                self._glow_target.setGraphicsEffect(None)
+            self._glow_target = button
+            self._glow_effect = None
+        if theme.current() != "cyberpunk":
+            if button is not None:
+                button.setGraphicsEffect(None)
+            return
+        if button is not None and button.graphicsEffect() is None:
+            self._glow_effect = theme.glow_effect()
+            button.setGraphicsEffect(self._glow_effect)
 
     @property
     def expanded(self) -> bool:
@@ -152,6 +180,7 @@ class Sidebar(QWidget):
             btn.setIcon(_spaced_icon(self._nav_icons[name], ICON_PX, INLINE_ICON_GAP) if expanded
                        else self._nav_icons[name])
             self._nav_layout.setAlignment(btn, alignment)
+        self._nav_layout.activate()
         self.set_active(self._active)
 
     def set_playlists(self, playlists, thumbnails) -> None:

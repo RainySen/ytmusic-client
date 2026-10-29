@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 
 from core.config import HOVER_PREFETCH_MS
 from core.i18n import t
-from ui import imaging
+from ui import imaging, theme
 from domain.home_shelves import CARDS_LAYOUT
 from domain.models import artist_names, thumbnail_url
 from ui.components.clickable import ClickableWidget
@@ -19,35 +19,41 @@ CARD_SIZE = 210
 LOOKAHEAD_PX = 600
 MOOD_COLUMNS = 4
 
-_ARROW_STYLE = """
-    QPushButton { background: rgba(255,255,255,0.10); border: none; border-radius: 16px; }
-    QPushButton:hover   { background: rgba(255,255,255,0.20); }
-    QPushButton:pressed { background: rgba(255,255,255,0.28); }
-    QPushButton:disabled { background: rgba(255,255,255,0.04); }
-"""
-_PLAY_ALL_STYLE = """
-    QPushButton { background: transparent; border: 1px solid rgba(255,255,255,0.25);
-                  border-radius: 16px; padding: 5px 14px; color: #e0e0e0; font-size: 12px; }
-    QPushButton:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.5); color: white; }
-"""
+
+def _arrow_style() -> str:
+    return f"""
+        QPushButton {{ background: {theme.overlay(0.10)}; border: none; border-radius: {theme.radius(16)}px; }}
+        QPushButton:hover   {{ background: {theme.overlay(0.20)}; }}
+        QPushButton:pressed {{ background: {theme.overlay(0.28)}; }}
+        QPushButton:disabled {{ background: {theme.overlay(0.04)}; }}
+    """
+
+
+def _play_all_style() -> str:
+    return f"""
+        QPushButton {{ background: transparent; border: 1px solid {theme.overlay(0.25)};
+                      border-radius: {theme.radius(16)}px; padding: 5px 14px; color: {theme.TEXT}; font-size: 12px; }}
+        QPushButton:hover {{ background: {theme.overlay(0.08)}; border-color: {theme.overlay(0.5)};
+                            color: {theme.TEXT}; }}
+    """
 
 
 def _play_all_button(on_click) -> QPushButton:
     button = QPushButton(t("section.play_all"))
     button.setCursor(Qt.PointingHandCursor)
-    button.setStyleSheet(_PLAY_ALL_STYLE)
+    button.setStyleSheet(_play_all_style())
     button.clicked.connect(on_click)
     return button
 
 
 def _arrow_button(icon_name: str) -> QPushButton:
     button = QPushButton()
-    button.setIcon(qta.icon(icon_name, color="white"))
+    button.setIcon(qta.icon(icon_name, color=theme.TEXT))
     button.setFixedSize(32, 32)
     button.setCursor(Qt.PointingHandCursor)
     # focused arrows get disabled at the edges and the scroll jumps to the next focusable widget
     button.setFocusPolicy(Qt.NoFocus)
-    button.setStyleSheet(_ARROW_STYLE)
+    button.setStyleSheet(_arrow_style())
     return button
 
 
@@ -82,13 +88,14 @@ class _CardOverlay(QWidget):
         super().__init__(cover)
         self.setGeometry(0, 0, size, size)
         self.play_button = QPushButton(self)
-        self.play_button.setIcon(qta.icon("fa5s.play", color="#0f0f0f"))
+        self.play_button.setIcon(qta.icon("fa5s.play", color=theme.BUTTON_TEXT))
         self.play_button.setFixedSize(48, 48)
         self.play_button.move(size - 48 - 10, size - 48 - 10)
         self.play_button.setCursor(Qt.PointingHandCursor)
         self.play_button.setToolTip(t("card.play_tooltip"))
-        self.play_button.setStyleSheet("QPushButton { background: white; border: none; border-radius: 24px; }"
-                                       "QPushButton:hover { background: #e6e6e6; }")
+        self.play_button.setStyleSheet(f"QPushButton {{ background: {theme.BUTTON_BG}; border: none; "
+                                       f"border-radius: {theme.radius(24)}px; }}"
+                                       f"QPushButton:hover {{ background: {theme.HOVER}; }}")
         self.play_button.clicked.connect(self.play_clicked)
         self.menu_button = CollectionActionsButton(self)
         self.menu_button.move(size - 32 - 8, 8)
@@ -97,7 +104,9 @@ class _CardOverlay(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 70))
+        shade = QColor(theme.BG)
+        shade.setAlpha(70)
+        painter.fillRect(self.rect(), shade)
         painter.end()
 
 
@@ -109,12 +118,14 @@ class _PlayHint(QWidget):
         super().__init__(cover)
         self.setGeometry(0, 0, size, size)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._icon = qta.icon("fa5s.play", color="white").pixmap(self.ICON, self.ICON)
+        self._icon = qta.icon("fa5s.play", color=theme.TEXT).pixmap(self.ICON, self.ICON)
         self.hide()
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 70))
+        shade = QColor(theme.BG)
+        shade.setAlpha(70)
+        painter.fillRect(self.rect(), shade)
         x = (self.width() - self.ICON) // 2
         painter.drawPixmap(x, (self.height() - self.ICON) // 2, self._icon)
         painter.end()
@@ -266,7 +277,7 @@ class _SectionHeader(QHBoxLayout):
     def __init__(self, title, on_prev, on_next, extra=None, title_px=20):
         super().__init__()
         label = QLabel(title)
-        label.setStyleSheet(f"font-size: {title_px}px; font-weight: 700; color: white;")
+        label.setStyleSheet(f"font-size: {title_px}px; font-weight: 700; color: {theme.TEXT};")
         label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.addWidget(label, stretch=1)
         if extra is not None:
@@ -506,9 +517,10 @@ class MoodTile(ClickableWidget):
         layout.setContentsMargins(16, 0, 12, 0)
         label = QLabel(item.get("title", ""))
         label.setWordWrap(True)
-        label.setStyleSheet("font-size: 14px; font-weight: 600; color: #f0f0f0;")
+        label.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {theme.TEXT};")
         layout.addWidget(label)
-        self.setStyleSheet("MoodTile { background: #2a2a2a; border-left: 4px solid #ff4e45; border-radius: 6px; }")
+        self.setStyleSheet(f"MoodTile {{ background: {theme.SURFACE_RAISED}; "
+                           f"border-left: 4px solid {theme.DANGER}; border-radius: {theme.radius(6)}px; }}")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.activated.connect(lambda: self.chosen.emit(self.item))
 
@@ -522,7 +534,7 @@ class MoodGridSection(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(12)
         label = QLabel(title)
-        label.setStyleSheet("font-size: 20px; font-weight: 700; color: white;")
+        label.setStyleSheet(f"font-size: 20px; font-weight: 700; color: {theme.TEXT};")
         root.addWidget(label)
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
@@ -578,7 +590,7 @@ class SectionFeed(QWidget):
 
         self._message = QLabel()
         self._message.setAlignment(Qt.AlignCenter)
-        self._message.setStyleSheet("color: #888; font-size: 14px; padding: 60px;")
+        self._message.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 14px; padding: 60px;")
         self._message.hide()
 
     def set_loading(self):

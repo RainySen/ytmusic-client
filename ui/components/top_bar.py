@@ -3,6 +3,7 @@ from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFrame
 
 from core.i18n import t
+from ui import theme
 from ui.components.search_history_popup import SearchHistoryPopup
 
 
@@ -31,21 +32,21 @@ class TopBar(QWidget):
         logo_l.setSpacing(6)
 
         self.menu_button = QPushButton()
-        self.menu_button.setIcon(qta.icon("fa5s.bars", color="white"))
+        self.menu_button.setIcon(qta.icon("fa5s.bars", color=theme.TEXT))
         self.menu_button.setToolTip(t("main.playlists.tooltip"))
         self.menu_button.setCheckable(True)
         self.menu_button.setFixedSize(36, 36)
         self.menu_button.setCursor(Qt.PointingHandCursor)
-        self.menu_button.setStyleSheet("""
-            QPushButton { background: transparent; border: none; border-radius: 18px; }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
-            QPushButton:pressed { background: rgba(255,255,255,0.10); }
+        self.menu_button.setStyleSheet(f"""
+            QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(18)}px; }}
+            QPushButton:hover {{ background: {theme.overlay(0.10)}; }}
+            QPushButton:pressed {{ background: {theme.overlay(0.10)}; }}
         """)
         self.menu_button.toggled.connect(self.menu_toggled)
         logo_l.addWidget(self.menu_button)
 
         yt_icon = QLabel()
-        yt_icon.setPixmap(qta.icon('fa5b.youtube', color='#FF0000').pixmap(24, 24))
+        yt_icon.setPixmap(qta.icon('fa5b.youtube', color=theme.BRAND).pixmap(24, 24))
         logo_text = QLabel(t("topbar.logo"))
         logo_text.setObjectName("logo_label")
 
@@ -57,16 +58,16 @@ class TopBar(QWidget):
         search_wrapper.setObjectName("search_wrapper")
         search_wrapper.setFixedHeight(42)
         search_wrapper.setMaximumWidth(520)
-        search_wrapper.setStyleSheet("""
-            QFrame#search_wrapper {
-                background: #121212;
-                border: 1px solid #383838;
-                border-radius: 21px;
-            }
-            QFrame#search_wrapper:focus-within {
-                border: 1px solid rgba(255,255,255,0.45);
-                background: #1a1a1a;
-            }
+        search_wrapper.setStyleSheet(f"""
+            QFrame#search_wrapper {{
+                background: {theme.BG};
+                border: 1px solid {theme.BORDER};
+                border-radius: {theme.radius(21)}px;
+            }}
+            QFrame#search_wrapper:focus-within {{
+                border: 1px solid {theme.overlay(0.45)};
+                background: {theme.SURFACE};
+            }}
         """)
         sw_layout = QHBoxLayout(search_wrapper)
         sw_layout.setContentsMargins(14, 0, 4, 0)
@@ -74,26 +75,26 @@ class TopBar(QWidget):
 
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText(t("main.search.placeholder"))
-        self.search_box.setStyleSheet("""
-            QLineEdit {
+        self.search_box.setStyleSheet(f"""
+            QLineEdit {{
                 background: transparent;
                 border: none;
-                color: white;
+                color: {theme.TEXT};
                 font-size: 14px;
-            }
+            }}
         """)
 
         self.search_button = QPushButton()
         self.search_button.setIcon(self.icon_search)
         self.search_button.setFixedSize(34, 34)
         self.search_button.setCursor(Qt.PointingHandCursor)
-        self.search_button.setStyleSheet("""
-            QPushButton {
+        self.search_button.setStyleSheet(f"""
+            QPushButton {{
                 background: transparent;
                 border: none;
-                border-radius: 17px;
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
+                border-radius: {theme.radius(17)}px;
+            }}
+            QPushButton:hover {{ background: {theme.overlay(0.10)}; }}
         """)
         self.search_button.clicked.connect(self.search_requested.emit)
 
@@ -109,13 +110,13 @@ class TopBar(QWidget):
         self.login_button.setToolTip(t("main.login"))
         self.login_button.setFixedSize(40, 40)
         self.login_button.setCursor(Qt.PointingHandCursor)
-        self.login_button.setStyleSheet("""
-            QPushButton {
+        self.login_button.setStyleSheet(f"""
+            QPushButton {{
                 background: transparent;
-                border: 1px solid #555;
-                border-radius: 20px;
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.10); border-color: #aaa; }
+                border: 1px solid {theme.BORDER};
+                border-radius: {theme.radius(20)}px;
+            }}
+            QPushButton:hover {{ background: {theme.overlay(0.10)}; border-color: {theme.TEXT_SECONDARY}; }}
         """)
         self.login_button.clicked.connect(self.login_requested.emit)
 
@@ -124,13 +125,13 @@ class TopBar(QWidget):
         top_layout.addWidget(search_wrapper, stretch=1)
         top_layout.addStretch()
         self.settings_button = QPushButton()
-        self.settings_button.setIcon(qta.icon("fa5s.cog", color="white"))
+        self.settings_button.setIcon(qta.icon("fa5s.cog", color=theme.TEXT))
         self.settings_button.setToolTip(t("main.settings"))
         self.settings_button.setFixedSize(40, 40)
         self.settings_button.setCursor(Qt.PointingHandCursor)
-        self.settings_button.setStyleSheet("""
-            QPushButton { background: transparent; border: none; border-radius: 20px; }
-            QPushButton:hover { background: rgba(255,255,255,0.10); }
+        self.settings_button.setStyleSheet(f"""
+            QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(20)}px; }}
+            QPushButton:hover {{ background: {theme.overlay(0.10)}; }}
         """)
         self.settings_button.clicked.connect(self.settings_requested.emit)
 
@@ -150,11 +151,11 @@ class TopBar(QWidget):
         self.login_button.setIcon(self.icon_login_active if is_logged_in else self.icon_login)
         self.login_button.setToolTip(t("main.logout") if is_logged_in else t("main.login"))
         if is_logged_in:
-            self.login_button.setStyleSheet("""
-                QPushButton {
+            self.login_button.setStyleSheet(f"""
+                QPushButton {{
                     background: transparent;
-                    border: 1px solid #FF0033;
-                    border-radius: 20px;
-                }
-                QPushButton:hover { background: rgba(255,0,51,0.12); }
+                    border: 1px solid {theme.ACCENT};
+                    border-radius: {theme.radius(20)}px;
+                }}
+                QPushButton:hover {{ background: {theme.accent_soft(0.12)}; }}
             """)

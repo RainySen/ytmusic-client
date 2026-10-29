@@ -1,6 +1,7 @@
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QWidget
 
+from ui import theme
 from ui.imaging import round_pixmap, scale_cover
 
 COVER_RADIUS = 10
@@ -12,7 +13,7 @@ class NowPlayingPanel(QWidget):
         super().__init__(parent)
         self._pixmap = None
         self._cover = None
-        self.setStyleSheet("background: #030303;")
+        self.setStyleSheet(f"background: {theme.BG};")
 
     def set_cover(self, pixmap: QPixmap):
         self._pixmap = pixmap if pixmap is not None and not pixmap.isNull() else None
@@ -36,7 +37,7 @@ class NowPlayingPanel(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor("#030303"))
+        painter.fillRect(self.rect(), QColor(theme.BG))
         if self._cover is not None:
             size = round(self._cover.deviceIndependentSize().width())
             painter.drawPixmap((self.width() - size) // 2, (self.height() - size) // 2, self._cover)

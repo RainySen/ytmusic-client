@@ -22,6 +22,9 @@ THUMBNAIL_QUALITY_OPTIONS = ("low", "auto", "high")
 DEFAULT_THUMBNAIL_QUALITY = "auto"
 THUMBNAIL_CACHE_OPTIONS = (100, 200, 400, 800)
 DEFAULT_THUMBNAIL_CACHE = 400
+# duplicated from ui.theme: domain never imports ui
+THEME_NAMES = ("classic", "aero", "cyberpunk")
+DEFAULT_THEME = "classic"
 
 
 def _flag(data: dict, name: str, default: bool) -> bool:
@@ -62,6 +65,11 @@ def _quality(data: dict) -> str:
     return value if value in THUMBNAIL_QUALITY_OPTIONS else DEFAULT_THUMBNAIL_QUALITY
 
 
+def _theme(data: dict) -> str:
+    value = data.get("theme")
+    return value if value in THEME_NAMES else DEFAULT_THEME
+
+
 @dataclass(frozen=True)
 class Settings:
     background_on_close: bool = True
@@ -87,6 +95,7 @@ class Settings:
     romanized_lyrics: bool = True
     announced_version: str = ""
     app_language: str = ""
+    theme: str = DEFAULT_THEME
 
     def with_changes(self, **changes) -> "Settings":
         unknown = set(changes) - set(self.__dataclass_fields__)
@@ -127,4 +136,5 @@ class Settings:
             romanized_lyrics=_flag(data, "romanized_lyrics", True),
             announced_version=_text(data, "announced_version"),
             app_language=_text(data, "app_language") if _text(data, "app_language") in APP_LANGUAGES else "",
+            theme=_theme(data),
         )

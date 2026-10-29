@@ -16,8 +16,8 @@ def icon_button(icon: str, size: int = 36, tooltip: str = "", checkable: bool = 
     if tooltip:
         button.setToolTip(tooltip)
     button.setStyleSheet(f"""
-        QPushButton {{ background: rgba(255,255,255,0.10); border: none; border-radius: {size // 2}px; }}
-        QPushButton:hover {{ background: rgba(255,255,255,0.20); }}
-        QPushButton:checked {{ background: rgba(62,166,255,0.22); }}
+        QPushButton {{ background: {theme.overlay(0.10)}; border: none; border-radius: {theme.radius(size // 2)}px; }}
+        QPushButton:hover {{ background: {theme.overlay(0.20)}; }}
+        QPushButton:checked {{ background: {theme.SELECTION}; }}
     """)
     return button
