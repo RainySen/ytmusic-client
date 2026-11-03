@@ -12,7 +12,7 @@ from ui.components.icon_button import icon_button
 PROGRESS_STEPS = 1000
 
 
-# own top-level window: the main stylesheet never reaches it, so the theme is applied here
+# top-level window: the main stylesheet doesn't reach it
 def _edge() -> str:
     return {"aero": theme.overlay(0.35), "cyberpunk": theme.LINK}.get(theme.current(), theme.BORDER)
 

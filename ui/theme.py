@@ -134,10 +134,31 @@ def accent_soft(alpha: float) -> str:
     return f"rgba({_ACCENT_SOFT_RGB[_current]},{alpha})"
 
 
+# backdrop colors (ui/components/backdrops.py)
+AERO_SCENE = {
+    "aurora": ("#3fe0d0", "#6cf2a4", "#5aa8ff"),
+    "hill_top": "#1b8f8a",
+    "hill_bottom": "#04283a",
+    "rim": "#9ff6ff",
+    "bubble": "#dff8ff",
+    "ray": "#bdf3ff",
+}
+
+CYBER_SCENE = {
+    "haze": "#1c0733",
+    "sun_top": "#ffd23f",
+    "sun_bottom": "#ff2bd6",
+    "city": "#0b0b18",
+    "edge": "#00f0ff",
+    "windows": ("#00f0ff", "#ff2bd6", "#ffd23f"),
+    "grid": "#ff2bd6",
+    "scan": "#000000",
+}
+
 _FONTS = {
     "classic": '"YouTube Sans", "Roboto", "Google Sans", "Segoe UI", system-ui',
     "aero": '"Segoe UI", system-ui',
-    # cyberpunk: empty, the family comes from the application font set in load_fonts
+    # cyberpunk: app font, see load_fonts
     "cyberpunk": "",
 }
 _FONT_FILES = {"cyberpunk": ("Jersey15.ttf", "Jersey 15")}
@@ -148,7 +169,6 @@ def font_family() -> str:
 
 
 def load_fonts() -> None:
-    # bundled font for the active theme; needs a running QApplication
     entry = _FONT_FILES.get(_current)
     if not entry:
         return
@@ -157,19 +177,18 @@ def load_fonts() -> None:
     from PySide6.QtWidgets import QApplication
     QFontDatabase.addApplicationFont(os.path.join(os.path.dirname(__file__), "fonts", entry[0]))
     font = QFont(entry[1])
-    # pixel fonts ship odd ligatures; QSS cannot turn features off, the app font can
+    # ligatures off: QSS can't, the app font can
     font.setFeature(QFont.Tag("liga"), 0)
     font.setFeature(QFont.Tag("calt"), 0)
     QApplication.setFont(font)
 
 
 def radius(px: int) -> int:
-    # cyberpunk: hard pixel corners
     return 0 if _current == "cyberpunk" else px
 
 
 def glass(fallback: str) -> str:
-    # aero bars: soft vista glass, faint sheen fading down; tall bars make a hard shine line look like a seam
+    # soft fade: a hard shine line looks like a seam on tall bars
     if _current != "aero":
         return fallback
     return (f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1e5c8a, stop:0.45 {PANEL_TOP}, "
@@ -177,7 +196,7 @@ def glass(fallback: str) -> str:
 
 
 def glow_effect():
-    # neon halo, cyberpunk only; callers pass the result to setGraphicsEffect
+    # cyberpunk only
     if _current != "cyberpunk":
         return None
     from PySide6.QtGui import QColor

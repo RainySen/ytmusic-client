@@ -163,7 +163,6 @@ QSplitter::handle {{ background: transparent; width: 1px; height: 1px; }}
 """ + _THEME_EXTRAS.get(theme.current(), lambda: "")()
 
 
-# vista/7 glass: translucent panes, shine lines, gel handles
 def _aero_qss() -> str:
     shine = (f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {theme.overlay(0.26)}, stop:0.49 {theme.overlay(0.10)}, "
              f"stop:0.5 {theme.overlay(0.03)}, stop:1 {theme.overlay(0.12)})")
@@ -201,7 +200,6 @@ QMenu::item:selected {{ background: {shine}; border: 1px solid {theme.overlay(0.
 """
 
 
-# pixel terminal: hard corners, neon edges
 def _cyberpunk_qss() -> str:
     return f"""
 #top_bar {{ border-bottom: 1px solid {theme.ACCENT}; }}

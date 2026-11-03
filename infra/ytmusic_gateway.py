@@ -31,7 +31,7 @@ class SessionRejected(GatewayError):
 # *PSIDTS expire unless rotated, as the web client does
 ROTATE_COOKIES_URL = "https://accounts.youtube.com/RotateCookies"
 _ROTATE_COOKIES_BODY = '[000,"-0000000000000000000"]'
-# google answers 429 to rotations seconds apart (quick restarts)
+# 429 on rotations seconds apart
 ROTATE_MIN_AGE_S = 10 * 60
 
 _AUTH_FAILURE_MARKERS = ("http 401", "http 403", "unauthorized", "forbidden", "authenticat", "sign in", "login required")
@@ -172,7 +172,7 @@ class YTMusicGateway:
         log.info("Session cookies rotated: %s", ", ".join(sorted(rotated)))
 
     def _rotated_recently(self) -> bool:
-        # the auth file is rewritten on every rotation (and login): its mtime is the last rotation
+        # auth file mtime = last rotation
         try:
             return time.time() - os.path.getmtime(self._auth_file) < ROTATE_MIN_AGE_S
         except OSError:

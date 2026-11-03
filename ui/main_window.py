@@ -9,6 +9,7 @@ from core.i18n import t
 from domain.models import format_seconds
 from ui import theme
 from ui.components import dialogs
+from ui.components.backdrops import SCENES
 from ui.components.album_panel import AlbumPanel
 from ui.components.artist_panel import ArtistPanel
 from ui.components.explore_panel import ExplorePanel
@@ -106,27 +107,17 @@ class MainWindow(QWidget):
         self._setup_tray()
         theme.load_fonts()
         self.setStyleSheet(app_stylesheet())
-        if theme.current() == "aero":
-            self._apply_aero_backdrop()
+        if theme.current() in SCENES:
+            self._apply_backdrop(SCENES[theme.current()])
 
-    def _apply_aero_backdrop(self):
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet(app_stylesheet() + f"""
-            QWidget {{ background-color: transparent; }}
-            MainWindow {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                                      stop:0 {theme.BG}, stop:1 {theme.BG_END}); }}
-            #aero_glow {{ background: qradialgradient(cx:0.5, cy:1, radius:0.9, fx:0.5, fy:1,
-                                                     stop:0 {theme.accent_soft(0.22)}, stop:1 {theme.accent_soft(0)}); }}
-        """)
-        self._aero_glow = QWidget(self)
-        self._aero_glow.setObjectName("aero_glow")
-        self._aero_glow.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self._place_aero_glow()
+    def _apply_backdrop(self, scene_type):
+        self.setStyleSheet(app_stylesheet() + "QWidget { background-color: transparent; }")
+        self._backdrop = scene_type(self)
+        self._place_backdrop()
 
-    def _place_aero_glow(self):
-        height = max(160, self.height() * 2 // 5)
-        self._aero_glow.setGeometry(0, self.height() - height, self.width(), height)
-        self._aero_glow.lower()
+    def _place_backdrop(self):
+        self._backdrop.setGeometry(self.rect())
+        self._backdrop.lower()
 
     def _load_icons(self):
         icon = qta.icon
@@ -173,7 +164,7 @@ class MainWindow(QWidget):
 
     def _on_menu_toggled(self, expanded: bool) -> None:
         self.sidebar.set_expanded(expanded)
-        # relayout now: a deferred pass can be lost, leaving the buttons at their collapsed spots
+        # relayout now: the deferred pass can get lost
         self._split.refresh()
         self.sidebar_expanded.emit(expanded)
 
@@ -283,8 +274,8 @@ class MainWindow(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, "_aero_glow"):
-            self._place_aero_glow()
+        if hasattr(self, "_backdrop"):
+            self._place_backdrop()
         self._toast.reposition()
         self.update_banner.reposition()
 

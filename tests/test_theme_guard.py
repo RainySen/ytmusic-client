@@ -240,3 +240,23 @@ def test_cyberpunk_glows_only_on_play_and_the_active_nav_item(qapp):
         window.deleteLater()
     finally:
         _under("classic")
+
+
+def test_aero_and_cyberpunk_paint_their_backdrop_and_classic_does_not(qapp):
+    from ui.components.backdrops import AeroScene, Backdrop, CyberScene
+    try:
+        for name, scene_type in (("aero", AeroScene), ("cyberpunk", CyberScene)):
+            _under(name)
+            window = MainWindow(NullThumbnails(), qta.icon("fa5s.music"))
+            window.resize(800, 500)
+            window.show()
+            scene = window.findChild(Backdrop)
+            assert type(scene) is scene_type and scene.size() == window.size()
+            assert not scene._render().isNull()
+            window.deleteLater()
+        _under("classic")
+        window = MainWindow(NullThumbnails(), qta.icon("fa5s.music"))
+        assert window.findChild(Backdrop) is None
+        window.deleteLater()
+    finally:
+        _under("classic")

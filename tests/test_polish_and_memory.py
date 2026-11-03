@@ -221,7 +221,6 @@ def test_expanding_the_sidebar_lays_out_the_nav_buttons_at_once(rig):
     rig.window.resize(1200, 700)
     rig.window.show()
     rig.window.top_bar.menu_button.click()
-    # no event loop turn: a lost deferred pass must not leave the collapsed positions
     assert [b.x() for b in rig.window.sidebar.nav_buttons.values()] == [8, 8, 8]
     assert rig.window.sidebar.parentWidget().sizes()[0] == 240
     rig.window.top_bar.menu_button.click()
