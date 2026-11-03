@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWi
 
 from core.i18n import t
 from domain.home_shelves import MOODS
+from ui import theme
 from ui.components.chip import Chip
 from ui.components.section_feed import SectionFeed
 
@@ -34,7 +35,7 @@ class HomePanel(QWidget):
 
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet("background: #282828; max-height: 1px;")
+        separator.setStyleSheet(f"background: {theme.SURFACE_RAISED}; max-height: 1px;")
         outer.addWidget(separator)
 
         self.feed = SectionFeed()

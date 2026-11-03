@@ -9,11 +9,15 @@ from ui import theme
 
 _UNSET = object()
 
-_CARD_QSS = f"#modal_card {{ background: {theme.SURFACE}; border: 1px solid {theme.BORDER}; border-radius: 16px; }}"
-_CLOSE_QSS = """
-    QPushButton { background: transparent; border: none; border-radius: 18px; }
-    QPushButton:hover { background: rgba(255,255,255,0.12); }
-"""
+def _card_qss() -> str:
+    return f"#modal_card {{ background: {theme.SURFACE}; border: 1px solid {theme.BORDER}; border-radius: {theme.radius(16)}px; }}"
+
+
+def _close_qss() -> str:
+    return f"""
+        QPushButton {{ background: transparent; border: none; border-radius: {theme.radius(18)}px; }}
+        QPushButton:hover {{ background: {theme.overlay(0.12)}; }}
+    """
 
 
 class Modal(QDialog):
@@ -30,7 +34,7 @@ class Modal(QDialog):
         outer.setContentsMargins(0, 0, 0, 0)
         self.card = QFrame()
         self.card.setObjectName("modal_card")
-        self.card.setStyleSheet(_CARD_QSS)
+        self.card.setStyleSheet(_card_qss())
         outer.addWidget(self.card)
         root = QVBoxLayout(self.card)
         root.setContentsMargins(0, 0, 0, 0)
@@ -44,10 +48,10 @@ class Modal(QDialog):
         header.addWidget(heading, stretch=1)
         if closable:
             close = QPushButton()
-            close.setIcon(qta.icon("fa5s.times", color="white"))
+            close.setIcon(qta.icon("fa5s.times", color=theme.TEXT))
             close.setFixedSize(36, 36)
             close.setCursor(Qt.PointingHandCursor)
-            close.setStyleSheet(_CLOSE_QSS)
+            close.setStyleSheet(_close_qss())
             close.setToolTip(t("dialogs.close"))
             close.clicked.connect(self.reject)
             header.addWidget(close, alignment=Qt.AlignTop)
@@ -72,7 +76,7 @@ class Modal(QDialog):
         button.setStyleSheet(theme.button_qss(kind))
         button.setMinimumWidth(104)
         if icon:
-            button.setIcon(qta.icon(icon, color="#0f0f0f" if kind == "primary" else "white"))
+            button.setIcon(qta.icon(icon, color=theme.BG if kind == "primary" else theme.TEXT))
         button.clicked.connect(on_click or self.reject)
         if default:
             button.setDefault(True)

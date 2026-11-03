@@ -7,7 +7,9 @@ from PySide6.QtWidgets import QApplication, QMenu, QSplitter, QSystemTrayIcon, Q
 
 from core.i18n import t
 from domain.models import format_seconds
+from ui import theme
 from ui.components import dialogs
+from ui.components.backdrops import SCENES
 from ui.components.album_panel import AlbumPanel
 from ui.components.artist_panel import ArtistPanel
 from ui.components.explore_panel import ExplorePanel
@@ -22,9 +24,9 @@ from ui.components.sidebar import Sidebar
 from ui.components.toast import Toast
 from ui.components.update_banner import UpdateBanner
 from ui.components.top_bar import TopBar
-from ui.components.track_actions import MENU_QSS
+from ui.components.track_actions import menu_qss
 from ui.imaging import scale_cover
-from ui.styles import APP_STYLESHEET
+from ui.styles import app_stylesheet
 
 # built on use: the language is only known after startup
 def _view_nav_labels() -> dict:
@@ -84,7 +86,7 @@ class MainWindow(QWidget):
 
         outer.addWidget(self._build_top_bar())
 
-        split = QSplitter(Qt.Horizontal)
+        self._split = split = QSplitter(Qt.Horizontal)
         split.setHandleWidth(1)
         split.addWidget(self._build_sidebar())
         split.addWidget(self._build_center())
@@ -103,25 +105,37 @@ class MainWindow(QWidget):
         self.update_banner = UpdateBanner(self)
         self._setup_shortcuts()
         self._setup_tray()
-        self.setStyleSheet(APP_STYLESHEET)
+        theme.load_fonts()
+        self.setStyleSheet(app_stylesheet())
+        if theme.current() in SCENES:
+            self._apply_backdrop(SCENES[theme.current()])
+
+    def _apply_backdrop(self, scene_type):
+        self.setStyleSheet(app_stylesheet() + "QWidget { background-color: transparent; }")
+        self._backdrop = scene_type(self)
+        self._place_backdrop()
+
+    def _place_backdrop(self):
+        self._backdrop.setGeometry(self.rect())
+        self._backdrop.lower()
 
     def _load_icons(self):
         icon = qta.icon
         self.icons = {
-            "play": icon("fa5s.play", color="#0f0f0f"),
-            "pause": icon("fa5s.pause", color="#0f0f0f"),
-            "next": icon("fa5s.step-forward", color="white"),
-            "prev": icon("fa5s.step-backward", color="white"),
-            "volume": icon("fa5s.volume-up", color="white"),
-            "search": icon("fa5s.search", color="white"),
-            "login": icon("fa5s.user-circle", color="white"),
-            "login_active": icon("fa5s.user-circle", color="#FF0000"),
-            "loop_off": icon("fa5s.sync-alt", color="gray"),
-            "loop_queue": icon("fa5s.sync-alt", color="#FF0000"),
-            "loop_song": icon("fa5s.redo", color="#FF0000"),
-            "home": icon("fa5s.home", color="white"),
-            "library": icon("fa5s.music", color="white"),
-            "explore": icon("fa5s.compass", color="white"),
+            "play": icon("fa5s.play", color=theme.BUTTON_TEXT),
+            "pause": icon("fa5s.pause", color=theme.BUTTON_TEXT),
+            "next": icon("fa5s.step-forward", color=theme.TEXT),
+            "prev": icon("fa5s.step-backward", color=theme.TEXT),
+            "volume": icon("fa5s.volume-up", color=theme.TEXT),
+            "search": icon("fa5s.search", color=theme.TEXT),
+            "login": icon("fa5s.user-circle", color=theme.TEXT),
+            "login_active": icon("fa5s.user-circle", color=theme.ACCENT),
+            "loop_off": icon("fa5s.sync-alt", color=theme.TEXT_MUTED),
+            "loop_queue": icon("fa5s.sync-alt", color=theme.ACCENT),
+            "loop_song": icon("fa5s.redo", color=theme.ACCENT),
+            "home": icon("fa5s.home", color=theme.TEXT),
+            "library": icon("fa5s.music", color=theme.TEXT),
+            "explore": icon("fa5s.compass", color=theme.TEXT),
         }
 
     def _build_top_bar(self):
@@ -150,6 +164,8 @@ class MainWindow(QWidget):
 
     def _on_menu_toggled(self, expanded: bool) -> None:
         self.sidebar.set_expanded(expanded)
+        # relayout now: the deferred pass can get lost
+        self._split.refresh()
         self.sidebar_expanded.emit(expanded)
 
     def _build_center(self):
@@ -258,6 +274,8 @@ class MainWindow(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if hasattr(self, "_backdrop"):
+            self._place_backdrop()
         self._toast.reposition()
         self.update_banner.reposition()
 
@@ -391,11 +409,11 @@ class MainWindow(QWidget):
             self.login_requested.emit()
             return
         menu = QMenu(self)
-        menu.setStyleSheet(MENU_QSS)
-        menu.addAction(qta.icon("fa5s.user-circle", color="#e0e0e0"), t("main.account.channel")).triggered.connect(
+        menu.setStyleSheet(menu_qss())
+        menu.addAction(qta.icon("fa5s.user-circle", color=theme.TEXT), t("main.account.channel")).triggered.connect(
             self.channel_requested)
         menu.addSeparator()
-        menu.addAction(qta.icon("fa5s.sign-out-alt", color="#e0e0e0"), t("main.account.logout")).triggered.connect(
+        menu.addAction(qta.icon("fa5s.sign-out-alt", color=theme.TEXT), t("main.account.logout")).triggered.connect(
             self._confirm_logout)
         self._show_account_menu(menu)
 

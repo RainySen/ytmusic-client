@@ -63,7 +63,7 @@ from services.session_service import SessionService
 from services.settings_service import SettingsService
 from services.update_service import UpdateService
 from services.stream_service import StreamService
-from ui import imaging
+from ui import imaging, theme
 from ui.login_window import LoginWindow
 from ui.components.track_actions import song_hub
 from ui.main_window import MainWindow
@@ -149,6 +149,7 @@ def migrate_lyrics_file(paths: AppPaths, settings: SettingsService) -> None:
 
 # fixed for the whole run, before any widget; first run: youtube content follows the app
 def apply_language(settings: SettingsService, settings_is_new: bool, locale_name: str) -> str:
+    theme.apply(settings.settings.theme)
     lang = i18n.set_language(i18n.resolve_language(settings.settings, locale_name), i18n.load(i18n.locales_dir()))
     if settings_is_new and settings.settings.content_language != lang:
         settings.update(content_language=lang)

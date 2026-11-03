@@ -5,7 +5,7 @@ import qtawesome as qta
 
 from core.i18n import t
 from domain.models import artist_names, thumbnail_url
-from ui import imaging
+from ui import imaging, theme
 from ui.components.lazy_thumbnail import LazyThumbnail
 
 
@@ -33,7 +33,7 @@ class ImprovedQueueItem(QWidget):
         self.play_indicator.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.play_indicator.setCursor(Qt.OpenHandCursor)
 
-        self.thumb = LazyThumbnail(40, radius=4, background="#1e1e1e")
+        self.thumb = LazyThumbnail(40, radius=4, background=theme.SURFACE)
         self.thumb.set_source(thumbnail_url(song, imaging.thumb_px(40)), thumbnails)
         self.thumb.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
@@ -52,7 +52,7 @@ class ImprovedQueueItem(QWidget):
 
         artist_text = artist_names(song, sep=", ") or t("queue.unknown")
         self.artist_label = QLabel(artist_text)
-        self.artist_label.setStyleSheet("color: #999; font-size: 11px;")
+        self.artist_label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 11px;")
         self.artist_label.setWordWrap(False)
         self.artist_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.artist_label.setTextInteractionFlags(Qt.NoTextInteraction)
@@ -67,7 +67,7 @@ class ImprovedQueueItem(QWidget):
         if not dur_str and dur_secs:
             dur_str = f"{dur_secs // 60}:{dur_secs % 60:02d}"
         self.duration_label = QLabel(dur_str or '')
-        self.duration_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.duration_label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 11px;")
         self.duration_label.setFixedWidth(36)
         self.duration_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
@@ -79,33 +79,33 @@ class ImprovedQueueItem(QWidget):
         buttons_layout.setSpacing(4)
 
         btn_play = QPushButton()
-        btn_play.setIcon(qta.icon('fa5s.play', color='white'))
+        btn_play.setIcon(qta.icon('fa5s.play', color=theme.TEXT))
         btn_play.setFixedSize(28, 28)
         btn_play.clicked.connect(lambda: self.play_clicked.emit(self.index))
         btn_play.setCursor(Qt.PointingHandCursor)
-        btn_play.setStyleSheet("""
-            QPushButton {
+        btn_play.setStyleSheet(f"""
+            QPushButton {{
                 border: none;
-                border-radius: 14px;
+                border-radius: {theme.radius(14)}px;
                 background: transparent;
-            }
-            QPushButton:hover { background: rgba(255,255,255,0.1); }
+            }}
+            QPushButton:hover {{ background: {theme.overlay(0.1)}; }}
         """)
 
         btn_remove = QPushButton()
-        btn_remove.setIcon(qta.icon('fa5s.times', color='#999'))
+        btn_remove.setIcon(qta.icon('fa5s.times', color=theme.TEXT_SECONDARY))
         btn_remove.setFixedSize(28, 28)
         btn_remove.clicked.connect(lambda: self.remove_clicked.emit(self.index))
         btn_remove.setCursor(Qt.PointingHandCursor)
-        btn_remove.setStyleSheet("""
-            QPushButton {
+        btn_remove.setStyleSheet(f"""
+            QPushButton {{
                 border: none;
-                border-radius: 14px;
+                border-radius: {theme.radius(14)}px;
                 background: transparent;
-            }
-            QPushButton:hover {
-                background: rgba(255,0,0,0.2);
-            }
+            }}
+            QPushButton:hover {{
+                background: {theme.accent_soft(0.2)};
+            }}
         """)
 
         buttons_layout.addWidget(btn_play)
@@ -123,18 +123,19 @@ class ImprovedQueueItem(QWidget):
 
     def set_current(self, is_current):
         self.is_current = is_current
-        icon = qta.icon('fa5s.volume-up', color='#FF0000') if is_current else qta.icon('fa5s.grip-vertical', color='#666')
+        icon = (qta.icon('fa5s.volume-up', color=theme.ACCENT) if is_current
+                else qta.icon('fa5s.grip-vertical', color=theme.TEXT_MUTED))
         self.play_indicator.setPixmap(icon.pixmap(14, 14))
-        bg_color = "rgba(255,0,0,0.08)" if is_current else "transparent"
-        border_color = "rgba(255,0,0,0.3)" if is_current else "transparent"
+        bg_color = theme.accent_soft(0.08) if is_current else "transparent"
+        border_color = theme.accent_soft(0.3) if is_current else "transparent"
         self.setStyleSheet(f"""
             ImprovedQueueItem {{
                 background: {bg_color};
                 border: 1px solid {border_color};
-                border-radius: 6px;
+                border-radius: {theme.radius(6)}px;
             }}
             ImprovedQueueItem:hover {{
-                background: rgba(255,255,255,0.03);
+                background: {theme.overlay(0.03)};
             }}
         """)
 

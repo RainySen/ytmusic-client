@@ -1,11 +1,16 @@
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QLabel, QWidget
 
-_COLORS = {
-    "info": ("#2a2a2a", "#e6e6e6", "#444"),
-    "warning": ("#3a3020", "#ffd479", "#6b5a2e"),
-    "error": ("#3a2020", "#ff9a9a", "#6b2e2e"),
-}
+from ui import theme
+
+
+# built on use: the theme is applied after import
+def _colors() -> dict:
+    return {
+        "info": (theme.SURFACE_RAISED, theme.TEXT, theme.BORDER),
+        "warning": (theme.SURFACE_RAISED, theme.TEXT, theme.DANGER),
+        "error": (theme.SURFACE_RAISED, theme.DANGER, theme.DANGER),
+    }
 
 
 class Toast(QLabel):
@@ -22,10 +27,11 @@ class Toast(QLabel):
         self.hide()
 
     def show_message(self, level: str, text: str) -> None:
-        background, foreground, border = _COLORS.get(level, _COLORS["info"])
+        colors = _colors()
+        background, foreground, border = colors.get(level, colors["info"])
         self.setStyleSheet(
             f"background: {background}; color: {foreground}; border: 1px solid {border};"
-            "border-radius: 8px; padding: 10px 18px; font-size: 13px;"
+            "border-radius: {theme.radius(8)}px; padding: 10px 18px; font-size: 13px;"
         )
         self.setText(text)
         self.reposition()

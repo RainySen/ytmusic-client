@@ -22,15 +22,20 @@ class Switch(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
-        track = QColor(theme.LINK) if self.isChecked() else QColor(255, 255, 255, 60)
-        knob = QColor("#ffffff") if self.isChecked() else QColor("#cccccc")
+        checked = self.isChecked()
+        track = QColor(theme.LINK) if checked else QColor(theme.TEXT)
+        if not checked:
+            track.setAlphaF(60 / 255)
+        knob = QColor(theme.SWITCH_KNOB) if checked else QColor(theme.PRESSED)
         if not self.isEnabled():
             track.setAlphaF(0.35)
             knob.setAlphaF(0.5)
+        corner = theme.radius(HEIGHT // 2)
         painter.setBrush(track)
-        painter.drawRoundedRect(QRectF(0, 0, WIDTH, HEIGHT), HEIGHT / 2, HEIGHT / 2)
+        painter.drawRoundedRect(QRectF(0, 0, WIDTH, HEIGHT), corner, corner)
         diameter = HEIGHT - 8
         left = WIDTH - diameter - 4 if self.isChecked() else 4
         painter.setBrush(knob)
-        painter.drawEllipse(QRectF(left, 4, diameter, diameter))
+        knob_corner = theme.radius(diameter // 2)
+        painter.drawRoundedRect(QRectF(left, 4, diameter, diameter), knob_corner, knob_corner)
         painter.end()

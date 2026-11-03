@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from core.i18n import t
+from ui import theme
 from ui.components.section_feed import SectionFeed
 
 # label keys: translated when the panel is built, after the language is set
@@ -11,14 +12,21 @@ _JUMP_BUTTONS = (
     ("explore.jump.charts", "fa5s.chart-line"),
     ("explore.jump.moods_genres", "fa5s.smile"),
 )
-_BUTTON_QSS = """
-    QPushButton { background: #212121; color: #f0f0f0; border: none; border-radius: 8px;
-                  padding: 0 18px; font-size: 17px; font-weight: 700; text-align: left; }
-    QPushButton:hover { background: #2c2c2c; }
+
+
+def _button_qss() -> str:
+    return f"""
+    QPushButton {{ background: {theme.SURFACE}; color: {theme.TEXT}; border: none; border-radius: {theme.radius(8)}px;
+                  padding: 0 18px; font-size: 17px; font-weight: 700; text-align: left; }}
+    QPushButton:hover {{ background: {theme.SURFACE_RAISED}; }}
 """
-_BACK_QSS = """
-    QPushButton { background: transparent; color: #ccc; border: none; font-size: 13px; padding: 6px 4px; }
-    QPushButton:hover { color: white; }
+
+
+def _back_qss() -> str:
+    return f"""
+    QPushButton {{ background: transparent; color: {theme.TEXT_SECONDARY}; border: none; font-size: 13px;
+                   padding: 6px 4px; }}
+    QPushButton:hover {{ color: {theme.TEXT}; }}
 """
 
 
@@ -50,17 +58,17 @@ class ExplorePanel(QWidget):
         row.setSpacing(16)
         for index, (label, icon) in enumerate(_JUMP_BUTTONS):
             button = QPushButton("  " + t(label))
-            button.setIcon(qta.icon(icon, color="#cfcfcf"))
+            button.setIcon(qta.icon(icon, color=theme.TEXT_SECONDARY))
             button.setFixedHeight(64)
             button.setCursor(Qt.PointingHandCursor)
-            button.setStyleSheet(_BUTTON_QSS)
+            button.setStyleSheet(_button_qss())
             button.clicked.connect(lambda _=False, i=index: self.jump_requested.emit(i))
             row.addWidget(button, stretch=1)
         top_layout.addWidget(self._jump_row)
 
         self._back = QPushButton("←  " + t("explore.back"))
         self._back.setCursor(Qt.PointingHandCursor)
-        self._back.setStyleSheet(_BACK_QSS)
+        self._back.setStyleSheet(_back_qss())
         self._back.clicked.connect(self.back_requested)
         self._back.hide()
         top_layout.addWidget(self._back, alignment=Qt.AlignLeft)
