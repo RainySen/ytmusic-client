@@ -40,7 +40,7 @@ def test_feed_loading_and_empty_messages_follow_the_language(qapp):
     i18n.set_language("en", i18n.load(i18n.locales_dir()))
     feed = SectionFeed()
     feed.set_loading()
-    assert feed._message.text() == i18n.t("home.loading") != "Cargando…"
+    assert feed.loading and feed._skeleton.accessibleName() == i18n.t("home.loading") != "Cargando…"
     feed.set_sections([], None)
     assert feed._message.text() == i18n.t("home.feed.empty")
     feed.set_sections([], None, empty_message="")

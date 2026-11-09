@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from typing import Callable
 
@@ -123,9 +124,10 @@ def build_lyrics_providers(settings: Settings, gateway: YTMusicGateway, environ:
     return [available[name]() for name in settings.lyrics_providers if name in available]
 
 
-# separate factory so tests can mock it
-def build_romanizer() -> UnisonRomanizer:
-    return UnisonRomanizer()
+# shortcut: unison stopped returning romanization (translation only) and local libs cost +110 MB (pykakasi)
+# or +49 MB (pypinyin); off until a light romanizer exists
+def build_romanizer() -> UnisonRomanizer | None:
+    return None
 
 
 def _remove_quietly(path: str) -> None:
@@ -184,7 +186,8 @@ def build_services(paths: AppPaths) -> Services:
     library = LibraryService(gateway, LocalPlaylistRepository(paths.playlists_file), catalog, browse_runner,
                              RecentPlaylists(paths.recent_playlists_file), PinnedPlaylists(paths.pinned_playlists_file))
     playback = PlaybackService(queue, streams, audio, catalog, notifier, radio_size=lambda: settings.settings.radio_size,
-                              auto_queue=lambda: settings.settings.auto_queue)
+                              auto_queue=lambda: settings.settings.auto_queue,
+                               previous_restarts=lambda: settings.settings.previous_restarts)
     navigator = Navigator()
     lyrics = LyricsService(build_lyrics_providers(settings.settings, gateway), browse_runner,
                            romanizer=build_romanizer(), romanize=settings.settings.romanized_lyrics)
@@ -210,11 +213,15 @@ def build_services(paths: AppPaths) -> Services:
 
     settings.changed.connect(refresh_auto_queue)
 
+    auth = AuthService(gateway, auth_runner)
+    # explicit logout: the next login must not reuse this google account
+    auth.logged_out.connect(lambda: shutil.rmtree(paths.web_profile_dir, ignore_errors=True))
+
     return Services(
         paths=paths, notifier=notifier, gateway=gateway, resolver=resolver, audio=audio, queue=queue,
         streams=streams, catalog=catalog, library=library,
         lyrics=lyrics,
-        auth=AuthService(gateway, auth_runner),
+        auth=auth,
         playback=playback,
         session=SessionService(paths.session_file, queue, streams, runner=browse_runner),
         opener=ItemOpener(catalog, playback, notifier, navigator),
@@ -270,7 +277,7 @@ def build_ui(services: Services, app_icon, login_window_factory: Callable[[], QW
     window = MainWindow(thumbnails, app_icon)
     services.notifier.message.connect(window.show_toast)
 
-    make_login = login_window_factory or (lambda: LoginWindow(services.auth, app_icon))
+    make_login = login_window_factory or (lambda: LoginWindow(services.auth, app_icon, services.paths.web_profile_dir))
     window.channel_requested.connect(services.navigator.channel_requested)
     pins = ListenAgainPins(services.paths.listen_again_file)
     home = HomePresenter(window, services.catalog, services.playback, services.opener, services.notifier,

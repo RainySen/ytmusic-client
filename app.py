@@ -60,12 +60,13 @@ def main() -> int:
             return
         ui = build_ui(services, icon, restart=lambda: restart_app(release))
         state["ui"] = ui
-        ui.start(services)
         ui.window.resize(1240, 750)
         if background:
             ui.memory.start_hidden()
         else:
             ui.window.show()
+        # after show: start's background network work competes for the GIL and delays the first paint
+        ui.start(services)
         if state["login"] is not None:
             state["login"].close()
         services.warm_up()
@@ -73,7 +74,7 @@ def main() -> int:
     if background or services.auth.is_authenticated:
         start_main_application()
     else:
-        login = LoginWindow(services.auth, icon)
+        login = LoginWindow(services.auth, icon, services.paths.web_profile_dir)
         login.login_success.connect(start_main_application)
         login.login_skipped.connect(start_main_application)
         login.closed.connect(lambda: app.quit() if state["ui"] is None else None)

@@ -33,6 +33,7 @@ ROTATE_COOKIES_URL = "https://accounts.youtube.com/RotateCookies"
 _ROTATE_COOKIES_BODY = '[000,"-0000000000000000000"]'
 # 429 on rotations seconds apart
 ROTATE_MIN_AGE_S = 10 * 60
+VISITOR_HEADER = "X-Goog-Visitor-Id"
 
 _AUTH_FAILURE_MARKERS = ("http 401", "http 403", "unauthorized", "forbidden", "authenticat", "sign in", "login required")
 
@@ -51,6 +52,7 @@ class YTMusicGateway:
         self._ytm_browse: Any = None
         self._ytm_public: Any = None
         self._authenticated = False
+        self._visitor_id: str | None = None
 
     @property
     def is_authenticated(self) -> bool:
@@ -99,7 +101,10 @@ class YTMusicGateway:
         headers = self._credentials()
         if headers is not None:
             try:
-                client = YTMusic(auth=headers, **options)
+                # a known visitor id skips ytmusicapi's page fetch (~0.5 s per client)
+                auth = {**headers, VISITOR_HEADER: self._visitor_id} if self._visitor_id else headers
+                client = YTMusic(auth=auth, **options)
+                self._visitor_id = self._visitor_id or getattr(client, "base_headers", {}).get(VISITOR_HEADER)
                 self._upgrade_storage(headers)
                 return client, True
             except OSError:
@@ -182,7 +187,10 @@ class YTMusicGateway:
         client = self._require_auth()
         try:
             self.rotate_cookies()
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            # 401: google revoked the cookies; the api may still answer, but with a logged-out feed
+            if getattr(getattr(exc, "response", None), "status_code", None) == 401:
+                raise SessionRejected(str(exc)) from exc
             log.warning("Cookie rotation failed", exc_info=True)
         try:
             client.get_library_playlists(limit=1)

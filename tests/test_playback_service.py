@@ -383,3 +383,107 @@ def test_every_offered_radio_size_is_valid_and_ordered():
 
     sizes = [s for s in RADIO_SIZE_OPTIONS if s]
     assert sizes == sorted(sizes) and sizes[0] == 5 and RADIO_SIZE_OPTIONS[-1] == 0
+
+
+def previous_rig(qapp, enabled):
+    r = Rig()
+    r.service = PlaybackService(r.queue, r.streams, r.audio, r.catalog, r.notifier,
+                                previous_restarts=lambda: enabled)
+    r.queue.replace([song(0), song(1)], index=1)
+    r.audio.has_media = True
+    return r
+
+
+def test_previous_restarts_the_song_after_three_seconds(qapp):
+    r = previous_rig(qapp, True)
+    r.audio.time_ms_changed.emit(3500)
+    r.service.previous()
+    assert r.audio.seeks == [0.0] and r.queue.current_index == 1
+
+
+def test_previous_goes_back_within_the_first_three_seconds(qapp):
+    r = previous_rig(qapp, True)
+    r.audio.time_ms_changed.emit(2000)
+    r.service.previous()
+    assert r.audio.seeks == [] and r.queue.current_index == 0
+
+
+def test_previous_always_goes_back_when_the_option_is_off(qapp):
+    r = previous_rig(qapp, False)
+    r.audio.time_ms_changed.emit(60000)
+    r.service.previous()
+    assert r.audio.seeks == [] and r.queue.current_index == 0
+
+
+def test_previous_restarts_setting_defaults_on_and_round_trips():
+    from domain.settings import Settings
+    assert Settings().previous_restarts is True
+    assert Settings.from_dict({"previous_restarts": False}).previous_restarts is False
+
+
+def test_settings_dialog_switch_reports_previous_restarts(qapp):
+    from domain.settings import Settings
+    from ui.settings_dialog import SettingsDialog
+    changes = []
+    dialog = SettingsDialog(None, Settings(), True, lambda **kw: changes.append(kw))
+    dialog.previous_restarts.setChecked(False)
+    assert changes == [{"previous_restarts": False}]
+    dialog.deleteLater()
+
+
+def _play_last(rig):
+    rig.queue.jump_to(len(rig.queue) - 1)
+    rig.service.play_track(rig.queue.current)
+    rig.streams.resolve(rig.queue.current["videoId"])
+
+
+def test_radio_extension_keeps_following_the_seed_radio(rig):
+    rig.service.start_radio(song(0))
+    rig.streams.resolve("v0")
+    radio_call = next(i for i, c in enumerate(rig.catalog.calls) if c["key"] == "radio")
+    rig.catalog.answer(radio_call, [song(i) for i in range(1, 9)])
+    _play_last(rig)
+    call = next(c for c in rig.catalog.calls if c["key"] == "extend")
+    assert call["video_id"] == "v0" and call["limit"] >= len(rig.queue)
+
+
+def test_radio_extension_never_brings_back_trimmed_songs(rig):
+    rig.service.start_radio(song(0))
+    rig.streams.resolve("v0")
+    radio_call = next(i for i, c in enumerate(rig.catalog.calls) if c["key"] == "radio")
+    rig.catalog.answer(radio_call, [song(i) for i in range(1, 6)])
+    rig.queue.trim_played(0)
+    _play_last(rig)
+    ext = next(i for i, c in enumerate(rig.catalog.calls) if c["key"] == "extend")
+    rig.catalog.answer(ext, [song(i) for i in range(1, 9)])
+    assert [s["videoId"] for s in rig.queue.snapshot()][-2:] == ["v6", "v7"]
+
+
+def test_collection_extension_seeds_from_the_last_song_the_user_picked(rig):
+    rig.queue.replace([song(1), song(2)], 0)
+    rig.queue.extend_unique([song(3), song(4)], auto=True)
+    _play_last(rig)
+    call = next(c for c in rig.catalog.calls if c["key"] == "extend")
+    assert call["video_id"] == "v2"
+
+
+def test_exhausted_anchor_falls_back_to_the_last_song(rig):
+    rig.queue.replace([song(1)], 0)
+    rig.queue.extend_unique([song(3)], auto=True)
+    _play_last(rig)
+    first = next(i for i, c in enumerate(rig.catalog.calls) if c["key"] == "extend")
+    rig.catalog.answer(first, [song(1), song(3)])
+    retry = [c for c in rig.catalog.calls if c["key"] == "extend"][-1]
+    assert rig.catalog.calls[first]["video_id"] == "v1" and retry["video_id"] == "v3"
+
+
+def test_old_radio_history_does_not_hide_songs_from_a_new_collection(rig):
+    rig.service.start_radio(song(0))
+    rig.streams.resolve("v0")
+    radio_call = next(i for i, c in enumerate(rig.catalog.calls) if c["key"] == "radio")
+    rig.catalog.answer(radio_call, [song(i) for i in range(1, 6)])
+    rig.queue.replace([song(20)], 0)
+    _play_last(rig)
+    ext = [i for i, c in enumerate(rig.catalog.calls) if c["key"] == "extend"][-1]
+    rig.catalog.answer(ext, [song(3), song(21)])
+    assert [s["videoId"] for s in rig.queue.snapshot()] == ["v20", "v3", "v21"]

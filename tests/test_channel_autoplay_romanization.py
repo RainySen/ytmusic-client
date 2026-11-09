@@ -451,3 +451,13 @@ def test_changing_the_setting_reaches_the_playback_service(tmp_path, monkeypatch
         assert seen == [False, True]
     finally:
         services.shutdown()
+
+
+def test_romanization_is_off_until_a_light_romanizer_exists(qapp):
+    from core.bootstrap import build_romanizer
+    from domain.settings import Settings
+    from ui.settings_dialog import SettingsDialog
+    assert build_romanizer() is None
+    dialog = SettingsDialog(None, Settings(), True, lambda **kw: None)
+    assert dialog.romanized_lyrics.parentWidget().isHidden()
+    dialog.deleteLater()

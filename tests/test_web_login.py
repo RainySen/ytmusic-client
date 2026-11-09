@@ -243,7 +243,7 @@ def test_web_window_is_reused_while_open_and_forgotten_when_closed(qapp, monkeyp
     created = []
 
     class FakeWeb:
-        def __init__(self):
+        def __init__(self, profile_dir=None):
             from PySide6.QtCore import QObject, Signal
 
             class Signals(QObject):
@@ -410,3 +410,37 @@ def test_window_retries_when_google_rejects_the_browser_and_then_explains(web):
         assert web._rejections == attempt and web._status.text() == RETRYING_HINT
     web._on_url(rejected)
     assert web._rejections == MAX_REJECT_RETRIES and web._status.text() == GAVE_UP_HINT
+
+
+@needs_webengine
+def test_login_browser_keeps_its_profile_on_disk_when_given_a_folder(qapp, tmp_path):
+    from ui.web_login_window import WebLoginWindow
+    window = WebLoginWindow(profile_dir=str(tmp_path / "web_profile"))
+    try:
+        profile = window._profile
+        assert not profile.isOffTheRecord()
+        assert profile.persistentStoragePath().replace("\\", "/") == str(tmp_path / "web_profile").replace("\\", "/")
+    finally:
+        window.close()
+        QTest.qWait(200)
+
+
+@needs_webengine
+def test_login_browser_without_a_folder_stays_off_the_record(web):
+    assert web._profile.isOffTheRecord()
+
+
+def test_logout_forgets_the_login_browser_profile(qapp, tmp_path):
+    from core.bootstrap import build_services
+    from core.config import AppPaths
+    paths = AppPaths(str(tmp_path))
+    paths.ensure_dirs()
+    services = build_services(paths)
+    try:
+        profile = paths.web_profile_dir
+        import os
+        os.makedirs(os.path.join(profile, "Cookies-dir"))
+        services.auth.logout()
+        assert not os.path.exists(profile)
+    finally:
+        services.shutdown()

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QSystemTrayIcon
 
 from domain.settings import Settings
 from services.settings_service import SettingsService
-from ui import imaging
+from ui import imaging, motion
 from ui.main_window import MainWindow
 from ui.settings_dialog import SettingsDialog
 
@@ -61,6 +61,7 @@ class SettingsPresenter:
         QTimer.singleShot(0, self._window, self._window.account_action)
 
     def _apply(self, settings: Settings) -> None:
+        motion.set_enabled(settings.animations)
         self._window.set_close_to_tray(settings.background_on_close)
         imaging.set_thumbnail_quality(settings.thumbnail_quality)
         if self._thumbnails is not None:

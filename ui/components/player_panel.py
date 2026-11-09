@@ -20,7 +20,8 @@ def _slim_slider_qss() -> str:
     QSlider::sub-page:horizontal {{ background: {theme.ACCENT}; border-radius: {theme.radius(1)}px; }}
     QSlider::handle:horizontal {{ width: 11px; height: 11px; margin: -4px 0; border-radius: {theme.radius(5)}px;
                                   background: {theme.ACCENT}; }}
-    QSlider::handle:horizontal:hover {{ background: {theme.ACCENT}; }}
+    QSlider::handle:horizontal:hover {{ background: {theme.ACCENT}; width: 13px; height: 13px; margin: -5px 0;
+                                        border-radius: {theme.radius(6)}px; }}
 """
 
 
@@ -224,6 +225,7 @@ class PlayerPanel(QWidget):
         self.progress_slider.setRange(0, 1000)
         self.progress_slider.setValue(0)
         self.progress_slider.setFixedHeight(14)
+        self.progress_slider.setMouseTracking(True)
         self.progress_slider.setStyleSheet(_slim_slider_qss())
 
         self.total_time_label = QLabel("0:00")

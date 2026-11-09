@@ -276,3 +276,35 @@ def test_declining_does_not_nag_until_the_next_login(rig, monkeypatch):
     presenter._reset_asked()
     rig.auth.session_expired.emit()
     assert len(opened) == 1
+
+
+def rotation_status(code):
+    response = requests.Response()
+    response.status_code = code
+    response.url = "https://accounts.youtube.com/RotateCookies"
+    return response
+
+
+def test_rotation_unauthorized_means_the_session_is_gone(tmp_path, monkeypatch):
+    path = str(tmp_path / "oauth.json")
+    write_secret_json(path, {"cookie": "__Secure-3PAPISID=k; __Secure-3PSIDTS=old"})
+    age(path)
+    client = RotatingClient("__Secure-3PAPISID=k; __Secure-3PSIDTS=old")
+    gateway = YTMusicGateway(path)
+    gateway._ytm, gateway._authenticated = client, True
+    monkeypatch.setattr(requests, "post", lambda url, **kw: rotation_status(401))
+    with pytest.raises(SessionRejected):
+        gateway.verify_session()
+    assert gateway.is_authenticated
+
+
+def test_other_rotation_errors_still_only_warn(tmp_path, monkeypatch):
+    path = str(tmp_path / "oauth.json")
+    write_secret_json(path, {"cookie": "__Secure-3PAPISID=k; __Secure-3PSIDTS=old"})
+    age(path)
+    client = RotatingClient("__Secure-3PAPISID=k; __Secure-3PSIDTS=old")
+    gateway = YTMusicGateway(path)
+    gateway._ytm, gateway._authenticated = client, True
+    monkeypatch.setattr(requests, "post", lambda url, **kw: rotation_status(429))
+    gateway.verify_session()
+    assert client.calls == 1

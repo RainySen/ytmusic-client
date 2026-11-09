@@ -51,6 +51,7 @@ class PlayerPresenter:
         window.next_clicked.connect(playback.next)
         window.previous_clicked.connect(playback.previous)
         window.seek_requested.connect(self._on_seek)
+        window.seek_by_requested.connect(playback.seek_by)
         window.volume_changed.connect(playback.set_volume)
         window.loop_clicked.connect(playback.toggle_loop)
         window.shuffle_clicked.connect(playback.shuffle)
@@ -71,6 +72,7 @@ class PlayerPresenter:
         playback.track_loading.connect(self._on_loading)
         playback.track_started.connect(self._on_started)
         playback.playing_changed.connect(window.set_playing)
+        playback.playing_changed.connect(lambda playing: playing or window.set_loading(False))
         playback.progress.connect(self._on_progress)
         playback.time_changed.connect(self._on_time)
         self._queue.changed.connect(self._refresh_queue)
@@ -113,10 +115,12 @@ class PlayerPresenter:
         self._show(song, t("player.loading_track", title=song.get('title', '')))
         window.reset_progress()
         window.set_playing(True)
+        window.set_loading(True)
         self._load_cover(song)
         self._load_like(song)
 
     def _on_started(self, song: dict) -> None:
+        self._window.set_loading(False)
         self._show(song, song.get("title", ""))
 
     def _open_artist(self) -> None:

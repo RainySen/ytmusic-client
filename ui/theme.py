@@ -156,16 +156,19 @@ CYBER_SCENE = {
 }
 
 _FONTS = {
-    "classic": '"YouTube Sans", "Roboto", "Google Sans", "Segoe UI", system-ui',
-    "aero": '"Segoe UI", system-ui',
+    "classic": ("YouTube Sans", "Roboto", "Google Sans", "Segoe UI"),
+    "aero": ("Segoe UI",),
     # cyberpunk: app font, see load_fonts
-    "cyberpunk": "",
+    "cyberpunk": (),
 }
 _FONT_FILES = {"cyberpunk": ("Jersey15.ttf", "Jersey 15")}
 
 
+# installed families only: a missing one makes qt scan every system font on the first text draw (~0.5 s)
 def font_family() -> str:
-    return _FONTS[_current]
+    from PySide6.QtGui import QFontDatabase
+    installed = set(QFontDatabase.families())
+    return ", ".join(f'"{name}"' for name in _FONTS[_current] if name in installed)
 
 
 def load_fonts() -> None:

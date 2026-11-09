@@ -2,7 +2,8 @@ from ui import theme
 
 
 def app_stylesheet() -> str:
-    family = f"font-family: {theme.font_family()};" if theme.font_family() else ""
+    families = theme.font_family()
+    family = f"font-family: {families};" if families else ""
     return f"""
 QWidget {{
     background-color: {theme.BG};

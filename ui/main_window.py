@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import qtawesome as qta
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSplitter, QSystemTrayIcon, QVBoxLayout, QWidget
 
 from core.i18n import t
 from domain.models import format_seconds
-from ui import theme
+from ui import motion, theme
 from ui.components import dialogs
 from ui.components.backdrops import SCENES
 from ui.components.album_panel import AlbumPanel
@@ -27,6 +27,12 @@ from ui.components.top_bar import TopBar
 from ui.components.track_actions import menu_qss
 from ui.imaging import scale_cover
 from ui.styles import app_stylesheet
+
+SPINNER_FRAMES = 12
+SEEK_STEP_MS = 5000
+VOLUME_STEP = 5
+SPINNER_MS = 70
+
 
 # built on use: the language is only known after startup
 def _view_nav_labels() -> dict:
@@ -60,6 +66,7 @@ class MainWindow(QWidget):
     loop_clicked = Signal()
     shuffle_clicked = Signal()
     seek_requested = Signal(float)
+    seek_by_requested = Signal(int)
     volume_changed = Signal(int)
 
     save_to_playlist_requested = Signal(dict)
@@ -78,7 +85,19 @@ class MainWindow(QWidget):
 
         self.setWindowIcon(app_icon)
         self.setWindowTitle("PyMusic Client")
+        # before any child exists: set late, qt re-polishes every widget (~0.5 s)
+        theme.load_fonts()
+        backdrop = SCENES.get(theme.current())
+        self.setStyleSheet(app_stylesheet() + ("QWidget { background-color: transparent; }" if backdrop else ""))
         self._load_icons()
+        self._is_playing = False
+        self._total_s = 0
+        self._loading = False
+        self._spinner_frames: list | None = None
+        self._spinner_frame = 0
+        self._spinner = QTimer(self)
+        self._spinner.setInterval(SPINNER_MS)
+        self._spinner.timeout.connect(self._spin)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -105,15 +124,9 @@ class MainWindow(QWidget):
         self.update_banner = UpdateBanner(self)
         self._setup_shortcuts()
         self._setup_tray()
-        theme.load_fonts()
-        self.setStyleSheet(app_stylesheet())
-        if theme.current() in SCENES:
-            self._apply_backdrop(SCENES[theme.current()])
-
-    def _apply_backdrop(self, scene_type):
-        self.setStyleSheet(app_stylesheet() + "QWidget { background-color: transparent; }")
-        self._backdrop = scene_type(self)
-        self._place_backdrop()
+        if backdrop:
+            self._backdrop = backdrop(self)
+            self._place_backdrop()
 
     def _place_backdrop(self):
         self._backdrop.setGeometry(self.rect())
@@ -218,7 +231,11 @@ class MainWindow(QWidget):
         self.player_panel.next_button.clicked.connect(self.next_clicked)
         self.player_panel.loop_button.clicked.connect(self.loop_clicked)
         self.player_panel.shuffle_button.clicked.connect(self.shuffle_clicked)
-        self.player_panel.progress_slider.sliderMoved.connect(lambda v: self.seek_requested.emit(v / 1000.0))
+        progress = self.player_panel.progress_slider
+        # preview while dragging, seek once on release: a seek per pixel stutters the audio
+        progress.sliderMoved.connect(self._preview_seek)
+        progress.sliderReleased.connect(lambda: self.seek_requested.emit(progress.value() / 1000.0))
+        progress.hover_text = lambda fraction: format_seconds(int(fraction * self._total_s))
         self.player_panel.volume_slider.valueChanged.connect(self.volume_changed)
         self.player_panel.hide()
         return self.player_panel
@@ -228,6 +245,31 @@ class MainWindow(QWidget):
         quit_action.setShortcut(QKeySequence("Ctrl+Q"))
         quit_action.triggered.connect(QApplication.instance().quit)
         self.addAction(quit_action)
+        panel = self.player_panel
+        volume = panel.volume_slider
+        for keys, slot in (
+            ("Space", self.play_pause_clicked.emit),
+            ("Right", lambda: self.seek_by_requested.emit(SEEK_STEP_MS)),
+            ("Left", lambda: self.seek_by_requested.emit(-SEEK_STEP_MS)),
+            ("Ctrl+Right", self.next_clicked.emit),
+            ("Ctrl+Left", self.previous_clicked.emit),
+            ("Up", lambda: volume.setValue(volume.value() + VOLUME_STEP)),
+            ("Down", lambda: volume.setValue(volume.value() - VOLUME_STEP)),
+            ("M", panel.toggle_mute),
+            ("Ctrl+F", self._focus_search),
+        ):
+            action = QAction(self)
+            action.setShortcut(QKeySequence(keys))
+            action.triggered.connect(slot)
+            self.addAction(action)
+
+    def _focus_search(self) -> None:
+        box = self.top_bar.search_box
+        box.setFocus(Qt.ShortcutFocusReason)
+        box.selectAll()
+
+    def _preview_seek(self, value: int) -> None:
+        self.player_panel.time_label.setText(format_seconds(int(value / 1000 * self._total_s)))
 
     def _setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self._app_icon, self)
@@ -307,9 +349,12 @@ class MainWindow(QWidget):
         return self._view
 
     def show_view(self, name):
+        changed = name != self._view or not self._pages[name].isVisible()
         self._view = name
         for key, panel in self._pages.items():
             panel.setVisible(key == name)
+        if changed:
+            motion.fade_in(self._pages[name])
         self.now_playing_panel.hide()
         self.side_panel.hide()
         self.player_panel.set_expanded(False)
@@ -324,6 +369,8 @@ class MainWindow(QWidget):
             panel.hide()
         self.now_playing_panel.show()
         self.side_panel.show()
+        motion.fade_in(self.now_playing_panel)
+        motion.fade_in(self.side_panel)
         self.player_panel.set_expanded(True)
 
     def set_search_history(self, items):
@@ -361,9 +408,31 @@ class MainWindow(QWidget):
         self.now_playing_panel.set_cover(pixmap)
 
     def set_playing(self, is_playing):
+        self._is_playing = is_playing
         self.player_panel.set_playing(is_playing)
-        self.player_panel.play_button.setIcon(self.icons["pause"] if is_playing else self.icons["play"])
+        if not self._loading:
+            self.player_panel.play_button.setIcon(self.icons["pause"] if is_playing else self.icons["play"])
         self._tray_play_action.setText(t("main.tray.pause") if is_playing else t("main.tray.play"))
+
+    def set_loading(self, loading: bool) -> None:
+        if loading == self._loading:
+            return
+        self._loading = loading
+        if not loading:
+            self._spinner.stop()
+            self.set_playing(self._is_playing)
+            return
+        if self._spinner_frames is None:
+            # pre-rendered angles: the timer only runs while a track resolves
+            self._spinner_frames = [qta.icon("fa5s.circle-notch", color=theme.BUTTON_TEXT,
+                                             rotated=i * 360 // SPINNER_FRAMES) for i in range(SPINNER_FRAMES)]
+        self._spinner_frame = 0
+        self._spin()
+        self._spinner.start()
+
+    def _spin(self) -> None:
+        self.player_panel.play_button.setIcon(self._spinner_frames[self._spinner_frame])
+        self._spinner_frame = (self._spinner_frame + 1) % SPINNER_FRAMES
 
     def set_loop_mode(self, mode):
         icons = {0: self.icons["loop_off"], 1: self.icons["loop_queue"], 2: self.icons["loop_song"]}
@@ -380,6 +449,10 @@ class MainWindow(QWidget):
         slider.blockSignals(False)
 
     def set_time(self, current, total):
+        self._total_s = total
+        if self.player_panel.progress_slider.isSliderDown():
+            self.player_panel.total_time_label.setText(format_seconds(total))
+            return
         self.player_panel.time_label.setText(format_seconds(current))
         self.player_panel.total_time_label.setText(format_seconds(total))
 
