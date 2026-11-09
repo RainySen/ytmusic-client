@@ -1,4 +1,5 @@
 import logging
+import os
 
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineScript
@@ -66,7 +67,7 @@ class WebLoginWindow(QWidget):
     session_captured = Signal(dict, str)
     closed = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, profile_dir: str | None = None):
         super().__init__(parent)
         self._cookies = WebSessionCookies()
         self._done = False
@@ -79,7 +80,14 @@ class WebLoginWindow(QWidget):
         self.resize(520, 720)
         self.setStyleSheet(f"background: {theme.BG};")
 
-        self._profile = QWebEngineProfile(self)
+        if profile_dir:
+            # remembered device: google flags fresh incognito browsers as insecure far more often
+            self._profile = QWebEngineProfile("login", self)
+            self._profile.setPersistentStoragePath(profile_dir)
+            self._profile.setCachePath(os.path.join(profile_dir, "cache"))
+            self._profile.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
+        else:
+            self._profile = QWebEngineProfile(self)
         self._user_agent = google_login_user_agent()
         self._profile.setHttpUserAgent(self._user_agent)
         self._profile.setHttpAcceptLanguage("es-419,es;q=0.9,en;q=0.8")

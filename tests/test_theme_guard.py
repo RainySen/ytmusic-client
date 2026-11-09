@@ -260,3 +260,12 @@ def test_aero_and_cyberpunk_paint_their_backdrop_and_classic_does_not(qapp):
         window.deleteLater()
     finally:
         _under("classic")
+
+
+def test_font_family_names_only_installed_fonts(qapp, monkeypatch):
+    from PySide6.QtGui import QFontDatabase
+    monkeypatch.setattr(QFontDatabase, "families", staticmethod(lambda *a: ["Segoe UI", "Arial"]))
+    theme.apply("classic")
+    assert theme.font_family() == '"Segoe UI"'
+    theme.apply("cyberpunk")
+    assert theme.font_family() == ""

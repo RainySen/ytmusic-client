@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout,
+    QWidget,
 )
 
 from core.i18n import t
@@ -12,6 +13,7 @@ from domain.settings import (
 )
 from ui import theme
 from ui.components import dialogs
+from ui.components.chip import Chip
 from ui.components.dialogs import Modal
 from ui.components.icon_button import icon_button
 from ui.components.no_scroll_combo import NoScrollComboBox
@@ -19,6 +21,7 @@ from ui.components.switch import Switch
 
 PROVIDER_LABELS = {"betterlyrics": "Better Lyrics", "lrclib": "LRCLIB", "youtube": "YouTube Music"}
 APP_LANGUAGE_NAMES = {"es": "Español", "en": "English", "pt": "Português"}
+TAB_KEYS = ("playback", "appearance", "system", "account")
 
 
 # built on use: the language is only known after startup
@@ -144,6 +147,9 @@ def _separator() -> QFrame:
 
 
 class SettingsDialog(Modal):
+    # remembered while the app runs
+    _last_tab = 0
+
     def __init__(self, parent, settings: Settings, tray_available: bool, on_change, on_free=None, *,
                  cache_size=None, clear_cache=None, logged_in: bool = False, on_account=None,
                  autostart_available: bool = True, on_open_log=None, on_restart=None):
@@ -155,23 +161,39 @@ class SettingsDialog(Modal):
         self._on_account = on_account
         self._on_open_log = on_open_log
         self._on_restart = on_restart
+        sections = {
+            "playback": (lambda b: self._build_playback(b, settings), lambda b: self._build_radio(b, settings),
+                         lambda b: self._build_lyrics(b, settings)),
+            "appearance": (lambda b: self._build_language(b, settings), lambda b: self._build_thumbnails(b, settings)),
+            "system": (lambda b: self._build_background(b, settings, tray_available, autostart_available),
+                       lambda b: self._build_memory(b, settings), self._build_cache),
+            "account": (lambda b: self._build_account(b, logged_in),),
+        }
+        tabs = QHBoxLayout()
+        tabs.setSpacing(8)
+        self.pages = QStackedWidget()
+        self.tab_buttons: list[Chip] = []
+        for index, key in enumerate(TAB_KEYS):
+            chip = Chip(t(f"settings.tab.{key}"))
+            chip.clicked.connect(lambda _checked=False, i=index: self._show_tab(i))
+            tabs.addWidget(chip)
+            self.tab_buttons.append(chip)
+            self.pages.addWidget(self._page(sections[key]))
+        tabs.addStretch(1)
+        self.body.addLayout(tabs)
+        self.body.addWidget(self.pages)
+        self._show_tab(SettingsDialog._last_tab)
+        self.add_button(t("settings.done"), "primary", self.accept, default=True)
+
+    def _page(self, builders) -> QScrollArea:
         content = QWidget()
         content.setStyleSheet("background: transparent;")
         body = QVBoxLayout(content)
         body.setContentsMargins(0, 0, 8, 0)
         body.setSpacing(4)
-
-        self._build_background(body, settings, tray_available, autostart_available)
-        self._build_radio(body, settings)
-        self._build_memory(body, settings)
-        self._build_playback(body, settings)
-        self._build_language(body, settings)
-        self._build_thumbnails(body, settings)
-        self._build_lyrics(body, settings)
-        self._build_cache(body)
-        self._build_account(body, logged_in)
+        for build in builders:
+            build(body)
         body.addStretch(1)
-
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -179,8 +201,13 @@ class SettingsDialog(Modal):
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         scroll.setStyleSheet(_scroll_qss())
         scroll.setWidget(content)
-        self.body.addWidget(scroll)
-        self.add_button(t("settings.done"), "primary", self.accept, default=True)
+        return scroll
+
+    def _show_tab(self, index: int) -> None:
+        self.pages.setCurrentIndex(index)
+        for position, chip in enumerate(self.tab_buttons):
+            chip.setChecked(position == index)
+        SettingsDialog._last_tab = index
 
     def _build_background(self, body, settings: Settings, tray_available: bool, autostart_available: bool) -> None:
         body.addWidget(_title(t("settings.background.section")))
@@ -245,6 +272,9 @@ class SettingsDialog(Modal):
         self.restore_queue = Switch(settings.restore_queue)
         body.addWidget(_row(t("settings.playback.restore_queue"), t("settings.playback.restore_queue_hint"),
                             self.restore_queue))
+        self.previous_restarts = Switch(settings.previous_restarts)
+        body.addWidget(_row(t("settings.playback.previous_restarts"), t("settings.playback.previous_restarts_hint"),
+                            self.previous_restarts))
         self.media_keys = Switch(settings.media_keys)
         body.addWidget(_row(t("settings.playback.media_keys"), t("settings.playback.media_keys_hint"),
                             self.media_keys))
@@ -254,6 +284,7 @@ class SettingsDialog(Modal):
         body.addWidget(_separator())
         self.remember_volume.toggled.connect(lambda v: self._on_change(remember_volume=v))
         self.restore_queue.toggled.connect(lambda v: self._on_change(restore_queue=v))
+        self.previous_restarts.toggled.connect(lambda v: self._on_change(previous_restarts=v))
         self.media_keys.toggled.connect(lambda v: self._on_change(media_keys=v))
         self.notifications.toggled.connect(lambda v: self._on_change(notifications=v))
 
@@ -266,7 +297,10 @@ class SettingsDialog(Modal):
         body.addWidget(_row(t("settings.language.content_title"), t("settings.language.content_hint"), self.language))
         self.theme_combo = _combo(THEME_NAMES, _theme_labels(), settings.theme)
         body.addWidget(_row(t("settings.theme.title"), t("settings.theme.hint"), self.theme_combo))
+        self.animations = Switch(settings.animations)
+        body.addWidget(_row(t("settings.animations.title"), t("settings.animations.hint"), self.animations))
         body.addWidget(_separator())
+        self.animations.toggled.connect(lambda v: self._on_change(animations=v))
         self.language.currentIndexChanged.connect(lambda _i: self._on_change(content_language=self.language.currentData()))
         self.theme_combo.currentIndexChanged.connect(lambda _i: self._on_theme(self.theme_combo.currentData()))
 
@@ -304,8 +338,11 @@ class SettingsDialog(Modal):
         self.lyrics_key.editingFinished.connect(self._commit_key)
         body.addWidget(_row(t("settings.lyrics.key_title"), t("settings.lyrics.key_hint"), self.lyrics_key))
         self.romanized_lyrics = Switch(settings.romanized_lyrics)
-        body.addWidget(_row(t("settings.lyrics.romanized_title"), t("settings.lyrics.romanized_hint"),
-                            self.romanized_lyrics))
+        romanized_row = _row(t("settings.lyrics.romanized_title"), t("settings.lyrics.romanized_hint"),
+                             self.romanized_lyrics)
+        # shortcut: hidden while there is no romanizer (see build_romanizer); show again with a light local one
+        romanized_row.hide()
+        body.addWidget(romanized_row)
         body.addWidget(_separator())
         self.romanized_lyrics.toggled.connect(lambda v: self._on_change(romanized_lyrics=v))
 

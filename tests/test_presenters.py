@@ -282,7 +282,7 @@ def test_home_asks_for_big_cards_on_daily_discover_and_releases(rig):
 def test_home_shows_loading_without_stored_feed(rig):
     home = make_home(rig)
     home.start()
-    assert rig.window.home_panel.feed._message.text() == "Cargando…"
+    assert rig.window.home_panel.feed.loading
 
 
 def test_home_error_without_content_shows_message(rig):
@@ -306,7 +306,7 @@ def test_mood_result_for_a_previous_selection_is_ignored(rig):
     home.select_mood("Fiesta")
     home.select_mood("Romance")
     rig.catalog.mood_calls[0]["on_done"]([("Late", [{"type": "song", "videoId": "x", "title": "x", "artists": []}])])
-    assert rig.window.home_panel.feed._message.text() == "Cargando…"
+    assert rig.window.home_panel.feed.loading
     rig.catalog.mood_calls[1]["on_done"](SECTIONS)
     assert home._has_content
 
@@ -325,7 +325,7 @@ def test_home_feed_ignored_while_a_mood_is_selected(rig):
     home.start()
     home.select_mood("Fiesta")
     rig.catalog.home_calls[0]["on_done"](SECTIONS)
-    assert rig.window.home_panel.feed._message.text() == "Cargando…"
+    assert rig.window.home_panel.feed.loading
 
 
 def test_empty_mood_shows_message(rig):
@@ -637,7 +637,7 @@ def test_explore_opens_loads_once_and_renders(rig):
     explore_rig(rig)
     rig.window.explore_requested.emit()
     assert rig.window.explore_panel.isVisible() and len(rig.catalog.explore_calls) == 1
-    assert rig.window.explore_panel.feed._message.text() == "Cargando…"
+    assert rig.window.explore_panel.feed.loading
     rig.catalog.explore_calls[0]["on_done"](SHELVES)
     assert len(rig.window.explore_panel.feed._built) >= 1
     rig.window.explore_requested.emit()

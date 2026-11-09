@@ -267,3 +267,25 @@ def test_session_restore_can_be_skipped(qapp, tmp_path):
     assert len(queue) == 0
     SessionService(str(path), queue, Streams()).restore()
     assert len(queue) == 1
+
+
+def test_second_client_reuses_the_visitor_id_instead_of_fetching_it(tmp_path, monkeypatch):
+    import ytmusicapi
+    from infra.ytmusic_gateway import YTMusicGateway
+
+    path = tmp_path / "oauth.json"
+    path.write_text('{"cookie": "SAPISID=1"}', encoding="utf-8")
+    seen = []
+
+    class Client:
+        def __init__(self, auth=None, **_options):
+            seen.append(dict(auth or {}))
+            # ytmusicapi fetches the visitor id only when the headers lack it
+            self.base_headers = {"X-Goog-Visitor-Id": "V1", **(auth or {})}
+
+    monkeypatch.setattr(ytmusicapi, "YTMusic", Client)
+    gateway = YTMusicGateway(str(path), "es")
+    gateway._browse_client()
+    assert seen == [{"cookie": "SAPISID=1"}, {"cookie": "SAPISID=1", "X-Goog-Visitor-Id": "V1"}]
+    from infra.secure_store import read_secret_json
+    assert read_secret_json(str(path)) == {"cookie": "SAPISID=1"}

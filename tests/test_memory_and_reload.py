@@ -235,7 +235,7 @@ def test_reload_without_content_shows_loading_and_skips_recommendations(rig):
     home = HomePresenter(rig.window, rig.catalog, rig.playback, rig.opener, rig.notifier)
     rig.keep(home)
     rig.window.home_requested.emit()
-    assert rig.window.home_panel.feed._message.text() == "Cargando…" and rig.catalog.pool_calls == []
+    assert rig.window.home_panel.feed.loading and rig.catalog.pool_calls == []
 
 
 def test_recommendations_prefetched_in_the_background_make_the_next_click_instant(rig):

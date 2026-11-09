@@ -8,16 +8,18 @@ from PySide6.QtWidgets import (
 
 from core.config import HOVER_PREFETCH_MS
 from core.i18n import t
-from ui import imaging, theme
+from ui import imaging, motion, theme
 from domain.home_shelves import CARDS_LAYOUT
 from domain.models import artist_names, thumbnail_url
 from ui.components.clickable import ClickableWidget
 from ui.components.lazy_thumbnail import LazyThumbnail
+from ui.components.skeleton import FeedSkeleton
 from ui.components.track_actions import CollectionActionsButton, TrackActionsButton
 
 CARD_SIZE = 210
 LOOKAHEAD_PX = 600
 MOOD_COLUMNS = 4
+HOVER_FADE_MS = 120
 
 
 def _arrow_style() -> str:
@@ -204,8 +206,12 @@ class HomeCard(ClickableWidget):
 
     def _sync_song_controls(self, *_):
         shown = self.hovered or self._actions.menu_is_open
+        appearing = shown and self._play_hint.isHidden()
         self._play_hint.setVisible(shown)
         self._actions.setVisible(shown)
+        if appearing:
+            motion.fade_in(self._play_hint, HOVER_FADE_MS)
+            motion.fade_in(self._actions, HOVER_FADE_MS)
         self._actions.set_revealed(shown)
 
     def _show_song_menu(self, pos):
@@ -227,7 +233,11 @@ class HomeCard(ClickableWidget):
             return
         overlay = self._overlay
         if overlay is not None:
-            overlay.setVisible(self.hovered or overlay.menu_button.menu_is_open)
+            shown = self.hovered or overlay.menu_button.menu_is_open
+            appearing = shown and overlay.isHidden()
+            overlay.setVisible(shown)
+            if appearing:
+                motion.fade_in(overlay, HOVER_FADE_MS)
 
 
 class CompactSongItem(ClickableWidget):
@@ -592,9 +602,17 @@ class SectionFeed(QWidget):
         self._message.setAlignment(Qt.AlignCenter)
         self._message.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 14px; padding: 60px;")
         self._message.hide()
+        self._skeleton = FeedSkeleton()
+        self._skeleton.hide()
+
+    @property
+    def loading(self) -> bool:
+        return not self._skeleton.isHidden()
 
     def set_loading(self):
-        self.show_message(t("home.loading"))
+        self._clear()
+        self._layout.insertWidget(0, self._skeleton)
+        self._skeleton.show()
 
     def show_message(self, text):
         self._clear()
@@ -607,9 +625,11 @@ class SectionFeed(QWidget):
         self._built = []
         self._message.hide()
         self._layout.removeWidget(self._message)
+        self._skeleton.hide()
+        self._layout.removeWidget(self._skeleton)
         while self._layout.count() > 1:
             widget = self._layout.takeAt(0).widget()
-            if widget is not None and widget is not self._message:
+            if widget is not None and widget not in (self._message, self._skeleton):
                 widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()

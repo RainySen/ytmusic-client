@@ -82,6 +82,7 @@ class Settings:
     free_memory: bool = True
     free_memory_seconds: int = DEFAULT_FREE_MEMORY_S
     remember_volume: bool = True
+    previous_restarts: bool = True
     volume: int = 100
     restore_queue: bool = True
     start_with_windows: bool = False
@@ -90,6 +91,7 @@ class Settings:
     better_lyrics_key: str = ""
     media_keys: bool = True
     notifications: bool = True
+    animations: bool = True
     thumbnail_quality: str = DEFAULT_THUMBNAIL_QUALITY
     thumbnail_cache_limit: int = DEFAULT_THUMBNAIL_CACHE
     romanized_lyrics: bool = True
@@ -123,6 +125,7 @@ class Settings:
             free_memory=_flag(data, "free_memory", True),
             free_memory_seconds=_choice(data, "free_memory_seconds", FREE_MEMORY_OPTIONS, DEFAULT_FREE_MEMORY_S),
             remember_volume=_flag(data, "remember_volume", True),
+            previous_restarts=_flag(data, "previous_restarts", True),
             volume=volume,
             restore_queue=_flag(data, "restore_queue", True),
             start_with_windows=_flag(data, "start_with_windows", False),
@@ -131,6 +134,7 @@ class Settings:
             better_lyrics_key=_text(data, "better_lyrics_key"),
             media_keys=_flag(data, "media_keys", True),
             notifications=_flag(data, "notifications", True),
+            animations=_flag(data, "animations", True),
             thumbnail_quality=_quality(data),
             thumbnail_cache_limit=_choice(data, "thumbnail_cache_limit", THUMBNAIL_CACHE_OPTIONS, DEFAULT_THUMBNAIL_CACHE),
             romanized_lyrics=_flag(data, "romanized_lyrics", True),

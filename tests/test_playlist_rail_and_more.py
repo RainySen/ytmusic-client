@@ -150,9 +150,8 @@ def test_jump_slider_click_on_the_handle_behaves_like_a_normal_slider(qapp):
 def test_seek_suppresses_stale_progress_and_time_until_the_backend_catches_up(rig):
     clock = [100.0]
     presenter = rig.keep(PlayerPresenter(rig.window, rig.playback, clock=lambda: clock[0]))
-    rig.window.player_panel.progress_slider.sliderMoved.emit(700)
-    assert rig.window.player_panel.progress_slider.value() != 100
     rig.window.player_panel.progress_slider.setValue(700)
+    rig.window.player_panel.progress_slider.sliderReleased.emit()
     rig.playback.progress.emit(0.05)
     assert rig.window.player_panel.progress_slider.value() == 700
     rig.playback.time_changed.emit(1, 300)

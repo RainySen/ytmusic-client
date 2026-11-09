@@ -403,7 +403,7 @@ def test_home_empty_and_loading_states(qapp):
     panel = HomePanel()
     panel.show()
     panel.set_loading()
-    assert panel.feed._message.isVisible() and panel.feed._message.text() == "Cargando…"
+    assert panel.feed.loading and panel.feed._skeleton.isVisible() and not panel.feed._message.isVisible()
     panel.set_sections([("Empty", [])], FakeThumbnails())
     assert "No hay contenido" in panel.feed._message.text()
     panel.set_sections([("S", [playlist(1)])], FakeThumbnails())

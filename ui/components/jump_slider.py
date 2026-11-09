@@ -2,10 +2,19 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider
+from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider, QToolTip
 
 
 class JumpSlider(QSlider):
+    # set to fraction -> label to show it under the cursor on hover
+    hover_text = None
+
+    def mouseMoveEvent(self, event):
+        if self.hover_text is not None and self.orientation() == Qt.Horizontal and self.width() > 0:
+            fraction = max(0.0, min(1.0, event.position().x() / self.width()))
+            QToolTip.showText(event.globalPosition().toPoint(), self.hover_text(fraction), self)
+        super().mouseMoveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.orientation() == Qt.Horizontal:
             option = QStyleOptionSlider()

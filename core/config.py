@@ -80,6 +80,10 @@ class AppPaths:
         return self._join("search_history.json")
 
     @property
+    def web_profile_dir(self) -> str:
+        return self._join("web_profile")
+
+    @property
     def cache_dir(self) -> str:
         return self._join("cache")
 

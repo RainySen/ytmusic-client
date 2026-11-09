@@ -65,6 +65,17 @@ class PlayQueue(QObject):
     def last(self) -> Track | None:
         return self._songs[-1] if self._songs else None
 
+    # radio seed, else the last song the user picked: suggestions never seed suggestions (style drift)
+    @property
+    def anchor(self) -> str | None:
+        if self._radio_seed:
+            return self._radio_seed
+        for song in reversed(self._songs):
+            video_id = song.get("videoId")
+            if video_id and video_id not in self._auto_ids:
+                return video_id
+        return self.last.get("videoId") if self.last else None
+
     def remaining_after_current(self) -> int:
         return max(0, len(self._songs) - self._index - 1)
 

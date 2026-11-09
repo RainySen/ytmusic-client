@@ -22,9 +22,10 @@ class LoginWindow(QWidget):
     login_skipped = Signal()
     closed = Signal()
 
-    def __init__(self, auth, app_icon):
+    def __init__(self, auth, app_icon, profile_dir: str | None = None):
         super().__init__()
         self._auth = auth
+        self._profile_dir = profile_dir
         self._app_icon = app_icon
         self._web = None
         self._build()
@@ -97,7 +98,7 @@ class LoginWindow(QWidget):
             return
         from ui.web_login_window import WebLoginWindow
 
-        self._web = WebLoginWindow()
+        self._web = WebLoginWindow(profile_dir=self._profile_dir)
         self._web.session_captured.connect(self._on_web_session)
         self._web.closed.connect(self._on_web_closed)
         self._web.start()
