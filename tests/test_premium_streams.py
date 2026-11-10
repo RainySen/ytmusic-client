@@ -22,6 +22,12 @@ class FakeYdl:
         return {"url": "https://audio.example/stream?expire=9999999999", "title": "T"}
 
 
+def test_streams_prefer_the_visionos_client(tmp_path):
+    # tv clients' urls mostly 403 in vlc (yt-dlp 2026.10.x)
+    options = YtDlpStreamResolver(str(tmp_path))._options()
+    assert options["extractor_args"]["youtube"]["player_client"][0] == "visionos"
+
+
 def make(tmp_path, cookie="SID=abc; __Secure-3PSID=def", remembered=None):
     auth = tmp_path / "oauth.json"
     if cookie is not None:
