@@ -29,6 +29,7 @@ class VlcAudioBackend(QObject):
         self._playing = False
         self._has_media = False
         self._volume = 100
+        self._paused_at = -1
 
         self._poll_ms = POLL_MS
         self._timer = QTimer(self)
@@ -76,20 +77,29 @@ class VlcAudioBackend(QObject):
         player = self._ensure()
         player.set_media(self._instance.media_new(url))
         player.play()
+        player.audio_set_mute(False)
         player.audio_set_volume(self._volume)
+        self._paused_at = -1
         self._has_media = True
         self._playing = True
         self._sync_timer()
 
+    # vlc keeps sounding for a moment after pausing, then pads the resume with that much silence:
+    # mute at once, and resume from the paused spot so the stale audio is flushed
     def pause(self) -> None:
         if self._player is not None and self._has_media:
+            self._player.audio_set_mute(True)
+            self._paused_at = self._player.get_time()
             self._player.set_pause(1)
             self._playing = False
             self._sync_timer()
 
     def resume(self) -> None:
         if self._player is not None and self._has_media:
+            if self._paused_at >= 0:
+                self._player.set_time(self._paused_at)
             self._player.set_pause(0)
+            self._player.audio_set_mute(False)
             self._playing = True
             self._sync_timer()
 
@@ -100,12 +110,15 @@ class VlcAudioBackend(QObject):
         self._has_media = False
         self._sync_timer()
 
+    # a seek flushes too: resume must not jump back
     def seek(self, fraction: float) -> None:
         if self._player is not None and self._has_media:
+            self._paused_at = -1
             self._player.set_position(max(0.0, min(1.0, fraction)))
 
     def seek_by(self, delta_ms: int) -> None:
         if self._player is not None and self._has_media:
+            self._paused_at = -1
             self._player.set_time(max(0, self._player.get_time() + delta_ms))
             self._poll()
 

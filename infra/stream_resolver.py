@@ -20,6 +20,8 @@ ACCOUNT_MARKERS = ("premium", "sign in to confirm", "members only", "join this c
 JS_RUNTIMES = (("deno", "deno"), ("node", "node"), ("bun", "bun"), ("quickjs", "qjs"))
 COOKIE_DOMAIN = ".youtube.com"
 COOKIE_TTL_S = 365 * 24 * 3600
+# "default" keeps yt-dlp's own clients as fallback
+PLAYER_CLIENTS = ["visionos", "default"]
 
 _LEGACY_KEYS = {
     "NO_RUNTIME_MESSAGE": "login.stream.no_runtime",
@@ -79,6 +81,8 @@ class YtDlpStreamResolver:
         return {
             "js_runtimes": available_js_runtimes(),
             "format": "bestaudio/best",
+            # newer yt-dlp prefers tv clients whose urls mostly 403 in vlc; visionos needs no js challenge
+            "extractor_args": {"youtube": {"player_client": PLAYER_CLIENTS}},
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
