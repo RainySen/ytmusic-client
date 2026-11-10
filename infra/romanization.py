@@ -1,52 +1,44 @@
 from __future__ import annotations
 
+import importlib.util
 import logging
-from typing import Any, Callable
-
-import requests
+from dataclasses import replace
+from typing import Callable
 
 from domain.models import Lyrics
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "PyMusicClient/1.0 (https://github.com/RainySen/ytmusic-client)"
-TIMEOUT_S = 8
-MAX_LINES = 200
-MAX_LINE_CHARS = 500
-ATTRIBUTION = "Unison (https://unison.boidu.dev)"
-
-HttpPost = Callable[..., Any]
+# optional: the option shows up only when sen-romanizer is installed
+LIBRARY = "sen_romanizer"
 
 
-def _http_post(url: str, json: dict):
-    return requests.post(url, json=json, headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT_S)
+def available() -> bool:
+    return importlib.util.find_spec(LIBRARY) is not None
 
 
-class UnisonRomanizer:
-    URL = "https://unison.boidu.dev/translate"
-
-    def __init__(self, target: str = "en", http_post: HttpPost = _http_post):
-        self._target = target
-        self._post = http_post
+class LocalRomanizer:
+    def __init__(self, romanize: Callable[..., str], detect: Callable[[list[str]], str | None] | None = None):
+        self._romanize = romanize
+        self._detect = detect
 
     def enrich(self, lyrics: Lyrics) -> Lyrics:
-        pending = [(i, line) for i, line in enumerate(lyrics.lines)
-                  if line.text.strip() and not line.romanization]
-        if not pending or len(lyrics.lines) > MAX_LINES:
-            return lyrics
-        texts = [line.text[:MAX_LINE_CHARS] for _i, line in pending]
+        lines = []
         try:
-            response = self._post(self.URL, json={"lines": texts, "to": self._target})
-            response.raise_for_status()
-            results = (response.json() or {}).get("lines") or []
-        except Exception as exc:
-            log.info("Unison romanization unavailable: %s", exc)
+            # the whole song picks the language: kanji-only lines of a japanese song are not chinese
+            lang = self._detect([line.text for line in lyrics.lines]) if self._detect else None
+            for line in lyrics.lines:
+                roman = "" if line.romanization or not line.text.strip() else self._romanize(line.text, lang)
+                # latin lines come back empty; identical text adds nothing under the line
+                lines.append(replace(line, romanization=roman) if roman and roman != line.text else line)
+        except Exception:
+            log.warning("Romanization failed", exc_info=True)
             return lyrics
-        if len(results) != len(pending):
-            return lyrics
-        lines = list(lyrics.lines)
-        for (index, line), result in zip(pending, results):
-            romanized = (result or {}).get("romanization") or ""
-            if romanized:
-                lines[index] = line.__class__(line.text, line.time_ms, line.end_ms, line.words, romanized)
         return Lyrics(tuple(lines), lyrics.synced, lyrics.source)
+
+
+def load_romanizer() -> LocalRomanizer | None:
+    if not available():
+        return None
+    from sen_romanizer import detect_language, romanize
+    return LocalRomanizer(romanize, detect_language)

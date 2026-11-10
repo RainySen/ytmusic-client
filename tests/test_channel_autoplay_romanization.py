@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QSystemTrayIcon
 from domain.models import LyricLine, LyricWord, Lyrics, normalize_track
 from domain.settings import Settings
 from infra.concurrency import TaskRunner
-from infra.romanization import UnisonRomanizer
+from infra.romanization import LocalRomanizer
 from presenters.player_presenter import PlayerPresenter
 from presenters.profile_presenter import ProfilePresenter
 from services.library_service import CHANNEL_ID, LibraryService
@@ -53,40 +53,27 @@ class FakeResponse:
         return self._payload
 
 
-def test_romanizer_posts_only_lines_missing_romanization_and_fills_them_in():
-    calls = []
+def test_local_romanizer_fills_only_lines_that_need_it():
+    seen = []
 
-    def post(url, json):
-        calls.append((url, json))
-        return FakeResponse({"lines": [{"romanization": "konnichiwa"}]})
+    def romanize(text, lang=None):
+        seen.append(text)
+        return {"花": "hana", "Hi": ""}.get(text, text)
 
-    romanizer = UnisonRomanizer("en", http_post=post)
-    lyrics = Lyrics((LyricLine("a", 0), LyricLine("b", 1000, romanization="ya-tiene")), synced=True, source="x")
-    out = romanizer.enrich(lyrics)
-    assert calls[0][0] == UnisonRomanizer.URL
-    assert calls[0][1] == {"lines": ["a"], "to": "en"}
-    assert out.lines[0].romanization == "konnichiwa"
-    assert out.lines[1].romanization == "ya-tiene"
-    assert out.synced and out.source == "x"
+    lyrics = Lyrics((LyricLine("花", 0), LyricLine("b", 1000, romanization="ya-tiene"), LyricLine("Hi", 2000),
+                     LyricLine("龘", 3000), LyricLine("  ", 4000)), synced=True, source="x")
+    out = LocalRomanizer(romanize).enrich(lyrics)
+    assert [line.romanization for line in out.lines] == ["hana", "ya-tiene", "", "", ""]
+    assert seen == ["花", "Hi", "龘"]
+    assert out.synced and out.source == "x" and out.lines[0].time_ms == 0
 
 
-def test_romanizer_leaves_lyrics_untouched_on_network_failure():
-    def post(url, json):
-        raise RuntimeError("down")
+def test_local_romanizer_leaves_lyrics_untouched_when_the_library_fails():
+    def romanize(text, lang=None):
+        raise RuntimeError("broken")
 
-    romanizer = UnisonRomanizer("en", http_post=post)
-    lyrics = Lyrics((LyricLine("a", 0),), synced=True)
-    assert romanizer.enrich(lyrics) is lyrics
-
-
-def test_romanizer_skips_empty_lines_and_giant_line_counts():
-    calls = []
-    romanizer = UnisonRomanizer("en", http_post=lambda *a, **k: calls.append(1) or FakeResponse({"lines": []}))
-    assert romanizer.enrich(Lyrics((LyricLine(""),), synced=False)).lines[0].text == ""
-    assert calls == []
-    huge = Lyrics(tuple(LyricLine("x") for _ in range(201)), synced=False)
-    assert romanizer.enrich(huge) is huge
-    assert calls == []
+    lyrics = Lyrics((LyricLine("花", 0),), synced=True)
+    assert LocalRomanizer(romanize).enrich(lyrics) is lyrics
 
 
 def test_lyrics_service_applies_romanization_only_when_enabled(qapp, wait_until):
@@ -115,11 +102,33 @@ def test_lyrics_service_applies_romanization_only_when_enabled(qapp, wait_until)
         assert wait_until(lambda: got)
         assert got[0].lines[0].romanization == "r" and romanizer.calls == 1
 
+        resets = []
+        service.reset.connect(lambda: resets.append(1))
         service.set_romanize(False)
+        service.set_romanize(False)
+        assert resets == [1]
         got2 = []
         service.fetch(song(1), got2.append)
         assert wait_until(lambda: got2)
         assert got2[0].lines[0].romanization == "" and romanizer.calls == 1
+    finally:
+        runner.shutdown()
+
+
+def test_provider_romanization_is_hidden_when_the_option_is_off(qapp, wait_until):
+    class Provider:
+        name = "p"
+
+        def fetch(self, query):
+            return Lyrics((LyricLine("夜", 0, romanization="yoru"),), synced=True, source="p")
+
+    runner = TaskRunner("lyr-rom-off", 1)
+    service = LyricsService([Provider()], runner, romanizer=None, romanize=False)
+    try:
+        got = []
+        service.fetch(song(1), got.append)
+        assert wait_until(lambda: got)
+        assert got[0].lines[0].romanization == ""
     finally:
         runner.shutdown()
 
@@ -453,11 +462,43 @@ def test_changing_the_setting_reaches_the_playback_service(tmp_path, monkeypatch
         services.shutdown()
 
 
-def test_romanization_is_off_until_a_light_romanizer_exists(qapp):
-    from core.bootstrap import build_romanizer
+def test_romanization_option_follows_the_optional_library(qapp, monkeypatch):
+    from core import bootstrap
     from domain.settings import Settings
+    from infra import romanization
     from ui.settings_dialog import SettingsDialog
-    assert build_romanizer() is None
-    dialog = SettingsDialog(None, Settings(), True, lambda **kw: None)
-    assert dialog.romanized_lyrics.parentWidget().isHidden()
-    dialog.deleteLater()
+    monkeypatch.setattr(romanization, "available", lambda: False)
+    assert bootstrap.build_romanizer() is None
+    hidden = SettingsDialog(None, Settings(), True, lambda **kw: None)
+    assert hidden.romanized_lyrics.parentWidget().isHidden()
+    shown = SettingsDialog(None, Settings(), True, lambda **kw: None, romanization_available=True)
+    assert not shown.romanized_lyrics.parentWidget().isHidden()
+    hidden.deleteLater()
+    shown.deleteLater()
+
+
+def test_line_synced_romanized_lines_light_up_when_active(qapp):
+    from ui import theme
+    from ui.components.side_panel import SidePanel
+    panel = SidePanel()
+    panel.set_lyrics(Lyrics((LyricLine("君", 0, romanization="kimi"), LyricLine("空", 1000, romanization="sora"),
+                             LyricLine("plain", 2000)), synced=True, source="LRCLIB"))
+    labels = [panel._lyrics.itemWidget(panel._lyrics.item(i)) for i in range(2)]
+    panel.highlight_lyric(1)
+    assert theme.CHIP_CHECKED in labels[1].text() and theme.CHIP_CHECKED not in labels[0].text()
+    panel.highlight_lyric(0)
+    assert theme.CHIP_CHECKED in labels[0].text() and theme.CHIP_CHECKED not in labels[1].text()
+    panel.highlight_lyric(2)
+    assert theme.CHIP_CHECKED not in labels[0].text()
+
+
+def test_local_romanizer_decides_the_language_once_per_song():
+    calls = []
+
+    def romanize(text, lang=None):
+        calls.append((text, lang))
+        return "x"
+
+    lyrics = Lyrics((LyricLine("寝床", 0), LyricLine("君の名前", 1000)), synced=True)
+    LocalRomanizer(romanize, detect=lambda texts: "ja" if any("の" in t for t in texts) else "zh").enrich(lyrics)
+    assert calls == [("寝床", "ja"), ("君の名前", "ja")]

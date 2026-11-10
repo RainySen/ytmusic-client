@@ -84,7 +84,7 @@
   "settings.lyrics.key_title": "Better Lyrics key",
   "settings.lyrics.key_hint": "Without a key it only returns what it already has cached. Its authors hand out keys per project.",
   "settings.lyrics.romanized_title": "Romanization (romaji, etc.)",
-  "settings.lyrics.romanized_hint": "Shows a second line with the lyrics transcribed to the Latin alphabet when the original language does not use it, via the Unison API (unison.boidu.dev). Applies to the next lyrics requested.",
+  "settings.lyrics.romanized_hint": "Shows a second line with the lyrics transcribed to the Latin alphabet when the original language does not use it (Japanese, Chinese, Korean, Russian, Greek). Works offline with sen-romanizer (JMdict and CC-CEDICT dictionaries, CC BY-SA 4.0). Applies to the next lyrics requested.",
   "settings.lyrics.move_up": "Move up",
   "settings.lyrics.move_down": "Move down",
   "settings.cache.section": "Cache",

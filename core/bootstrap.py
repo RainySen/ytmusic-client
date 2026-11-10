@@ -27,7 +27,7 @@ from infra.listen_again_pins import ListenAgainPins
 from infra.pinned_playlists import PinnedPlaylists
 from infra.playlist_repository import LocalPlaylistRepository
 from infra.recent_playlists import RecentPlaylists
-from infra.romanization import UnisonRomanizer
+from infra.romanization import LocalRomanizer, available as romanization_available, load_romanizer
 from infra.stream_resolver import YtDlpStreamResolver
 from infra.settings_repository import SettingsRepository
 from infra.thumbnail_cache import ThumbnailCache
@@ -124,10 +124,9 @@ def build_lyrics_providers(settings: Settings, gateway: YTMusicGateway, environ:
     return [available[name]() for name in settings.lyrics_providers if name in available]
 
 
-# shortcut: unison stopped returning romanization (translation only) and local libs cost +110 MB (pykakasi)
-# or +49 MB (pypinyin); off until a light romanizer exists
-def build_romanizer() -> UnisonRomanizer | None:
-    return None
+# separate factory so tests can mock it; None when sen-romanizer is not installed
+def build_romanizer() -> LocalRomanizer | None:
+    return load_romanizer()
 
 
 def _remove_quietly(path: str) -> None:
@@ -316,7 +315,8 @@ def build_ui(services: Services, app_icon, login_window_factory: Callable[[], QW
         memory=memory,
         preferences=SettingsPresenter(window, services.settings, free_now=memory.free_now, cache=cache,
                                       on_language=change_language, autostart_available=autostart.available,
-                                      thumbnails=thumbnails, open_log=lambda: reveal_file(paths.log_file), restart=restart),
+                                      thumbnails=thumbnails, open_log=lambda: reveal_file(paths.log_file), restart=restart,
+                                      romanization_available=romanization_available()),
         mini=MiniPlayerPresenter(window, services.playback, services.settings),
         system=SystemPresenter(window, services.playback, services.settings, MediaKeys(), autostart),
         playlist_rail=PlaylistRailPresenter(window, services.library, services.playback, services.notifier),

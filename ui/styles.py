@@ -164,6 +164,12 @@ QSplitter::handle {{ background: transparent; width: 1px; height: 1px; }}
 """ + _THEME_EXTRAS.get(theme.current(), lambda: "")()
 
 
+# lyrics over a painted backdrop need a darker plate to stay readable
+def _lyrics_plate(alpha: float) -> str:
+    return (f"#lyrics_list {{ background: {theme.shade(alpha)}; border: 1px solid {theme.overlay(0.10)}; "
+            f"border-radius: {theme.radius(12)}px; }}\n")
+
+
 def _aero_qss() -> str:
     shine = (f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {theme.overlay(0.26)}, stop:0.49 {theme.overlay(0.10)}, "
              f"stop:0.5 {theme.overlay(0.03)}, stop:1 {theme.overlay(0.12)})")
@@ -198,7 +204,7 @@ QMenu {{
     border: 1px solid {theme.overlay(0.40)};
 }}
 QMenu::item:selected {{ background: {shine}; border: 1px solid {theme.overlay(0.45)}; }}
-"""
+""" + _lyrics_plate(0.6)
 
 
 def _cyberpunk_qss() -> str:
@@ -218,7 +224,7 @@ QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{ border-radius: 0; 
 QMenu {{ border-radius: 0; border: 1px solid {theme.LINK}; }}
 QMenu::item {{ border-radius: 0; }}
 QMenu::item:selected {{ background: {theme.SELECTION}; border-left: 2px solid {theme.ACCENT}; }}
-"""
+""" + _lyrics_plate(0.72)
 
 
 _THEME_EXTRAS = {"aero": _aero_qss, "cyberpunk": _cyberpunk_qss}

@@ -84,7 +84,7 @@
   "settings.lyrics.key_title": "Chave do Better Lyrics",
   "settings.lyrics.key_hint": "Sem chave, só responde o que já tem salvo. Os autores fornecem chaves por projeto.",
   "settings.lyrics.romanized_title": "Romanização (romaji etc.)",
-  "settings.lyrics.romanized_hint": "Mostra uma segunda linha com a letra transcrita para o alfabeto latino quando o idioma original não o usa, pela API do Unison (unison.boidu.dev). Vale para a próxima letra pedida.",
+  "settings.lyrics.romanized_hint": "Mostra uma segunda linha com a letra transcrita para o alfabeto latino quando o idioma original não o usa (japonês, chinês, coreano, russo, grego). Funciona offline com o sen-romanizer (dicionários JMdict e CC-CEDICT, CC BY-SA 4.0). Vale para a próxima letra pedida.",
   "settings.lyrics.move_up": "Subir",
   "settings.lyrics.move_down": "Descer",
   "settings.cache.section": "Cache",

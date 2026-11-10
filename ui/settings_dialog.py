@@ -152,7 +152,8 @@ class SettingsDialog(Modal):
 
     def __init__(self, parent, settings: Settings, tray_available: bool, on_change, on_free=None, *,
                  cache_size=None, clear_cache=None, logged_in: bool = False, on_account=None,
-                 autostart_available: bool = True, on_open_log=None, on_restart=None):
+                 autostart_available: bool = True, on_open_log=None, on_restart=None,
+                 romanization_available: bool = False):
         super().__init__(parent, t("settings.title"), width=540, height=_dialog_height())
         self._on_change = on_change
         self._on_free = on_free
@@ -161,6 +162,7 @@ class SettingsDialog(Modal):
         self._on_account = on_account
         self._on_open_log = on_open_log
         self._on_restart = on_restart
+        self._romanization_available = romanization_available
         sections = {
             "playback": (lambda b: self._build_playback(b, settings), lambda b: self._build_radio(b, settings),
                          lambda b: self._build_lyrics(b, settings)),
@@ -340,8 +342,8 @@ class SettingsDialog(Modal):
         self.romanized_lyrics = Switch(settings.romanized_lyrics)
         romanized_row = _row(t("settings.lyrics.romanized_title"), t("settings.lyrics.romanized_hint"),
                              self.romanized_lyrics)
-        # shortcut: hidden while there is no romanizer (see build_romanizer); show again with a light local one
-        romanized_row.hide()
+        # optional library: hidden when sen-romanizer is not installed
+        romanized_row.setVisible(self._romanization_available)
         body.addWidget(romanized_row)
         body.addWidget(_separator())
         self.romanized_lyrics.toggled.connect(lambda v: self._on_change(romanized_lyrics=v))

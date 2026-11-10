@@ -66,6 +66,23 @@ def _clock(value: str | None) -> int | None:
     return parse_time_ms(value) if value else None
 
 
+# Apple TTML keeps romaji in the header, keyed by each line's itunes:key
+def _transliterations(root: ET.Element) -> dict[str, str]:
+    lines: dict[str, str] = {}
+    for block in root.iter():
+        if _local(block.tag) != "transliteration":
+            continue
+        for text in block:
+            key = text.get("for")
+            if _local(text.tag) == "text" and key and key not in lines:
+                lines[key] = " ".join("".join(text.itertext()).split())
+    return lines
+
+
+def _line_key(paragraph: ET.Element) -> str:
+    return next((value for key, value in paragraph.attrib.items() if key.rsplit("}", 1)[-1] == "key"), "")
+
+
 def _collect_words(node: ET.Element, words: list[list], line_start: int) -> None:
     for child in node:
         if _local(child.tag) != "span":
@@ -92,6 +109,7 @@ def parse_ttml(document: str | None, source: str = "") -> Lyrics | None:
     except ET.ParseError:
         return None
     lines: list[LyricLine] = []
+    romanized = _transliterations(root)
     for paragraph in root.iter():
         if _local(paragraph.tag) != "p":
             continue
@@ -113,7 +131,8 @@ def parse_ttml(document: str | None, source: str = "") -> Lyrics | None:
             start, stop, timed = begin, end, ()
         if not text or start is None:
             continue
-        lines.append(LyricLine(text, start, stop if stop is not None else start, timed))
+        lines.append(LyricLine(text, start, stop if stop is not None else start, timed,
+                               romanized.get(_line_key(paragraph), "")))
     if not lines:
         return None
     lines.sort(key=lambda line: line.time_ms)

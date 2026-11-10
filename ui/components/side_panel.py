@@ -43,6 +43,7 @@ def _tab_qss() -> str:
 
 LYRICS_TEXT_WIDTH = PANEL_WIDTH - 32 - 44
 LYRICS_FONT_PX = 17
+LYRICS_ACTIVE_FONT_PX = 19
 
 
 def _hint_qss() -> str:
@@ -287,6 +288,8 @@ class SidePanel(QWidget):
         self._lyric_sung = {}
         self._lyric_active = -1
         self._lyric_romanization = {}
+        self._plain_lines = {}
+        self._plain_active = -1
         return tab
 
     def set_lyrics(self, lyrics: Lyrics):
@@ -326,14 +329,18 @@ class SidePanel(QWidget):
             if not line.romanization:
                 item.setText(line.text)
                 continue
-            label = QLabel(f'{escape(line.text)}<br><span style="color:{theme.TEXT_MUTED}; font-size: 12px;">'
-                           f'{escape(line.romanization)}</span>')
+            label = QLabel()
             label.setWordWrap(True)
             label.setTextFormat(Qt.RichText)
             label.setAlignment(Qt.AlignCenter)
             label.setFixedWidth(LYRICS_TEXT_WIDTH)
             label.setStyleSheet("background: transparent;")
+            index = self._lyrics.count() - 1
+            self._plain_lines[index] = (label, line)
+            # sized while active: the bigger font must fit when the line lights up
+            self._render_plain(index, active=True)
             item.setSizeHint(QSize(LYRICS_TEXT_WIDTH, label.heightForWidth(LYRICS_TEXT_WIDTH) + 16))
+            self._render_plain(index, active=False)
             self._lyrics.setItemWidget(item, label)
 
     def _reset_lyrics(self):
@@ -342,6 +349,15 @@ class SidePanel(QWidget):
         self._lyric_sung = {}
         self._lyric_active = -1
         self._lyric_romanization = {}
+        self._plain_lines = {}
+        self._plain_active = -1
+
+    # item widgets ignore the list's selected style, so romanized lines light themselves up
+    def _render_plain(self, index, active):
+        label, line = self._plain_lines[index]
+        color, size = (theme.CHIP_CHECKED, LYRICS_ACTIVE_FONT_PX) if active else (theme.TEXT_MUTED, LYRICS_FONT_PX)
+        label.setText(f'<span style="color:{color}; font-size: {size}px; font-weight: 700;">{escape(line.text)}</span>'
+                      f'<br><span style="color:{theme.TEXT_MUTED}; font-size: 12px;">{escape(line.romanization)}</span>')
 
     def set_lyrics_lines(self, lines):
         self._reset_lyrics()
@@ -357,6 +373,12 @@ class SidePanel(QWidget):
             self._select_tab(TAB_LYRICS)
 
     def highlight_lyric(self, index):
+        if index != self._plain_active:
+            if self._plain_active in self._plain_lines:
+                self._render_plain(self._plain_active, active=False)
+            if index in self._plain_lines:
+                self._render_plain(index, active=True)
+            self._plain_active = index
         if 0 <= index < self._lyrics.count():
             self._lyrics.setCurrentRow(index)
             self._lyrics.scrollToItem(self._lyrics.item(index), QListWidget.PositionAtCenter)

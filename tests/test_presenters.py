@@ -446,8 +446,11 @@ def test_clear_confirmed_keeps_only_current(rig):
     assert [s["videoId"] for s in rig.queue.snapshot()] == ["v2"]
 
 
-class FakeLyrics:
+class FakeLyrics(QObject):
+    reset = Signal()
+
     def __init__(self):
+        super().__init__()
         self.calls = []
 
     def fetch(self, video_id, on_done, on_error=None):
@@ -493,6 +496,15 @@ def test_unsynced_lyrics_do_not_highlight(rig):
     lyrics.calls[-1][1](Lyrics((LyricLine("x"), LyricLine("y")), synced=False))
     rig.playback.time_ms.emit(3000)
     assert rig.window.side_panel._lyrics.currentRow() == -1
+
+
+def test_lyrics_reload_for_the_current_song_on_reset(rig):
+    lyrics = FakeLyrics()
+    rig.keep(LyricsPresenter(rig.window, rig.playback, lyrics))
+    rig.playback.play_track(song(1))
+    lyrics.calls[-1][1](timed(("a", 0)))
+    lyrics.reset.emit()
+    assert len(lyrics.calls) == 2 and lyrics.calls[-1][0] == song(1)
 
 
 def test_lyrics_error_shows_not_found(rig):

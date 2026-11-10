@@ -86,6 +86,23 @@ def test_ttml_nested_background_vocals_are_flattened_in_order():
     assert line.text == "Main (echo)" and [w.text for w in line.words] == ["Main ", "(echo)"]
 
 
+def test_ttml_header_transliterations_become_line_romanization():
+    doc = ('<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">'
+           '<head><metadata><iTunesMetadata xmlns="http://music.apple.com/lyric-ttml-internal"><transliterations>'
+           '<transliteration xml:lang="ja-Latn"><text for="L1">'
+           '<span xmlns="http://www.w3.org/ns/ttml" begin="1.0" end="2.0">shizu</span>'
+           '<span xmlns="http://www.w3.org/ns/ttml" begin="2.0" end="3.0">mu</span> '
+           '<span xmlns="http://www.w3.org/ns/ttml" begin="3.0" end="4.0">you ni</span></text>'
+           '</transliteration></transliterations></iTunesMetadata></metadata></head><body><div>'
+           '<p begin="1.0" end="4.0" itunes:key="L1"><span begin="1.0" end="3.0">沈む</span>'
+           '<span begin="3.0" end="4.0">ように</span></p>'
+           '<p begin="5.0" end="6.0" itunes:key="L2"><span begin="5.0" end="6.0">夜</span></p>'
+           '</div></body></tt>')
+    first, second = parse_ttml(doc).lines
+    assert first.text == "沈むように" and first.romanization == "shizumu you ni"
+    assert second.romanization == ""
+
+
 def test_ttml_refuses_entities_bad_xml_and_empty_documents():
     assert parse_ttml('<!DOCTYPE x [<!ENTITY a "aaaa">]><tt><body><p begin="0:01">&a;</p></body></tt>') is None
     assert parse_ttml("<tt><body><p") is None
