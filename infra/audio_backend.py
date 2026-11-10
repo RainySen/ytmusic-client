@@ -77,6 +77,7 @@ class VlcAudioBackend(QObject):
         player = self._ensure()
         player.set_media(self._instance.media_new(url))
         player.play()
+        # 1.6.1 muted on pause; clear a session it may have left muted
         player.audio_set_mute(False)
         player.audio_set_volume(self._volume)
         self._paused_at = -1
@@ -85,10 +86,10 @@ class VlcAudioBackend(QObject):
         self._sync_timer()
 
     # vlc keeps sounding for a moment after pausing, then pads the resume with that much silence:
-    # mute at once, and resume from the paused spot so the stale audio is flushed
+    # resume from the paused spot so the stale audio is flushed.
+    # no mute here: vlc applies session mute out of order and songs stayed silent
     def pause(self) -> None:
         if self._player is not None and self._has_media:
-            self._player.audio_set_mute(True)
             self._paused_at = self._player.get_time()
             self._player.set_pause(1)
             self._playing = False
@@ -99,7 +100,6 @@ class VlcAudioBackend(QObject):
             if self._paused_at >= 0:
                 self._player.set_time(self._paused_at)
             self._player.set_pause(0)
-            self._player.audio_set_mute(False)
             self._playing = True
             self._sync_timer()
 
