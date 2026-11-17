@@ -31,7 +31,7 @@ jobs:
 
       # published hash lets users check the download is untouched
       - run: |
-          foreach ($exe in Get-ChildItem release/PyMusicClient-Setup-*.exe) {
+          foreach ($exe in Get-ChildItem release/SeinyFM-Setup-*.exe) {
             $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
             Set-Content "$($exe.FullName).sha256" "$hash  $($exe.Name)" -Encoding ascii -NoNewline
           }
@@ -39,11 +39,11 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installer
-          path: release/PyMusicClient-Setup-*.exe*
+          path: release/SeinyFM-Setup-*.exe*
       - if: startsWith(github.ref, 'refs/tags/v')
         run: |
           $tag = "${{ github.ref_name }}"
-          $files = (Get-ChildItem release/PyMusicClient-Setup-*.exe*).FullName
+          $files = (Get-ChildItem release/SeinyFM-Setup-*.exe*).FullName
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $files --clobber

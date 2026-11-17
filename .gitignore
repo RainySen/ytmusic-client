@@ -207,7 +207,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 
-# PyMusic Client — credentials / local state
+# Seiny FM — credentials / local state
 oauth.json
 client_config.json
 queue_and_cache.json

@@ -17,7 +17,7 @@ if (-not $iscc) {
 Write-Host "Limpiando builds anteriores..." -ForegroundColor Yellow
 Remove-Item -Recurse -Force build, dist, release, "*.spec" -ErrorAction SilentlyContinue
 
-Write-Host "Compilando YTMusicClient $version..." -ForegroundColor Cyan
+Write-Host "Compilando Seiny FM $version..." -ForegroundColor Cyan
 & $python -m PyInstaller --onedir --noconsole --clean --noconfirm --distpath release --name "YTMusicClient" --icon "icon.ico" --version-file "version_info.txt" --add-data "version_info.txt;." --add-data "locales;locales" --add-data "ui/fonts;ui/fonts" --collect-datas yt_dlp --collect-datas yt_dlp_ejs --hidden-import yt_dlp_ejs --collect-datas qtawesome --collect-datas ytmusicapi --hidden-import "PySide6.QtSvg" "app.py"
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller fallo" }
 
@@ -26,9 +26,9 @@ if ($LASTEXITCODE -ne 0) { throw "prune_bundle fallo" }
 
 if ($iscc) {
     Write-Host "Generando instalador..." -ForegroundColor Cyan
-    & $iscc "/DAppVersion=$version" "installer\PyMusicClient.iss"
+    & $iscc "/DAppVersion=$version" "installer\SeinyFM.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup fallo" }
-    Write-Host "Instalador: release\PyMusicClient-Setup-$version.exe" -ForegroundColor Green
+    Write-Host "Instalador: release\SeinyFM-Setup-$version.exe" -ForegroundColor Green
 } else {
     Write-Host "Inno Setup no encontrado (winget install JRSoftware.InnoSetup); solo se genero la carpeta release\YTMusicClient" -ForegroundColor Yellow
 }

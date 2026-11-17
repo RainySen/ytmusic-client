@@ -5,7 +5,7 @@ import shutil
 import sys
 from dataclasses import dataclass
 
-APP_NAME = "PyMusic Client"
+APP_NAME = "Seiny FM"
 DATA_DIR_NAME = "data"
 LEGACY_DATA = ("oauth.json", "local_playlists.json", "queue_and_cache.json", "lyrics_settings.json",
                "ytmusic-client.log*", "cache", ".yt-dlp-cache")

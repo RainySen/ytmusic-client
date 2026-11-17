@@ -1,7 +1,7 @@
 {
-  "login.app_name": "PyMusic Client",
+  "login.app_name": "Seiny FM",
   "login.credits": "by RainySen & Moonshine",
-  "login.window.title": "Bienvenido a PyMusic Client",
+  "login.window.title": "Bienvenido a Seiny FM",
   "login.continue": "Continuar",
   "login.google": "Iniciar sesión con Google",
   "login.manual.button": "Pegar cURL o cookies",

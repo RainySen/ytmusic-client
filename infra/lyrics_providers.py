@@ -12,7 +12,7 @@ from infra.ytmusic_gateway import YTMusicGateway
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "PyMusicClient/1.0 (https://github.com/RainySen/ytmusic-client)"
+USER_AGENT = "SeinyFM/1.0 (https://github.com/RainySen/ytmusic-client)"
 TIMEOUT_S = 6
 DURATION_TOLERANCE_S = 3
 RETRIES = 1
