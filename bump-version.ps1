@@ -9,6 +9,14 @@ Set-Location $PSScriptRoot
 $Version = $Version -replace '^v\.?', ''
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Usa el formato mayor.menor.parche, por ejemplo 1.3.0" }
 
+# releases are cut from an up-to-date master only; checked before anything is written
+if ($Publish) {
+    $branch = git branch --show-current
+    if ($branch -ne "master") { throw "Publica desde master (estas en '$branch'): git switch master; git pull" }
+    git fetch -q origin master
+    if ((git rev-parse HEAD) -ne (git rev-parse origin/master)) { throw "Tu master no coincide con origin/master: haz git pull (o sube tus commits por PR)" }
+}
+
 $parts = $Version.Split(".")
 $tuple = "($($parts[0]), $($parts[1]), $($parts[2]), 0)"
 $text = Get-Content version_info.txt -Raw
