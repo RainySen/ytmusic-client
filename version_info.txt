@@ -16,11 +16,11 @@ VSVersionInfo(
       StringTable(
         '040904B0',
         [
-          StringStruct('FileDescription', 'PyMusic Client'),
+          StringStruct('FileDescription', 'Seiny FM'),
           StringStruct('FileVersion', '1.6.1'),
           StringStruct('InternalName', 'YTMusicClient'),
           StringStruct('OriginalFilename', 'YTMusicClient.exe'),
-          StringStruct('ProductName', 'PyMusic Client'),
+          StringStruct('ProductName', 'Seiny FM'),
           StringStruct('ProductVersion', '1.6.1'),
         ]
       )

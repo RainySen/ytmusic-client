@@ -5,6 +5,7 @@ from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSplitter, QSystemTrayIcon, QVBoxLayout, QWidget
 
+from core.config import APP_NAME
 from core.i18n import t
 from domain.models import format_seconds
 from ui import motion, theme
@@ -84,7 +85,7 @@ class MainWindow(QWidget):
         self._close_to_tray = True
 
         self.setWindowIcon(app_icon)
-        self.setWindowTitle("PyMusic Client")
+        self.setWindowTitle(APP_NAME)
         # before any child exists: set late, qt re-polishes every widget (~0.5 s)
         theme.load_fonts()
         backdrop = SCENES.get(theme.current())
@@ -273,7 +274,7 @@ class MainWindow(QWidget):
 
     def _setup_tray(self):
         self.tray_icon = QSystemTrayIcon(self._app_icon, self)
-        self.tray_icon.setToolTip("PyMusic Client")
+        self.tray_icon.setToolTip(APP_NAME)
         menu = QMenu(self)
         menu.addAction(t("main.tray.show")).triggered.connect(self.bring_to_front)
         menu.addSeparator()

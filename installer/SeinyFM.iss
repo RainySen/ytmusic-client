@@ -1,7 +1,8 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
-#define AppName "PyMusic Client"
+#define AppName "Seiny FM"
+; exe and install dir keep the old name: autostart entries and updates point at them
 #define AppExe "YTMusicClient.exe"
 #define VlcUrl "https://get.videolan.org/vlc/3.0.21/win64/vlc-3.0.21-win64.exe"
 #define VlcSha256 "9742689a50e96ddc04d80ceff046b28da2beefd617be18166f8c5e715ec60c59"
@@ -23,7 +24,7 @@ RestartApplications=no
 SetupIconFile=..\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=..\release
-OutputBaseFilename=PyMusicClient-Setup-{#AppVersion}
+OutputBaseFilename=SeinyFM-Setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -51,6 +52,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\release\YTMusicClient\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; shortcuts from before the rename
+[InstallDelete]
+Type: files; Name: "{autoprograms}\PyMusic Client.lnk"
+Type: files; Name: "{autodesktop}\PyMusic Client.lnk"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
