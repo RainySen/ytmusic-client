@@ -28,15 +28,16 @@ def backend(qapp, player):
     return audio
 
 
-def test_pause_mutes_first_and_resume_flushes_from_the_paused_spot(qapp):
+def test_resume_flushes_from_the_paused_spot_without_touching_mute(qapp):
+    # vlc applied mute out of order and left songs silent (1.6.1)
     player = FakePlayer()
     audio = backend(qapp, player)
     audio.pause()
-    assert player.calls == [("mute", True), ("pause", 1)]
+    assert player.calls == [("pause", 1)]
     player.calls.clear()
     player.time_ms = 43_000  # vlc's clock may drift while the tail still plays
     audio.resume()
-    assert player.calls == [("time", 42_000), ("pause", 0), ("mute", False)]
+    assert player.calls == [("time", 42_000), ("pause", 0)]
     assert audio.is_playing
 
 
@@ -47,4 +48,4 @@ def test_seeking_while_paused_is_not_undone_by_resume(qapp):
     audio.seek(0.5)
     player.calls.clear()
     audio.resume()
-    assert player.calls == [("pause", 0), ("mute", False)]
+    assert player.calls == [("pause", 0)]
