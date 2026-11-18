@@ -16,7 +16,7 @@
   "library.empty.artists": "No hay artistas todavía.",
   "library.load_failed": "No se pudo cargar. Revisa tu conexión e inténtalo de nuevo.",
   "library.link_copied": "Enlace copiado al portapapeles.",
-  "library.cloud_playlist_description": "Creada desde PyMusic Client",
+  "library.cloud_playlist_description": "Creada desde Seiny FM",
   "library.channel.recent": "Escuchado recientemente",
   "library.channel.favorite_artists": "Tus artistas favoritos",
   "library.collection.no_tracks": "No hay canciones reproducibles aquí.",

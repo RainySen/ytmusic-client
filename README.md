@@ -1,4 +1,6 @@
-# PyMusic Client
+# Seiny FM
+
+*Antes PyMusic Client · Formerly PyMusic Client*
 
 <img width="1552" height="977" alt="image" src="https://github.com/user-attachments/assets/fcc6cbe7-dce3-4903-b435-e72a9dc03bf8" />
 <img width="1552" height="977" alt="image" src="https://github.com/user-attachments/assets/0a8effac-850f-4d8c-9ee9-9472125c0ad6" />
@@ -68,13 +70,13 @@ El engranaje de la barra superior abre la configuración; los cambios se aplican
 
 ## Instalación
 
-1. Descarga `PyMusicClient-Setup-<versión>.exe` desde la sección [Releases](../../releases).
+1. Descarga `SeinyFM-Setup-<versión>.exe` desde la sección [Releases](../../releases).
 2. Ejecútalo. Se instala solo para tu usuario y no pide permisos de administrador.
 3. Si el PC no tiene VLC de 64 bits, el instalador lo descarga (versión 3.0.21, con verificación SHA-256) y lo instala. En ese paso Windows pide permisos de administrador.
 
 Para actualizar, ejecuta el instalador de la versión nueva sobre la anterior: la app se reemplaza en su sitio y se conservan tus datos.
 
-Como el instalador todavía no está firmado, Windows SmartScreen puede mostrar "Windows protegió su PC". Pulsa **Más información** y luego **Ejecutar de todas formas**. Cada Release incluye un archivo `.sha256` junto al instalador; puedes comprobar la descarga con `Get-FileHash PyMusicClient-Setup-<versión>.exe` en PowerShell y comparar el resultado.
+Como el instalador todavía no está firmado, Windows SmartScreen puede mostrar "Windows protegió su PC". Pulsa **Más información** y luego **Ejecutar de todas formas**. Cada Release incluye un archivo `.sha256` junto al instalador; puedes comprobar la descarga con `Get-FileHash SeinyFM-Setup-<versión>.exe` en PowerShell y comparar el resultado.
 
 ### Tus datos
 
@@ -129,7 +131,7 @@ El script hace tres cosas:
 
 1. Compila con PyInstaller en modo `--onedir` (`release\YTMusicClient\`).
 2. Recorta de esa carpeta los componentes de Qt que no se usan (`installer/prune_bundle.py`).
-3. Si tienes [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`), genera `release\PyMusicClient-Setup-<versión>.exe`, de unos 105 MB. Casi todo el peso es QtWebEngine.
+3. Si tienes [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`), genera `release\SeinyFM-Setup-<versión>.exe`, de unos 105 MB. Casi todo el peso es QtWebEngine.
 
 La versión sale de `version_info.txt`. Para cambiarla, ejecuta `.\bump-version.ps1 1.3.0`, que actualiza sus cuatro campos a la vez (`filevers`, `prodvers`, `FileVersion` y `ProductVersion`); después compila.
 
@@ -268,13 +270,13 @@ The gear in the top bar opens the settings; changes apply instantly and are save
 
 ## Installation
 
-1. Download `PyMusicClient-Setup-<version>.exe` from the [Releases](../../releases) section.
+1. Download `SeinyFM-Setup-<version>.exe` from the [Releases](../../releases) section.
 2. Run it. It installs for your user only and does not ask for administrator rights.
 3. If the PC does not have 64-bit VLC, the installer downloads it (version 3.0.21, with SHA-256 verification) and installs it. Windows asks for administrator rights at that step.
 
 To update, run the new version's installer over the previous one: the app is replaced in place and your data is kept.
 
-Since the installer is not signed yet, Windows SmartScreen may show "Windows protected your PC". Click **More info** and then **Run anyway**. Each Release ships a `.sha256` file next to the installer; you can check the download with `Get-FileHash PyMusicClient-Setup-<version>.exe` in PowerShell and compare the result.
+Since the installer is not signed yet, Windows SmartScreen may show "Windows protected your PC". Click **More info** and then **Run anyway**. Each Release ships a `.sha256` file next to the installer; you can check the download with `Get-FileHash SeinyFM-Setup-<version>.exe` in PowerShell and compare the result.
 
 ### Your data
 
@@ -329,7 +331,7 @@ The script does three things:
 
 1. Builds with PyInstaller in `--onedir` mode (`release\YTMusicClient\`).
 2. Strips the unused Qt components from that folder (`installer/prune_bundle.py`).
-3. If you have [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`), it produces `release\PyMusicClient-Setup-<version>.exe`, around 105 MB. Almost all of that weight is QtWebEngine.
+3. If you have [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`), it produces `release\SeinyFM-Setup-<version>.exe`, around 105 MB. Almost all of that weight is QtWebEngine.
 
 The version comes from `version_info.txt`. To change it, run `.\bump-version.ps1 1.3.0`, which updates its four fields at once (`filevers`, `prodvers`, `FileVersion` and `ProductVersion`); then build.
 
