@@ -41,9 +41,10 @@ class SettingsPresenter:
         settings.changed.connect(self._apply)
         self._apply(settings.settings)
 
+    # volume is remembered, mute is not: a saved 0 would open the app silent
     def start(self) -> None:
         current = self._settings.settings
-        if current.remember_volume:
+        if current.remember_volume and current.volume:
             self._restoring = True
             self._window.player_panel.volume_slider.setValue(current.volume)
             self._restoring = False
@@ -76,4 +77,5 @@ class SettingsPresenter:
             self._volume_timer.start()
 
     def _save_volume(self) -> None:
-        self._settings.update(volume=self._window.volume)
+        if self._window.volume:
+            self._settings.update(volume=self._window.volume)

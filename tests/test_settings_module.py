@@ -141,6 +141,25 @@ def test_volume_is_saved_after_a_pause_and_restored_on_start(rig, tmp_path):
     assert presenter is not None
 
 
+def test_mute_is_not_remembered_across_restarts(rig, tmp_path):
+    # closing while muted must not open the app silent next time
+    service = make_settings(tmp_path)
+    rig.keep(SettingsPresenter(rig.window, service))
+    rig.window.player_panel.volume_slider.setValue(60)
+    QTest.qWait(800)
+    rig.window.player_panel.toggle_mute()
+    QTest.qWait(800)
+    assert service.settings.volume == 60
+
+
+def test_a_saved_zero_volume_starts_audible(rig, tmp_path):
+    # older versions saved 0 when the app was closed muted
+    service = make_settings(tmp_path)
+    service.update(volume=0)
+    rig.keep(SettingsPresenter(rig.window, service)).start()
+    assert rig.window.volume > 0
+
+
 def test_volume_is_not_saved_or_restored_when_remembering_is_off(rig, tmp_path):
     service = make_settings(tmp_path)
     service.update(remember_volume=False, volume=25)
