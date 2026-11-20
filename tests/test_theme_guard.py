@@ -269,3 +269,18 @@ def test_font_family_names_only_installed_fonts(qapp, monkeypatch):
     assert theme.font_family() == '"Segoe UI"'
     theme.apply("cyberpunk")
     assert theme.font_family() == ""
+
+
+def test_lyrics_sit_on_a_darker_plate_over_painted_backdrops():
+    from ui.styles import app_stylesheet
+    try:
+        for name in ("aero", "cyberpunk"):
+            _under(name)
+            assert f"#lyrics_list {{ background: {theme.shade(LYRICS_PLATE_ALPHA[name])}" in app_stylesheet()
+        _under("classic")
+        assert "LYRICS_PLATE" not in app_stylesheet() and app_stylesheet().count("#lyrics_list {") == 1
+    finally:
+        _under("classic")
+
+
+LYRICS_PLATE_ALPHA = {"aero": 0.6, "cyberpunk": 0.72}

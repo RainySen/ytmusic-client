@@ -3,12 +3,15 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from dataclasses import replace
 from typing import Callable
+
+from PySide6.QtCore import QObject, Signal
 
 from domain.models import Lyrics, lyrics_query
 from infra.concurrency import TaskRunner
 from infra.lyrics_providers import LyricsProvider
-from infra.romanization import UnisonRomanizer
+from infra.romanization import LocalRomanizer
 from infra.ttl_cache import TTLCache
 
 log = logging.getLogger(__name__)
@@ -18,10 +21,14 @@ PROVIDER_COOLDOWN_S = 60
 _NOT_FOUND = object()
 
 
-class LyricsService:
+class LyricsService(QObject):
+    # cached lyrics are stale: refetch what is on screen
+    reset = Signal()
+
     def __init__(self, providers: list[LyricsProvider], runner: TaskRunner,
-                 clock: Callable[[], float] = time.monotonic, romanizer: UnisonRomanizer | None = None,
+                 clock: Callable[[], float] = time.monotonic, romanizer: LocalRomanizer | None = None,
                  romanize: bool = True):
+        super().__init__()
         self._providers = list(providers)
         self._runner = runner
         self._clock = clock
@@ -36,11 +43,13 @@ class LyricsService:
             self._providers = list(providers)
             self._cooldown.clear()
         self._cache.clear()
+        self.reset.emit()
 
     def set_romanize(self, enabled: bool) -> None:
         if enabled != self._romanize:
             self._romanize = enabled
             self._cache.clear()
+            self.reset.emit()
 
     def fetch(self, song: dict, on_done: Callable[[Lyrics | None], None],
               on_error: Callable[[Exception], None] | None = None) -> None:
@@ -82,7 +91,10 @@ class LyricsService:
         return self._romanized(fallback) if fallback else fallback, complete
 
     def _romanized(self, lyrics: Lyrics) -> Lyrics:
-        if not self._romanize or self._romanizer is None:
+        if not self._romanize:
+            # providers may ship their own romaji (Apple TTML)
+            return replace(lyrics, lines=tuple(replace(line, romanization="") for line in lyrics.lines))
+        if self._romanizer is None:
             return lyrics
         try:
             return self._romanizer.enrich(lyrics)

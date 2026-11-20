@@ -11,6 +11,7 @@ class LyricsPresenter:
     def __init__(self, window: MainWindow, playback: PlaybackService, lyrics: LyricsService):
         self._panel = window.side_panel
         self._lyrics = lyrics
+        self._song: dict | None = None
         self._video_id: str | None = None
         self._times: list[int] = []
         self._word_synced = False
@@ -18,8 +19,14 @@ class LyricsPresenter:
 
         playback.track_loading.connect(self._on_track)
         playback.time_ms.connect(self._on_time)
+        lyrics.reset.connect(self._reload)
+
+    def _reload(self) -> None:
+        if self._song is not None:
+            self._on_track(self._song)
 
     def _on_track(self, song: dict) -> None:
+        self._song = song
         video_id = song.get("videoId")
         self._video_id = video_id
         self._times = []

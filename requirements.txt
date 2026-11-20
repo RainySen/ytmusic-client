@@ -5,3 +5,4 @@ yt-dlp-ejs>=0.3
 requests>=2.32
 python-vlc>=3.0.21203
 qtawesome>=1.4
+sen-romanizer>=0.1.0
