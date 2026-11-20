@@ -435,6 +435,10 @@ requests==2.34.2 \
     # via
     #   -r requirements.txt
     #   ytmusicapi
+sen-romanizer==0.1.0 \
+    --hash=sha256:53a7fb7b27bffc9e56b22b7d0ce708faab385a9307c73fad9777f1553c263a64 \
+    --hash=sha256:83c4b35cd1d4a306d019665526cea975bfb46cff2bbfd324bbd3b2a082f55648
+    # via -r requirements.txt
 shiboken6==6.12.0 \
     --hash=sha256:3bde565bb0890044b5c7f63808adddede5abc241e9395a2bfed61919884d6240 \
     --hash=sha256:47105e05baf57d35453e07d240bbe59cb4b8d9565377ea5134ff9fb37d4f5c02 \
