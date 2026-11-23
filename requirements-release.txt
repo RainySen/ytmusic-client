@@ -458,9 +458,9 @@ yt-dlp-ejs==0.8.0 \
     --hash=sha256:79300e5fca7f937a1eeede11f0456862c1b41107ce1d726871e0207424f4bdb4 \
     --hash=sha256:d5fa1639f63b5c4af8d932495f60689d5370f1a095782c944f7f62a303eb104e
     # via -r requirements.txt
-ytmusicapi==1.12.3 \
-    --hash=sha256:be81511af7494eec8e5970c56a10e51aada6253246649e4ea6714fd6aeb654ee \
-    --hash=sha256:f65db840907a43ca23b29bd563951a1e390fbe2089d7aa4ddbe2043824b2acd9
+ytmusicapi==1.12.4 \
+    --hash=sha256:6f2dd849f76850c8053cd40ecd7ae26e1195c0874463784a5203158a1ac453b0 \
+    --hash=sha256:bb9e827aba9f9dac956583c9c9bb6de738a810721d449ab9fd4bb58457fd6d59
     # via -r requirements.txt
 
 # The following packages are considered to be unsafe in a requirements file:
