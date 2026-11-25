@@ -34,7 +34,8 @@ class LazyThumbnail(QLabel):
         self._requested = False
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignCenter)
-        self.setPixmap(_placeholder(icon, max(16, size // 2)))
+        self._idle = _placeholder(icon, max(16, size // 2))
+        self.setPixmap(self._idle)
 
     def set_source(self, url: str, cache) -> None:
         self._url = url
@@ -46,6 +47,14 @@ class LazyThumbnail(QLabel):
     def showEvent(self, event):
         super().showEvent(event)
         self._load()
+
+    # hidden pages kept every scaled cover alive; the cache gives it back instantly on show
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        if self._loaded:
+            self._loaded = False
+            self._requested = False
+            self.setPixmap(self._idle)
 
     def paintEvent(self, event):
         if not self._loaded:
@@ -64,6 +73,9 @@ class LazyThumbnail(QLabel):
         self._cache.request(self._url, self._apply)
 
     def _apply(self, pixmap: QPixmap) -> None:
+        if not self.isVisible():
+            self._requested = False
+            return
         dpr = self.devicePixelRatioF()
         if self._circle:
             result = circle_pixmap(pixmap, self._size, dpr)
