@@ -1,5 +1,5 @@
 from PySide6.QtCore import QEvent, QPoint, QTimer, Qt
-from PySide6.QtGui import QEnterEvent
+from PySide6.QtGui import QEnterEvent, QPixmap
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QMenu, QPushButton
 
@@ -85,6 +85,50 @@ def test_thumbnail_requested_immediately_if_already_visible(qapp):
     thumb.show()
     thumb.set_source("http://x/2", cache)
     assert cache.requests == ["http://x/2"]
+
+
+class AnsweringThumbnails(FakeThumbnails):
+    def __init__(self, answer_now=True):
+        super().__init__()
+        self.answer_now = answer_now
+        self.waiting = []
+
+    def request(self, url, callback):
+        super().request(url, callback)
+        pixmap = QPixmap(64, 64)
+        pixmap.fill(Qt.red)
+        if self.answer_now:
+            callback(pixmap)
+        else:
+            self.waiting.append((callback, pixmap))
+
+
+# hidden pages kept every cover pixmap alive (ram grew with each page visited)
+def test_thumbnail_releases_its_image_when_hidden_and_reloads_when_shown(qapp):
+    cache = AnsweringThumbnails()
+    thumb = LazyThumbnail(48)
+    empty = thumb.pixmap().cacheKey()
+    thumb.set_source("http://x/3", cache)
+    thumb.show()
+    assert thumb.pixmap().cacheKey() != empty
+    thumb.hide()
+    assert thumb.pixmap().cacheKey() == empty
+    thumb.show()
+    assert cache.requests == ["http://x/3", "http://x/3"] and thumb.pixmap().cacheKey() != empty
+
+
+def test_thumbnail_arriving_while_hidden_is_not_kept(qapp):
+    cache = AnsweringThumbnails(answer_now=False)
+    thumb = LazyThumbnail(48)
+    empty = thumb.pixmap().cacheKey()
+    thumb.set_source("http://x/4", cache)
+    thumb.show()
+    thumb.hide()
+    callback, pixmap = cache.waiting.pop()
+    callback(pixmap)
+    assert thumb.pixmap().cacheKey() == empty
+    thumb.show()
+    assert cache.requests == ["http://x/4", "http://x/4"]
 
 
 def test_thumbnail_without_url_never_requests(qapp):
